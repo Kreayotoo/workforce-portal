@@ -1,5 +1,15 @@
 {
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/workforce-portal.html" }
+  "version": 2,
+  "builds": [
+    {
+      "src": "workforce-portal.html",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/workforce-portal.html"
+    }
   ]
 }
