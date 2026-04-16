@@ -1,0 +1,1024 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WorkForce Portal</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{--navy:#1a1a4e;--navy2:#2d2d8f;--navy3:#12123a;--bg:#f0f2f5;--white:#fff;--border:#e2e5ea;--text:#111;--muted:#6b7280;--green-bg:#dcfce7;--green-txt:#166534;--red-bg:#fee2e2;--red-txt:#991b1b;--amber-bg:#fef3c7;--amber-txt:#92400e;--blue-bg:#eff6ff;--blue-txt:#1e40af;--purple-bg:#f5f3ff;--purple-txt:#4c1d95}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+.hidden{display:none!important}
+input,select,textarea,button{font-family:inherit;font-size:13px}
+input[type=text],input[type=email],input[type=date],input[type=number],input[type=time],input[type=password],select,textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;background:var(--white);color:var(--text);outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--navy2);box-shadow:0 0 0 3px rgba(45,45,143,.1)}
+textarea{resize:vertical}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+th{font-size:11px;color:var(--muted);text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);font-weight:600;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+td{padding:8px 10px;border-bottom:1px solid #f3f4f6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafafa}
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+.bg{background:var(--green-bg);color:var(--green-txt)}
+.br{background:var(--red-bg);color:var(--red-txt)}
+.ba{background:var(--amber-bg);color:var(--amber-txt)}
+.bb{background:var(--blue-bg);color:var(--blue-txt)}
+.bp{background:var(--purple-bg);color:var(--purple-txt)}
+.bx{background:#f1f5f9;color:#475569}
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:1rem}
+.card-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.card-hd h3{font-size:14px;font-weight:600}
+.stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:1rem}
+.stat{background:#f8f9fb;border-radius:8px;padding:.875rem}
+.stat-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;font-weight:500}
+.stat-val{font-size:22px;font-weight:700;color:var(--text)}
+.stat-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.btn{padding:7px 14px;border-radius:7px;cursor:pointer;font-weight:600;border:none;font-size:13px;transition:background .15s}
+.btn-primary{background:var(--navy);color:#fff}.btn-primary:hover{background:var(--navy2)}
+.btn-sec{background:var(--white);color:var(--text);border:1px solid var(--border)}.btn-sec:hover{background:#f9fafb}
+.btn-link{background:none;border:none;color:var(--navy2);cursor:pointer;font-size:12px;font-weight:500;padding:0}
+.btn-icon{background:none;border:none;cursor:pointer;padding:3px 5px;border-radius:4px;font-size:13px}.btn-icon:hover{background:#f1f5f9}
+.btn-del:hover{background:#fee2e2}
+.btn-g{background:var(--green-bg);color:var(--green-txt);border:1px solid #bbf7d0;padding:3px 9px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600}
+.btn-r{background:var(--red-bg);color:var(--red-txt);border:1px solid #fecaca;padding:3px 9px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600}
+.fld{margin-bottom:.875rem}
+.fld label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.page-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.pg-title{font-size:18px;font-weight:700}
+.pg-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.search-bar{display:flex;gap:8px;margin-bottom:1rem;align-items:center;flex-wrap:wrap}
+.two-col{display:grid;grid-template-columns:2fr 1fr;gap:10px}
+.notif-row{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #f3f4f6;align-items:flex-start}
+.notif-row:last-child{border-bottom:none}
+.ni{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.ni-info{background:#eff6ff}.ni-warning{background:#fffbeb}.ni-success{background:#f0fdf4}.ni-danger{background:#fee2e2}
+.av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0;font-size:11px}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:200;padding:1rem}
+.modal{background:var(--white);border-radius:14px;padding:1.5rem;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
+.modal-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem}
+.modal-hd h3{font-size:16px;font-weight:700}
+.modal-ftr{display:flex;gap:8px;justify-content:flex-end;margin-top:1rem}
+.xbtn{background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);line-height:1}
+.topbar{background:var(--navy);color:#fff;padding:0 1rem;height:50px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
+.tb-logo{font-size:15px;font-weight:800;letter-spacing:.07em}
+.tb-logo span{color:#60a5fa}
+.sidebar{width:50px;background:var(--navy3);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:4px;min-height:calc(100vh - 50px);position:sticky;top:50px;height:calc(100vh - 50px)}
+.si{width:36px;height:36px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;color:rgba(255,255,255,.45);transition:.15s;position:relative}
+.si:hover{background:rgba(255,255,255,.12);color:rgba(255,255,255,.85)}
+.si.act{background:rgba(255,255,255,.2);color:#fff}
+.si-dot{position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:#ef4444}
+.main{flex:1;padding:1.25rem;min-width:0;overflow-x:hidden}
+.app{display:flex;flex-direction:column;min-height:100vh}
+.body-row{display:flex;flex:1}
+.prog-bar{background:#e5e7eb;border-radius:4px;height:6px;overflow:hidden}
+.prog-fill{height:6px;border-radius:4px}
+.alert{padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:10px}
+.alert-e{background:var(--red-bg);color:var(--red-txt)}
+.alert-s{background:var(--green-bg);color:var(--green-txt)}
+.muted{font-size:11px;color:var(--muted)}
+.modules-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;margin-bottom:1rem}
+.mod-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:.7rem;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;transition:border-color .15s;position:relative}
+.mod-card:hover{border-color:rgba(45,45,143,.3)}
+.mod-ic{width:36px;height:36px;border-radius:8px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:16px}
+.mod-lb{font-size:11px;font-weight:600;color:var(--muted);text-align:center}
+.mod-dot{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;background:#ef4444}
+
+/* LOGIN */
+.login-wrap{display:flex;min-height:100vh}
+.login-left{flex:1;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;color:#fff}
+.login-logo{width:64px;height:64px;background:rgba(255,255,255,.15);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;border:1.5px solid rgba(255,255,255,.3);margin-bottom:1rem}
+.login-left h1{font-size:20px;font-weight:700;margin-bottom:.3rem}
+.login-left p{font-size:12px;opacity:.6;text-align:center;max-width:180px;margin-bottom:1.5rem}
+.feat{display:flex;align-items:center;gap:8px;font-size:12px;opacity:.8;margin-bottom:7px}
+.fdot{width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0}
+.login-right{flex:1;display:flex;align-items:center;justify-content:center;padding:2rem;background:var(--white)}
+.login-card{width:100%;max-width:320px}
+.login-card h2{font-size:20px;font-weight:700;margin-bottom:.25rem}
+.login-sub{font-size:13px;color:var(--muted);margin-bottom:1.25rem}
+.login-toggle{font-size:12px;color:var(--muted);text-align:center;margin-top:12px}
+.login-toggle span{color:var(--navy2);cursor:pointer;font-weight:600}
+.geo-box{background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;align-items:flex-start;gap:10px}
+.geo-icon{font-size:18px;flex-shrink:0;margin-top:1px}
+.geo-status{font-size:12px;color:#0369a1;font-weight:600}
+.geo-sub{font-size:11px;color:#0284c7;margin-top:2px}
+.geo-err{background:#fef2f2;border-color:#fecaca}.geo-err .geo-status{color:#b91c1c}.geo-err .geo-sub{color:#dc2626}
+.geo-ok{background:#f0fdf4;border-color:#bbf7d0}.geo-ok .geo-status{color:#166534}.geo-ok .geo-sub{color:#15803d}
+.geo-warn{background:#fffbeb;border-color:#fde68a}.geo-warn .geo-status{color:#92400e}.geo-warn .geo-sub{color:#b45309}
+.map-frame{width:100%;height:260px;border-radius:10px;border:1px solid var(--border);background:#f1f5f9;overflow:hidden;position:relative}
+.map-pin{position:absolute;transform:translate(-50%,-100%);font-size:24px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.3))}
+.map-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(0,0,0,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.05) 1px,transparent 1px);background-size:40px 40px}
+.loc-card{display:flex;gap:10px;padding:9px 0;border-bottom:1px solid #f3f4f6;align-items:flex-start}
+.loc-card:last-child{border-bottom:none}
+/* FACE RECOGNITION */
+.face-box{background:#0f172a;border-radius:10px;padding:14px;margin-bottom:12px;color:#fff}
+.face-box-hd{font-size:12px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.cam-wrap{position:relative;width:100%;aspect-ratio:4/3;border-radius:8px;overflow:hidden;background:#000}
+.cam-wrap video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.cam-wrap canvas{position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1)}
+.face-status{margin-top:10px;text-align:center;font-size:12px;min-height:20px}
+.face-status.scanning{color:#60a5fa;animation:pulse 1.5s infinite}
+.face-status.success{color:#4ade80;font-weight:700;font-size:14px}
+.face-status.fail{color:#f87171}
+.face-status.idle{color:#94a3b8}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+.face-ring{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:130px;height:130px;border-radius:50%;border:2px dashed rgba(96,165,250,.6);pointer-events:none}
+.face-ring.detected{border-color:#4ade80;border-style:solid;box-shadow:0 0 0 4px rgba(74,222,128,.15)}
+.face-ring.matched{border-color:#4ade80;border-style:solid;border-width:3px}
+.face-ring.fail{border-color:#f87171;border-style:solid}
+.face-tabs{display:flex;gap:6px;margin-bottom:12px}
+.face-tab{flex:1;padding:7px;border:1px solid rgba(255,255,255,.15);border-radius:7px;font-size:12px;cursor:pointer;text-align:center;background:rgba(255,255,255,.05);color:#94a3b8;font-weight:600;transition:.15s}
+.face-tab.active{background:rgba(96,165,250,.2);border-color:#60a5fa;color:#60a5fa}
+.enroll-thumb{width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid #334155}
+.login-methods{display:flex;flex-direction:column;gap:8px;margin-bottom:12px}
+.method-btn{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--white);transition:.15s;font-size:13px;font-weight:600;width:100%;text-align:left}
+.method-btn:hover{border-color:var(--navy2);background:#f8f9ff}
+.method-btn.active{border-color:var(--navy2);background:#eff6ff;color:var(--navy2)}
+.method-ic{width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+<script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const fmt = n => new Intl.NumberFormat('en-IN').format(Math.round(n||0));
+const initials = name => (name||'').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+const todayStr = () => new Date().toISOString().split('T')[0];
+const dateLabel = () => new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+const avColors = [['#eff6ff','#1e40af'],['#f0fdf4','#166534'],['#fdf4ff','#6b21a8'],['#fffbeb','#92400e'],['#fef2f2','#991b1b']];
+const av = (name,size=28) => {
+  const i=(name||'').charCodeAt(0)%avColors.length;
+  return `<div class="av" style="width:${size}px;height:${size}px;background:${avColors[i][0]};color:${avColors[i][1]};font-size:${Math.round(size*.38)}px">${initials(name)}</div>`;
+};
+const badge = s => {
+  const map={Active:'bg',Approved:'bg',Present:'bg',Pending:'ba','Half Day':'ba','Not marked':'bx',Inactive:'br',Rejected:'br',Absent:'br',Casual:'bb',Sick:'bb',Earned:'bb',Maternity:'bp',Paternity:'bp',Travel:'bb',Food:'bb',Training:'bb',Accommodation:'bb',Other:'bx'};
+  return `<span class="badge ${map[s]||'bx'}">${s}</span>`;
+};
+
+// ─── DATA LAYER ────────────────────────────────────────────────────
+const STORE_KEY = 'wf_portal_v1';
+const DEPTS = ['Engineering','HR','Sales','Finance','Operations','Marketing','Legal'];
+
+function loadData(){
+  try{ return JSON.parse(localStorage.getItem(STORE_KEY)) || null; }catch(e){return null;}
+}
+function saveData(d){ localStorage.setItem(STORE_KEY, JSON.stringify(d)); }
+
+function initData(){
+  return {
+    user:{email:'admin@company.com',password:'admin123',name:'Admin User'},
+    employees:[
+      {id:'EMP-101',name:'Kiran Kumar',email:'kiran@co.com',phone:'9876543210',dept:'Engineering',role:'Lead Developer',status:'Active',salary:75000,joined:'2023-01-15'},
+      {id:'EMP-102',name:'Priya Sharma',email:'priya@co.com',phone:'9876543211',dept:'HR',role:'HR Manager',status:'Active',salary:65000,joined:'2023-02-01'},
+      {id:'EMP-103',name:'Ravi Nair',email:'ravi@co.com',phone:'9876543212',dept:'Sales',role:'Sales Executive',status:'Active',salary:55000,joined:'2023-03-10'},
+      {id:'EMP-104',name:'Ananya Reddy',email:'ananya@co.com',phone:'9876543213',dept:'Finance',role:'Accountant',status:'Pending',salary:50000,joined:'2024-01-05'},
+      {id:'EMP-105',name:'Suresh Babu',email:'suresh@co.com',phone:'9876543214',dept:'Operations',role:'Ops Manager',status:'Active',salary:60000,joined:'2023-04-20'},
+      {id:'EMP-106',name:'Deepa Menon',email:'deepa@co.com',phone:'9876543215',dept:'Marketing',role:'Marketing Lead',status:'Active',salary:58000,joined:'2023-05-15'},
+    ],
+    attendance:[],
+    leaves:[
+      {id:1,emp:'Priya Sharma',type:'Casual',from:'2026-04-18',to:'2026-04-19',days:2,status:'Pending',reason:'Personal work'},
+      {id:2,emp:'Ravi Nair',type:'Sick',from:'2026-04-15',to:'2026-04-15',days:1,status:'Approved',reason:'Fever'},
+    ],
+    expenses:[
+      {id:1,emp:'Kiran Kumar',cat:'Travel',amount:4500,date:'2026-04-10',status:'Approved',desc:'Client visit Hyderabad'},
+      {id:2,emp:'Ravi Nair',cat:'Food',amount:850,date:'2026-04-12',status:'Pending',desc:'Team lunch'},
+    ],
+    performance:[
+      {id:1,emp:'Kiran Kumar',quarter:'Q1 2026',rating:4.5,goals:5,achieved:4,notes:'Excellent technical leadership'},
+      {id:2,emp:'Priya Sharma',quarter:'Q1 2026',rating:4.2,goals:4,achieved:4,notes:'Strong HR initiatives'},
+    ],
+    notifications:[
+      {id:1,type:'warning',msg:'2 employees have not activated their accounts',time:'Today 9:00 AM',read:false},
+      {id:2,type:'info',msg:'Priya Sharma applied for leave',time:'Today 10:30 AM',read:false},
+      {id:3,type:'success',msg:'Welcome to WorkForce Portal!',time:'Just now',read:false},
+    ],
+    settings:{company:'My Company',email:'hr@company.com',tz:'Asia/Kolkata',currency:'INR',hours:9,officeRadius:500,officeLat:17.3850,officeLng:78.4867},
+    loginLogs:[],
+    loggedIn:false
+  };
+}
+
+let D = loadData() || initData();
+
+function save(){ saveData(D); }
+function unreadCount(){ return D.notifications.filter(n=>!n.read).length; }
+
+// ─── ROUTER ────────────────────────────────────────────────────────
+let currentPage = 'dashboard';
+
+function nav(page){
+  currentPage = page;
+  renderApp();
+}
+
+// ─── RENDER ENGINE ─────────────────────────────────────────────────
+function renderApp(){
+  if(!D.loggedIn){ $('root').innerHTML = renderLogin(); bindLogin(); return; }
+  const uc = unreadCount();
+  $('root').innerHTML = `
+  <div class="app">
+    <div class="topbar">
+      <div class="tb-logo">WORK<span>FORCE</span></div>
+      <div style="flex:1"></div>
+      <div style="position:relative;cursor:pointer;font-size:16px;color:#fff" onclick="nav('notifications')">
+        🔔${uc>0?`<div class="si-dot" style="top:-2px;right:-2px"></div>`:''}
+      </div>
+      <div style="width:30px;height:30px;border-radius:50%;background:#60a5fa;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#1e3a8a">${initials(D.user.name)}</div>
+      <span style="font-size:12px;color:rgba(255,255,255,.7)">${D.user.email}</span>
+      <button class="btn btn-sec" style="font-size:12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff" onclick="logout()">Log out</button>
+    </div>
+    <div class="body-row">
+      <div class="sidebar">
+        ${[['⊞','dashboard','Dashboard'],['👥','employees','Employees'],['📅','attendance','Attendance'],['🏖','leave','Leave'],['💰','payroll','Payroll'],['🧾','expenses','Expenses'],['⭐','performance','Performance'],['🗺','locations','Login Locations'],['🔔','notifications','Notifications'],['⚙','settings','Settings']].map(([ic,pg,tt])=>`
+        <div class="si ${currentPage===pg?'act':''}" title="${tt}" onclick="nav('${pg}')">${ic}${pg==='notifications'&&uc>0?'<div class="si-dot"></div>':''}</div>`).join('')}
+      </div>
+      <div class="main" id="main-content"></div>
+    </div>
+  </div>`;
+  const pages = {dashboard:pgDashboard,employees:pgEmployees,attendance:pgAttendance,leave:pgLeave,payroll:pgPayroll,expenses:pgExpenses,performance:pgPerformance,notifications:pgNotifications,settings:pgSettings,locations:pgLocations};
+  if(pages[currentPage]) $('main-content').innerHTML = pages[currentPage]();
+  bindPage();
+}
+
+// ─── GEOLOCATION ──────────────────────────────────────────────────
+let geoState = {status:'idle',lat:null,lng:null,accuracy:null,city:null,address:null};
+
+function getDistanceM(lat1,lng1,lat2,lng2){
+  const R=6371000,dLat=(lat2-lat1)*Math.PI/180,dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function geoBoxHTML(){
+  const s=geoState;
+  if(s.status==='idle') return `<div class="geo-box"><div class="geo-icon">📍</div><div><div class="geo-status">Detecting your location…</div><div class="geo-sub">Location will be recorded with login</div></div></div>`;
+  if(s.status==='loading') return `<div class="geo-box"><div class="geo-icon">🔄</div><div><div class="geo-status">Getting your location…</div><div class="geo-sub">Please allow location access when prompted</div></div></div>`;
+  if(s.status==='error') return `<div class="geo-box geo-err"><div class="geo-icon">⚠</div><div><div class="geo-status">Location unavailable</div><div class="geo-sub">${s.error||'Permission denied — login will still work'}</div></div></div>`;
+  if(s.status==='ok'){
+    const oLat=D&&D.settings?D.settings.officeLat:17.385,oLng=D&&D.settings?D.settings.officeLng:78.4867,oR=D&&D.settings?D.settings.officeRadius:500;
+    const dist=getDistanceM(s.lat,s.lng,oLat,oLng);
+    const inOffice=dist<=oR;
+    return `<div class="geo-box ${inOffice?'geo-ok':'geo-warn'}"><div class="geo-icon">${inOffice?'✅':'📍'}</div><div>
+      <div class="geo-status">${inOffice?'Within office zone':'Outside office zone'}</div>
+      <div class="geo-sub">${s.address||s.city||'Location captured'} &nbsp;·&nbsp; ±${Math.round(s.accuracy||0)}m accuracy</div>
+      <div class="geo-sub" style="margin-top:1px">${dist<1000?Math.round(dist)+'m':((dist/1000).toFixed(1))+'km'} from office</div>
+    </div></div>`;
+  }
+  return '';
+}
+
+function captureGeo(){
+  if(!navigator.geolocation){geoState={status:'error',error:'Geolocation not supported'};if($('geo-box-wrap'))$('geo-box-wrap').innerHTML=geoBoxHTML();return;}
+  geoState={status:'loading'};if($('geo-box-wrap'))$('geo-box-wrap').innerHTML=geoBoxHTML();
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      geoState={status:'ok',lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy,city:null,address:null};
+      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`)
+        .then(r=>r.json()).then(d=>{
+          geoState.city=d.address?.city||d.address?.town||d.address?.village||'';
+          geoState.address=(d.address?.road?d.address.road+', ':'')+geoState.city;
+        }).catch(()=>{}).finally(()=>{if($('geo-box-wrap'))$('geo-box-wrap').innerHTML=geoBoxHTML();});
+    },
+    err=>{const m={1:'Location permission denied',2:'Position unavailable',3:'Request timed out'};geoState={status:'error',error:m[err.code]||err.message};if($('geo-box-wrap'))$('geo-box-wrap').innerHTML=geoBoxHTML();}
+    ,{timeout:10000,enableHighAccuracy:true}
+  );
+}
+
+// ─── FACE RECOGNITION ENGINE ──────────────────────────────────────
+const FR = {
+  loaded: false, loading: false, stream: null, interval: null,
+  mode: 'idle', // idle | scanning | matched | failed | enrolling
+  matchedUser: null, descriptor: null,
+  MODEL_URL: 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model'
+};
+
+async function frLoadModels(){
+  if(FR.loaded||FR.loading) return;
+  FR.loading=true;
+  try{
+    await faceapi.nets.tinyFaceDetector.loadFromUri(FR.MODEL_URL);
+    await faceapi.nets.faceLandmark68TinyNet.loadFromUri(FR.MODEL_URL);
+    await faceapi.nets.faceRecognitionNet.loadFromUri(FR.MODEL_URL);
+    FR.loaded=true;
+  }catch(e){console.warn('face-api models failed:',e);}
+  FR.loading=false;
+}
+
+async function frStartCamera(videoId, canvasId, onResult){
+  frStopCamera();
+  try{
+    FR.stream = await navigator.mediaDevices.getUserMedia({video:{width:320,height:240,facingMode:'user'}});
+    const vid=$( videoId); if(!vid) return;
+    vid.srcObject=FR.stream; vid.play();
+    await new Promise(r=>vid.onloadedmetadata=r);
+    await frLoadModels();
+    frScanLoop(videoId, canvasId, onResult);
+  }catch(e){
+    if(onResult) onResult({type:'cam-error',msg:e.name==='NotAllowedError'?'Camera permission denied':'Camera not available'});
+  }
+}
+
+function frStopCamera(){
+  if(FR.interval){clearInterval(FR.interval);FR.interval=null;}
+  if(FR.stream){FR.stream.getTracks().forEach(t=>t.stop());FR.stream=null;}
+  FR.mode='idle';
+}
+
+function frScanLoop(videoId, canvasId, onResult){
+  FR.mode='scanning';
+  FR.interval = setInterval(async()=>{
+    const vid=$(videoId),cvs=$(canvasId);
+    if(!vid||!cvs||!FR.loaded) return;
+    const opts=new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:0.5});
+    const det = await faceapi.detectSingleFace(vid,opts).withFaceLandmarks(true).withFaceDescriptor();
+    cvs.width=vid.videoWidth; cvs.height=vid.videoHeight;
+    const ctx=cvs.getContext('2d'); ctx.clearRect(0,0,cvs.width,cvs.height);
+    if(det){
+      const box=det.detection.box;
+      ctx.strokeStyle='#4ade80'; ctx.lineWidth=2; ctx.strokeRect(box.x,box.y,box.width,box.height);
+      if(onResult) onResult({type:'detected', descriptor:det.descriptor, det});
+    } else {
+      if(onResult) onResult({type:'no-face'});
+    }
+  },400);
+}
+
+async function frCaptureSingle(videoId){
+  const vid=$(videoId); if(!vid||!FR.loaded) return null;
+  await frLoadModels();
+  const opts=new faceapi.TinyFaceDetectorOptions({inputSize:224,scoreThreshold:0.5});
+  const det=await faceapi.detectSingleFace(vid,opts).withFaceLandmarks(true).withFaceDescriptor();
+  return det?det.descriptor:null;
+}
+
+function frGetEnrolled(){
+  // Returns array of {name, descriptor (Float32Array)}
+  const raw=JSON.parse(localStorage.getItem('wf_faces')||'[]');
+  return raw.map(r=>({name:r.name, descriptor:new Float32Array(r.descriptor)}));
+}
+
+function frSaveEnrolled(list){
+  localStorage.setItem('wf_faces', JSON.stringify(list.map(r=>({name:r.name,descriptor:Array.from(r.descriptor)}))));
+}
+
+function frMatchDescriptor(descriptor){
+  const enrolled=frGetEnrolled();
+  if(!enrolled.length) return null;
+  let best=null, bestDist=Infinity;
+  enrolled.forEach(e=>{
+    const dist=faceapi.euclideanDistance(descriptor, e.descriptor);
+    if(dist<bestDist){bestDist=dist;best=e;}
+  });
+  return bestDist<0.55?{name:best.name,distance:bestDist}:null;
+}
+
+// Login page face mode state
+let faceLoginState = {scanning:false, lastStatus:'', detected:false};
+
+function renderFaceLogin(){
+  return `
+  <div class="face-box">
+    <div class="face-box-hd">🎭 Face recognition login</div>
+    <div class="face-tabs">
+      <div class="face-tab active" id="ft-scan" onclick="switchFaceTab('scan')">Scan Face</div>
+      <div class="face-tab" id="ft-enroll" onclick="switchFaceTab('enroll')">Enroll Face</div>
+    </div>
+    <div id="face-scan-panel">
+      <div class="cam-wrap" id="cam-wrap-login">
+        <video id="fr-video" autoplay muted playsinline></video>
+        <canvas id="fr-canvas"></canvas>
+        <div class="face-ring" id="face-ring"></div>
+      </div>
+      <div class="face-status idle" id="face-status-txt">Loading models… please wait</div>
+      <button class="btn btn-sec" style="width:100%;margin-top:8px;font-size:12px" onclick="startFaceScan()">🔄 Restart camera</button>
+    </div>
+    <div id="face-enroll-panel" class="hidden">
+      <div class="cam-wrap" id="cam-wrap-enroll">
+        <video id="fr-video-enroll" autoplay muted playsinline></video>
+        <canvas id="fr-canvas-enroll"></canvas>
+        <div class="face-ring" id="face-ring-enroll"></div>
+      </div>
+      <div class="face-status idle" id="enroll-status-txt">Position your face in the circle</div>
+      <div class="fld" style="margin-top:8px"><label style="color:#94a3b8">Your name (must match employee name)</label>
+        <input type="text" id="enroll-name" placeholder="e.g. Kiran Kumar" style="background:#1e293b;border-color:#334155;color:#fff"></div>
+      <button class="btn btn-primary" style="width:100%" onclick="enrollFace()">📸 Capture & enroll face</button>
+      <div id="enrolled-list" style="margin-top:10px">${renderEnrolledList()}</div>
+    </div>
+  </div>`;
+}
+
+function renderEnrolledList(){
+  const list=frGetEnrolled();
+  if(!list.length) return `<div style="font-size:11px;color:#64748b;text-align:center">No faces enrolled yet</div>`;
+  return `<div style="font-size:11px;color:#64748b;margin-bottom:6px">Enrolled faces (${list.length}):</div>`+
+    list.map(e=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid #1e293b;font-size:12px;color:#94a3b8">
+      <span>👤 ${e.name}</span>
+      <button onclick="deleteEnrolled('${e.name}')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:11px">Remove</button>
+    </div>`).join('');
+}
+
+function deleteEnrolled(name){
+  frSaveEnrolled(frGetEnrolled().filter(e=>e.name!==name));
+  if($('enrolled-list')) $('enrolled-list').innerHTML=renderEnrolledList();
+}
+
+let faceTabMode='scan';
+function switchFaceTab(tab){
+  faceTabMode=tab;
+  frStopCamera();
+  ['scan','enroll'].forEach(t=>{
+    const el=$(`ft-${t}`); if(el) el.classList.toggle('active',t===tab);
+    const panel=$(`face-${t}-panel`); if(panel) panel.classList.toggle('hidden',t!==tab);
+  });
+  if(tab==='scan') startFaceScan();
+  else startFaceEnroll();
+}
+
+async function startFaceScan(){
+  const statusEl=$('face-status-txt'),ring=$('face-ring');
+  if(statusEl) statusEl.textContent='Starting camera…'; statusEl&&statusEl.setAttribute('class','face-status scanning');
+  await frStartCamera('fr-video','fr-canvas', result=>{
+    const s=$('face-status-txt'),r=$('face-ring');
+    if(result.type==='cam-error'){
+      if(s){s.textContent=result.msg;s.className='face-status fail';}
+      if(r) r.className='face-ring fail'; return;
+    }
+    if(result.type==='no-face'){
+      if(s){s.textContent='No face detected — look at the camera';s.className='face-status idle';}
+      if(r) r.className='face-ring'; return;
+    }
+    if(result.type==='detected'){
+      if(r) r.className='face-ring detected';
+      const match=frMatchDescriptor(result.descriptor);
+      if(match){
+        frStopCamera();
+        if(s){s.textContent=`✅ Face matched: ${match.name}`;s.className='face-status success';}
+        if(r) r.className='face-ring matched';
+        // Auto-fill email if we find this employee
+        const emp=D.employees.find(e=>e.name.toLowerCase()===match.name.toLowerCase());
+        if(emp&&$('l-email')) $('l-email').value=emp.email;
+        if($('l-pass')) $('l-pass').value='';
+        if($('login-err')) $('login-err').innerHTML=`<div class="alert alert-s">Face recognised as <strong>${match.name}</strong>. Enter password or <button onclick="faceSignIn('${match.name}')" class="btn btn-primary" style="padding:2px 10px;font-size:12px;margin-left:4px">Sign in with face only</button></div>`;
+      } else {
+        if(frGetEnrolled().length===0){
+          if(s){s.textContent='No faces enrolled — enroll first using the Enroll Face tab';s.className='face-status fail';}
+        } else {
+          if(s){s.textContent='Face not recognised — try again or use password';s.className='face-status fail';}
+          if(r) r.className='face-ring fail';
+        }
+      }
+    }
+  });
+}
+
+async function startFaceEnroll(){
+  const s=$('enroll-status-txt'),r=$('face-ring-enroll');
+  if(s){s.textContent='Starting camera…';s.className='face-status scanning';}
+  await frStartCamera('fr-video-enroll','fr-canvas-enroll', result=>{
+    const st=$('enroll-status-txt'),rg=$('face-ring-enroll');
+    if(result.type==='cam-error'){if(st){st.textContent=result.msg;st.className='face-status fail';}return;}
+    if(result.type==='no-face'){if(st){st.textContent='No face — look at the camera';st.className='face-status idle';}if(rg)rg.className='face-ring';return;}
+    if(result.type==='detected'){if(st){st.textContent='Face detected — click Capture & Enroll';st.className='face-status success';}if(rg)rg.className='face-ring detected';}
+  });
+}
+
+async function enrollFace(){
+  const name=($('enroll-name')||{}).value?.trim();
+  if(!name){alert('Enter your name first');return;}
+  const s=$('enroll-status-txt');
+  if(s){s.textContent='Capturing…';s.className='face-status scanning';}
+  const desc=await frCaptureSingle('fr-video-enroll');
+  if(!desc){if(s){s.textContent='No face detected — reposition and try again';s.className='face-status fail';}return;}
+  const list=frGetEnrolled().filter(e=>e.name.toLowerCase()!==name.toLowerCase());
+  list.push({name,descriptor:desc});
+  frSaveEnrolled(list);
+  if(s){s.textContent=`✅ ${name} enrolled successfully!`;s.className='face-status success';}
+  if($('enrolled-list')) $('enrolled-list').innerHTML=renderEnrolledList();
+  setTimeout(()=>{if(s&&s.textContent.includes('enrolled'))s.textContent='Face enrolled. You can now use face login.';},2000);
+}
+
+function faceSignIn(name){
+  // Sign in purely by face match — log it
+  const log={id:Date.now(),user:name,email:D.user.name===name?D.user.email:'face-auth',time:new Date().toLocaleString('en-IN'),lat:geoState.lat,lng:geoState.lng,accuracy:geoState.accuracy,address:geoState.address||geoState.city||'Unknown',geoStatus:geoState.status,inOffice:geoState.status==='ok'?getDistanceM(geoState.lat,geoState.lng,D.settings.officeLat,D.settings.officeLng)<=D.settings.officeRadius:null,method:'face'};
+  if(!D.loginLogs)D.loginLogs=[];
+  D.loginLogs.unshift(log);
+  D.loggedIn=true;frStopCamera();save();renderApp();
+}
+function renderLogin(){
+  return `<div class="login-wrap">
+  <div class="login-left">
+    <div class="login-logo">WF</div>
+    <h1>WorkForce Portal</h1>
+    <p>Complete HR & employee management</p>
+    ${['Face recognition login','Geo-location tracking','Employee directory','Attendance & payroll','Leave management','Performance reviews'].map(f=>`<div class="feat"><div class="fdot"></div>${f}</div>`).join('')}
+  </div>
+  <div class="login-right" style="background:#f8fafc;overflow-y:auto">
+    <div class="login-card" style="max-width:370px;width:100%">
+      <h2 style="margin-bottom:.2rem">Welcome back</h2>
+      <p class="login-sub">Choose how to sign in</p>
+      <div class="login-methods">
+        <button class="method-btn active" id="meth-face" onclick="setLoginMethod('face')">
+          <div class="method-ic" style="background:#0f172a">🎭</div>
+          <div><div>Face recognition</div><div style="font-size:11px;color:var(--muted);font-weight:400">Scan your face to sign in instantly</div></div>
+        </button>
+        <button class="method-btn" id="meth-pass" onclick="setLoginMethod('pass')">
+          <div class="method-ic" style="background:#eff6ff">🔑</div>
+          <div><div>Email & password</div><div style="font-size:11px;color:var(--muted);font-weight:400">Traditional login</div></div>
+        </button>
+      </div>
+      <div id="face-login-section">${renderFaceLogin()}</div>
+      <div id="pass-login-section" class="hidden">
+        <div id="geo-box-wrap">${geoBoxHTML()}</div>
+        <div id="login-err"></div>
+        <div class="fld"><label>Email</label><input type="email" id="l-email" value="admin@company.com"></div>
+        <div class="fld"><label>Password</label><input type="password" id="l-pass" value="admin123"></div>
+        <button class="btn btn-primary" style="width:100%;padding:10px" onclick="doLogin()">Sign in</button>
+        <p style="text-align:center;font-size:11px;color:var(--muted);margin-top:8px">Default: admin@company.com / admin123</p>
+      </div>
+      <div class="login-toggle" style="margin-top:10px">Trouble? <span onclick="setLoginMethod('pass')">Use password instead</span> · <span onclick="showSignup()">Change password</span></div>
+    </div>
+  </div>
+  </div>`;
+}
+function setLoginMethod(method){
+  ['face','pass'].forEach(m=>{
+    const btn=$(`meth-${m}`),sec=$(`${m}-login-section`);
+    if(btn)btn.classList.toggle('active',m===method);
+    if(sec)sec.classList.toggle('hidden',m!==method);
+  });
+  if(method==='face'){frStopCamera();setTimeout(startFaceScan,100);}
+  else{frStopCamera();captureGeo();}
+}
+function bindLogin(){
+  document.querySelectorAll('#l-email,#l-pass').forEach(el=>el.addEventListener('keydown',e=>e.key==='Enter'&&doLogin()));
+  setTimeout(()=>{frLoadModels();startFaceScan();captureGeo();},200);
+}
+function doLogin(){
+  const em=$('l-email').value.trim(),pw=$('l-pass').value;
+  if(em===D.user.email&&pw===D.user.password){
+    const log={id:Date.now(),user:D.user.name,email:D.user.email,time:new Date().toLocaleString('en-IN'),lat:geoState.lat,lng:geoState.lng,accuracy:geoState.accuracy,address:geoState.address||geoState.city||'Unknown',geoStatus:geoState.status,inOffice:geoState.status==='ok'?getDistanceM(geoState.lat,geoState.lng,D.settings.officeLat,D.settings.officeLng)<=D.settings.officeRadius:null};
+    if(!D.loginLogs)D.loginLogs=[];
+    D.loginLogs.unshift(log);if(D.loginLogs.length>100)D.loginLogs=D.loginLogs.slice(0,100);
+    D.loggedIn=true;save();renderApp();
+  } else {$('login-err').innerHTML=`<div class="alert alert-e">Wrong email or password</div>`;}
+}
+function showSignup(){
+  const np=prompt('Enter new password (min 6 chars):');
+  if(np&&np.length>=6){D.user.password=np;save();alert('Password updated! Use it to sign in.');}
+}
+function logout(){D.loggedIn=false;geoState={status:'idle'};frStopCamera();save();renderApp();}
+
+// ─── DASHBOARD ───────────────────────────────────────────────────
+function pgDashboard(){
+  const active=D.employees.filter(e=>e.status==='Active').length;
+  const pLeaves=D.leaves.filter(l=>l.status==='Pending').length;
+  const pExp=D.expenses.filter(e=>e.status==='Pending').length;
+  const mods=[['👥','Directory','employees'],['📅','Attendance','attendance'],['🏖','Leave','leave'],['💰','Payroll','payroll'],['🧾','Expenses','expenses'],['⭐','Performance','performance'],['🗺','Locations','locations'],['🔔','Notifications','notifications'],['⚙','Settings','settings']];
+  return `
+  <div class="page-hd">
+    <div><div class="pg-title">Hi, ${D.user.name.split(' ')[0]}! 👋</div><div class="pg-sub">${dateLabel()}</div></div>
+    <button class="btn btn-primary" onclick="openEmpModal()">+ Add employee</button>
+  </div>
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-lbl">Total employees</div><div class="stat-val">${D.employees.length}</div><div class="stat-sub">${DEPTS.length} departments</div></div>
+    <div class="stat"><div class="stat-lbl">Active</div><div class="stat-val">${active}</div><div class="stat-sub">${D.employees.length?Math.round(active/D.employees.length*100):0}% workforce</div></div>
+    <div class="stat"><div class="stat-lbl">Pending leaves</div><div class="stat-val">${pLeaves}</div><div class="stat-sub">Awaiting approval</div></div>
+    <div class="stat"><div class="stat-lbl">Open tasks</div><div class="stat-val">${pLeaves+pExp}</div><div class="stat-sub">Leaves + expenses</div></div>
+  </div>
+  <div class="modules-grid" style="grid-template-columns:repeat(9,minmax(0,1fr))">${mods.map(([ic,lb,pg])=>`<div class="mod-card" onclick="nav('${pg}')"><div class="mod-ic">${ic}</div><div class="mod-lb">${lb}</div>${pg==='notifications'&&unreadCount()>0?'<div class="mod-dot"></div>':''}</div>`).join('')}</div>
+  <div class="two-col">
+    <div class="card">
+      <div class="card-hd"><h3>Recent employees</h3><button class="btn-link" onclick="nav('employees')">View all →</button></div>
+      <table><thead><tr><th style="width:32%">Name</th><th style="width:24%">Dept</th><th style="width:28%">Role</th><th style="width:16%">Status</th></tr></thead>
+      <tbody>${D.employees.slice(0,6).map(e=>`<tr><td><div style="display:flex;align-items:center;gap:8px">${av(e.name)}${e.name}</div></td><td>${e.dept}</td><td>${e.role}</td><td>${badge(e.status)}</td></tr>`).join('')}</tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-hd"><h3>Notifications</h3><span class="muted">${unreadCount()} unread</span></div>
+      ${D.notifications.slice(0,5).map(n=>`<div class="notif-row"><div class="ni ni-${n.type}">${n.type==='warning'?'⚠':n.type==='success'?'✓':'ℹ'}</div><div><div style="font-size:12px;font-weight:${n.read?400:600}">${n.msg}</div><div style="font-size:11px;color:var(--muted)">${n.time}</div></div></div>`).join('')}
+    </div>
+  </div>
+  <div id="emp-modal-wrap"></div>`;
+}
+
+// ─── EMPLOYEES ───────────────────────────────────────────────────
+function pgEmployees(){
+  return `
+  <div class="page-hd"><div class="pg-title">Employee directory</div><button class="btn btn-primary" onclick="openEmpModal()">+ Add employee</button></div>
+  <div class="search-bar">
+    <input type="text" id="emp-q" placeholder="Search name, email, dept…" style="max-width:240px" oninput="filterEmps()">
+    <select id="emp-d" style="width:160px" onchange="filterEmps()"><option value="">All departments</option>${DEPTS.map(d=>`<option>${d}</option>`).join('')}</select>
+    <select id="emp-s" style="width:130px" onchange="filterEmps()"><option value="">All statuses</option><option>Active</option><option>Pending</option><option>Inactive</option></select>
+  </div>
+  <div class="card" style="padding:0">
+    <table><thead><tr><th style="width:4%;padding-left:12px">#</th><th style="width:22%">Name</th><th style="width:15%">Dept</th><th style="width:16%">Role</th><th style="width:20%">Email</th><th style="width:11%">Salary</th><th style="width:9%">Status</th><th style="width:3%"></th></tr></thead>
+    <tbody id="emp-tbody">${empRows(D.employees)}</tbody></table>
+  </div>
+  <div id="emp-modal-wrap"></div>`;
+}
+function empRows(list){
+  return list.map((e,i)=>`<tr>
+    <td style="padding-left:12px;color:var(--muted)">${i+1}</td>
+    <td><div style="display:flex;align-items:center;gap:8px">${av(e.name)}${e.name}</div></td>
+    <td>${e.dept}</td><td>${e.role}</td><td style="color:var(--muted)">${e.email}</td>
+    <td>₹${fmt(e.salary)}</td><td>${badge(e.status)}</td>
+    <td style="display:flex;gap:2px"><button class="btn-icon" onclick="openEmpModal('${e.id}')">✏</button><button class="btn-icon btn-del" onclick="delEmp('${e.id}','${e.name}')">🗑</button></td>
+  </tr>`).join('');
+}
+function filterEmps(){
+  const q=($('emp-q')||{}).value||'',d=($('emp-d')||{}).value||'',s=($('emp-s')||{}).value||'';
+  const list=D.employees.filter(e=>{
+    const mq=!q||e.name.toLowerCase().includes(q.toLowerCase())||e.email.toLowerCase().includes(q.toLowerCase())||e.dept.toLowerCase().includes(q.toLowerCase());
+    return mq&&(!d||e.dept===d)&&(!s||e.status===s);
+  });
+  if($('emp-tbody')) $('emp-tbody').innerHTML=empRows(list);
+}
+
+let editingEmpId=null;
+function openEmpModal(id){
+  editingEmpId=id||null;
+  const e=id?D.employees.find(x=>x.id===id):{status:'Active',dept:'Engineering',joined:todayStr()};
+  const wrap=$('emp-modal-wrap');
+  if(!wrap)return;
+  wrap.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('emp-modal-wrap')">
+  <div class="modal"><div class="modal-hd"><h3>${id?'Edit employee':'Add employee'}</h3><button class="xbtn" onclick="closeModal('emp-modal-wrap')">×</button></div>
+  <div class="frow"><div class="fld"><label>Full name</label><input type="text" id="ef-name" value="${e.name||''}"></div>
+  <div class="fld"><label>Email</label><input type="email" id="ef-email" value="${e.email||''}"></div></div>
+  <div class="frow"><div class="fld"><label>Phone</label><input type="text" id="ef-ph" value="${e.phone||''}"></div>
+  <div class="fld"><label>Date of joining</label><input type="date" id="ef-doj" value="${e.joined||''}"></div></div>
+  <div class="frow"><div class="fld"><label>Department</label><select id="ef-dept">${DEPTS.map(d=>`<option ${e.dept===d?'selected':''}>${d}</option>`).join('')}</select></div>
+  <div class="fld"><label>Role</label><input type="text" id="ef-role" value="${e.role||''}"></div></div>
+  <div class="frow"><div class="fld"><label>Salary (₹/month)</label><input type="number" id="ef-sal" value="${e.salary||30000}"></div>
+  <div class="fld"><label>Status</label><select id="ef-st"><option ${e.status==='Active'?'selected':''}>Active</option><option ${e.status==='Pending'?'selected':''}>Pending</option><option ${e.status==='Inactive'?'selected':''}>Inactive</option></select></div></div>
+  <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('emp-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="saveEmp()">${id?'Save changes':'Add employee'}</button></div>
+  </div></div>`;
+}
+function saveEmp(){
+  const data={name:$('ef-name').value,email:$('ef-email').value,phone:$('ef-ph').value,joined:$('ef-doj').value,dept:$('ef-dept').value,role:$('ef-role').value,salary:parseInt($('ef-sal').value)||30000,status:$('ef-st').value};
+  if(!data.name||!data.email){alert('Name and email are required');return;}
+  if(editingEmpId){Object.assign(D.employees.find(e=>e.id===editingEmpId),data);}
+  else{data.id='EMP-'+(100+D.employees.length+1);D.employees.push(data);D.notifications.unshift({id:Date.now(),type:'info',msg:`New employee ${data.name} added.`,time:'Just now',read:false});}
+  save();nav(currentPage);
+}
+function delEmp(id,name){
+  if(!confirm(`Delete ${name}? This cannot be undone.`))return;
+  D.employees=D.employees.filter(e=>e.id!==id);save();nav(currentPage);
+}
+
+// ─── ATTENDANCE ──────────────────────────────────────────────────
+function pgAttendance(){
+  const selDate=window._attDate||todayStr();
+  window._attDate=selDate;
+  const recs=D.attendance.filter(a=>a.date===selDate);
+  const present=recs.filter(a=>a.status==='Present').length;
+  return `
+  <div class="page-hd">
+    <div class="pg-title">Attendance</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="date" id="att-date" value="${selDate}" style="width:160px" onchange="window._attDate=this.value;nav('attendance')">
+      <button class="btn btn-sec" onclick="markAllAtt('Present')">All present</button>
+      <button class="btn btn-sec" onclick="markAllAtt('Absent')">All absent</button>
+      <button class="btn btn-primary" onclick="saveAtt()">Save attendance</button>
+    </div>
+  </div>
+  <div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <div class="stat"><div class="stat-lbl">Present</div><div class="stat-val">${present}</div></div>
+    <div class="stat"><div class="stat-lbl">Absent</div><div class="stat-val">${recs.filter(a=>a.status==='Absent').length}</div></div>
+    <div class="stat"><div class="stat-lbl">Rate</div><div class="stat-val">${recs.length?Math.round(present/recs.length*100):0}%</div></div>
+  </div>
+  <div class="card" style="padding:0;margin-bottom:1rem">
+    <div class="card-hd" style="padding:1rem 1rem 0"><h3>Mark attendance — ${selDate}</h3></div>
+    <table style="margin-top:8px"><thead><tr><th style="width:26%;padding-left:12px">Employee</th><th style="width:18%">Department</th><th style="width:15%">In time</th><th style="width:15%">Out time</th><th style="width:26%">Status</th></tr></thead>
+    <tbody>${D.employees.map(e=>{const r=recs.find(a=>a.empId===e.id)||{status:'Not marked',in:'09:00',out:'18:00'};return`<tr>
+      <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:8px">${av(e.name)}${e.name}</div></td><td>${e.dept}</td>
+      <td><input type="time" class="att-in" data-id="${e.id}" value="${r.in||'09:00'}" style="width:100px"></td>
+      <td><input type="time" class="att-out" data-id="${e.id}" value="${r.out||'18:00'}" style="width:100px"></td>
+      <td><select class="att-st" data-id="${e.id}" style="width:130px"><option ${r.status==='Present'?'selected':''}>Present</option><option ${r.status==='Absent'?'selected':''}>Absent</option><option ${r.status==='Half Day'?'selected':''}>Half Day</option><option ${r.status==='Not marked'?'selected':''}>Not marked</option></select></td>
+    </tr>`;}).join('')}</tbody></table>
+  </div>
+  <div class="card" style="padding:0">
+    <div class="card-hd" style="padding:1rem 1rem 0"><h3>Attendance log</h3></div>
+    <table style="margin-top:8px"><thead><tr><th style="width:28%;padding-left:12px">Employee</th><th style="width:18%">Date</th><th style="width:15%">In</th><th style="width:15%">Out</th><th style="width:24%">Status</th></tr></thead>
+    <tbody>${D.attendance.slice(0,30).map(a=>`<tr><td style="padding-left:12px">${a.empName}</td><td>${a.date}</td><td>${a.in||'--'}</td><td>${a.out||'--'}</td><td>${badge(a.status)}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--muted)">No records yet</td></tr>'}</tbody></table>
+  </div>`;
+}
+function markAllAtt(status){
+  document.querySelectorAll('.att-st').forEach(s=>s.value=status);
+}
+function saveAtt(){
+  const date=window._attDate||todayStr();
+  document.querySelectorAll('.att-st').forEach(s=>{
+    const id=s.dataset.id,emp=D.employees.find(e=>e.id===id);
+    const inT=document.querySelector(`.att-in[data-id="${id}"]`).value;
+    const outT=document.querySelector(`.att-out[data-id="${id}"]`).value;
+    D.attendance=D.attendance.filter(a=>!(a.empId===id&&a.date===date));
+    D.attendance.unshift({empId:id,empName:emp.name,date,status:s.value,in:inT,out:outT});
+  });
+  save();alert('Attendance saved!');
+}
+
+// ─── LEAVE ───────────────────────────────────────────────────────
+function pgLeave(){
+  return `
+  <div class="page-hd"><div class="pg-title">Leave management</div><button class="btn btn-primary" onclick="openLeaveModal()">+ Apply leave</button></div>
+  <div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <div class="stat"><div class="stat-lbl">Pending</div><div class="stat-val">${D.leaves.filter(l=>l.status==='Pending').length}</div><div class="stat-sub">Awaiting approval</div></div>
+    <div class="stat"><div class="stat-lbl">Approved</div><div class="stat-val">${D.leaves.filter(l=>l.status==='Approved').length}</div></div>
+    <div class="stat"><div class="stat-lbl">Total days</div><div class="stat-val">${D.leaves.reduce((s,l)=>s+(l.days||0),0)}</div></div>
+  </div>
+  <div class="card" style="padding:0">
+    <div class="card-hd" style="padding:1rem 1rem 0"><h3>All leave requests</h3></div>
+    <table style="margin-top:8px"><thead><tr><th style="width:18%;padding-left:12px">Employee</th><th style="width:11%">Type</th><th style="width:12%">From</th><th style="width:12%">To</th><th style="width:6%">Days</th><th style="width:21%">Reason</th><th style="width:20%">Action</th></tr></thead>
+    <tbody>${D.leaves.map(l=>`<tr><td style="padding-left:12px">${l.emp}</td><td>${badge(l.type)}</td><td>${l.from}</td><td>${l.to}</td><td>${l.days}</td><td>${l.reason}</td>
+    <td>${l.status==='Pending'?`<div style="display:flex;gap:4px"><button class="btn-g" onclick="updateLeave(${l.id},'Approved')">Approve</button><button class="btn-r" onclick="updateLeave(${l.id},'Rejected')">Reject</button></div>`:badge(l.status)}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)">No requests</td></tr>'}</tbody></table>
+  </div>
+  <div id="leave-modal-wrap"></div>`;
+}
+function updateLeave(id,status){
+  const l=D.leaves.find(x=>x.id===id);if(l)l.status=status;save();nav('leave');
+}
+function openLeaveModal(){
+  $('leave-modal-wrap').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('leave-modal-wrap')">
+  <div class="modal"><div class="modal-hd"><h3>Apply for leave</h3><button class="xbtn" onclick="closeModal('leave-modal-wrap')">×</button></div>
+  <div class="frow"><div class="fld"><label>Employee</label><select id="lv-emp">${D.employees.map(e=>`<option>${e.name}</option>`).join('')}</select></div>
+  <div class="fld"><label>Leave type</label><select id="lv-type"><option>Casual</option><option>Sick</option><option>Earned</option><option>Maternity</option><option>Paternity</option></select></div></div>
+  <div class="frow"><div class="fld"><label>From date</label><input type="date" id="lv-from" value="${todayStr()}"></div>
+  <div class="fld"><label>To date</label><input type="date" id="lv-to" value="${todayStr()}"></div></div>
+  <div class="fld"><label>Reason</label><textarea id="lv-reason" rows="2" placeholder="Brief reason…"></textarea></div>
+  <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('leave-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="submitLeave()">Submit</button></div>
+  </div></div>`;
+}
+function submitLeave(){
+  const from=$('lv-from').value,to=$('lv-to').value;
+  if(!from||!to)return;
+  const days=Math.max(1,Math.round((new Date(to)-new Date(from))/86400000)+1);
+  D.leaves.unshift({id:Date.now(),emp:$('lv-emp').value,type:$('lv-type').value,from,to,days,status:'Pending',reason:$('lv-reason').value||'—'});
+  save();nav('leave');
+}
+
+// ─── PAYROLL ─────────────────────────────────────────────────────
+function pgPayroll(){
+  const total=D.employees.reduce((s,e)=>s+(e.salary||0),0);
+  return `
+  <div class="page-hd"><div class="pg-title">Payroll management</div></div>
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-lbl">Monthly payroll</div><div class="stat-val">₹${fmt(total)}</div></div>
+    <div class="stat"><div class="stat-lbl">Avg salary</div><div class="stat-val">₹${fmt(D.employees.length?total/D.employees.length:0)}</div></div>
+    <div class="stat"><div class="stat-lbl">Processed</div><div class="stat-val">${D.employees.filter(e=>e.status==='Active').length}</div><div class="stat-sub">Active employees</div></div>
+    <div class="stat"><div class="stat-lbl">Period</div><div class="stat-val">Apr 2026</div></div>
+  </div>
+  <div class="card" style="padding:0">
+    <div class="card-hd" style="padding:1rem 1rem 0"><h3>Payroll register — April 2026</h3><span class="muted">PF 12% · TDS 10%</span></div>
+    <table style="margin-top:8px"><thead><tr><th style="width:19%;padding-left:12px">Employee</th><th style="width:14%">Dept</th><th style="width:13%">Gross</th><th style="width:11%">PF</th><th style="width:11%">TDS</th><th style="width:13%">Net pay</th><th style="width:10%">Status</th><th style="width:9%">Edit</th></tr></thead>
+    <tbody>${D.employees.map(e=>{const pf=Math.round((e.salary||0)*.12),tds=Math.round((e.salary||0)*.1),net=(e.salary||0)-pf-tds;return`<tr>
+      <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:8px">${av(e.name)}${e.name}</div></td>
+      <td>${e.dept}</td><td>₹${fmt(e.salary)}</td><td>₹${fmt(pf)}</td><td>₹${fmt(tds)}</td>
+      <td><strong>₹${fmt(net)}</strong></td><td>${badge(e.status==='Active'?'Approved':'Pending')}</td>
+      <td><input type="number" value="${e.salary||0}" style="width:80px" onblur="updateSalary('${e.id}',this.value)"></td>
+    </tr>`;}).join('')}</tbody></table>
+  </div>`;
+}
+function updateSalary(id,val){
+  const v=parseInt(val);if(isNaN(v)||v<=0)return;
+  const e=D.employees.find(x=>x.id===id);if(e){e.salary=v;save();nav('payroll');}
+}
+
+// ─── EXPENSES ────────────────────────────────────────────────────
+function pgExpenses(){
+  const total=D.expenses.reduce((s,e)=>s+(e.amount||0),0);
+  const appr=D.expenses.filter(e=>e.status==='Approved').reduce((s,e)=>s+(e.amount||0),0);
+  return `
+  <div class="page-hd"><div class="pg-title">Expense claims</div><button class="btn btn-primary" onclick="openExpModal()">+ Add claim</button></div>
+  <div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <div class="stat"><div class="stat-lbl">Total claimed</div><div class="stat-val">₹${fmt(total)}</div></div>
+    <div class="stat"><div class="stat-lbl">Approved</div><div class="stat-val">₹${fmt(appr)}</div></div>
+    <div class="stat"><div class="stat-lbl">Pending</div><div class="stat-val">${D.expenses.filter(e=>e.status==='Pending').length}</div></div>
+  </div>
+  <div class="card" style="padding:0">
+    <div class="card-hd" style="padding:1rem 1rem 0"><h3>All expense claims</h3></div>
+    <table style="margin-top:8px"><thead><tr><th style="width:18%;padding-left:12px">Employee</th><th style="width:13%">Category</th><th style="width:11%">Amount</th><th style="width:13%">Date</th><th style="width:25%">Description</th><th style="width:20%">Status</th></tr></thead>
+    <tbody>${D.expenses.map(e=>`<tr><td style="padding-left:12px">${e.emp}</td><td>${badge(e.cat)}</td><td>₹${fmt(e.amount)}</td><td>${e.date}</td><td>${e.desc}</td>
+    <td>${e.status==='Pending'?`<div style="display:flex;gap:4px"><button class="btn-g" onclick="updateExp(${e.id},'Approved')">Approve</button><button class="btn-r" onclick="updateExp(${e.id},'Rejected')">Reject</button></div>`:badge(e.status)}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">No claims yet</td></tr>'}</tbody></table>
+  </div>
+  <div id="exp-modal-wrap"></div>`;
+}
+function updateExp(id,status){const e=D.expenses.find(x=>x.id===id);if(e){e.status=status;save();nav('expenses');}}
+function openExpModal(){
+  $('exp-modal-wrap').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('exp-modal-wrap')">
+  <div class="modal"><div class="modal-hd"><h3>Add expense claim</h3><button class="xbtn" onclick="closeModal('exp-modal-wrap')">×</button></div>
+  <div class="frow"><div class="fld"><label>Employee</label><select id="ex-emp">${D.employees.map(e=>`<option>${e.name}</option>`).join('')}</select></div>
+  <div class="fld"><label>Category</label><select id="ex-cat"><option>Travel</option><option>Food</option><option>Training</option><option>Accommodation</option><option>Other</option></select></div></div>
+  <div class="frow"><div class="fld"><label>Amount (₹)</label><input type="number" id="ex-amt" placeholder="0"></div>
+  <div class="fld"><label>Date</label><input type="date" id="ex-date" value="${todayStr()}"></div></div>
+  <div class="fld"><label>Description</label><textarea id="ex-desc" rows="2"></textarea></div>
+  <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('exp-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="submitExp()">Submit</button></div>
+  </div></div>`;
+}
+function submitExp(){
+  const amt=parseFloat($('ex-amt').value);if(!amt)return alert('Enter an amount');
+  D.expenses.unshift({id:Date.now(),emp:$('ex-emp').value,cat:$('ex-cat').value,amount:amt,date:$('ex-date').value,status:'Pending',desc:$('ex-desc').value||'—'});
+  save();nav('expenses');
+}
+
+// ─── PERFORMANCE ─────────────────────────────────────────────────
+function pgPerformance(){
+  const avg=D.performance.length?D.performance.reduce((s,p)=>s+(p.rating||0),0)/D.performance.length:0;
+  return `
+  <div class="page-hd"><div class="pg-title">Performance</div><button class="btn btn-primary" onclick="openPerfModal()">+ Add review</button></div>
+  <div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <div class="stat"><div class="stat-lbl">Avg rating</div><div class="stat-val">${avg.toFixed(1)}/5</div></div>
+    <div class="stat"><div class="stat-lbl">Reviews done</div><div class="stat-val">${D.performance.length}</div></div>
+    <div class="stat"><div class="stat-lbl">Pending</div><div class="stat-val">${Math.max(0,D.employees.length-D.performance.length)}</div></div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:10px">
+    ${D.performance.map(p=>`<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:10px">${av(p.emp,36)}<div><div style="font-weight:600;font-size:14px">${p.emp}</div><div style="font-size:11px;color:var(--muted)">${p.quarter}</div></div></div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:15px;font-weight:700">${p.rating}/5</span>${badge(p.rating>=4?'Approved':p.rating>=3?'Pending':'Rejected')}</div></div>
+      <div style="margin-bottom:6px"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">Goals: ${p.achieved}/${p.goals} achieved</div>
+      <div class="prog-bar"><div class="prog-fill" style="width:${Math.min(100,Math.round(p.achieved/Math.max(p.goals,1)*100))}%;background:${p.rating>=4?'#22c55e':p.rating>=3?'#f59e0b':'#ef4444'}"></div></div></div>
+      <div style="font-size:12px;color:var(--muted)">${p.notes}</div></div>`).join('')||'<div class="card" style="text-align:center;color:var(--muted)">No reviews yet. Add the first one!</div>'}
+  </div>
+  <div id="perf-modal-wrap"></div>`;
+}
+function openPerfModal(){
+  $('perf-modal-wrap').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('perf-modal-wrap')">
+  <div class="modal"><div class="modal-hd"><h3>Add performance review</h3><button class="xbtn" onclick="closeModal('perf-modal-wrap')">×</button></div>
+  <div class="frow"><div class="fld"><label>Employee</label><select id="pf-emp">${D.employees.map(e=>`<option>${e.name}</option>`).join('')}</select></div>
+  <div class="fld"><label>Quarter</label><select id="pf-q"><option>Q1 2026</option><option>Q2 2026</option><option>Q3 2026</option><option>Q4 2026</option></select></div></div>
+  <div class="frow"><div class="fld"><label>Rating (1–5)</label><input type="number" id="pf-rat" min="1" max="5" step="0.1" placeholder="4.0"></div>
+  <div class="fld"><label>Goals set</label><input type="number" id="pf-goals" placeholder="5"></div></div>
+  <div class="fld"><label>Goals achieved</label><input type="number" id="pf-ach" placeholder="4"></div>
+  <div class="fld"><label>Review notes</label><textarea id="pf-notes" rows="2"></textarea></div>
+  <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('perf-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="submitPerf()">Save review</button></div>
+  </div></div>`;
+}
+function submitPerf(){
+  D.performance.push({id:Date.now(),emp:$('pf-emp').value,quarter:$('pf-q').value,rating:parseFloat($('pf-rat').value)||3,goals:parseInt($('pf-goals').value)||4,achieved:parseInt($('pf-ach').value)||3,notes:$('pf-notes').value||'—'});
+  save();nav('performance');
+}
+
+// ─── LOCATION LOGS ───────────────────────────────────────────────
+function pgLocations(){
+  if(!D.loginLogs)D.loginLogs=[];
+  const logs=D.loginLogs;
+  const total=logs.length,inOff=logs.filter(l=>l.inOffice===true).length,outOff=logs.filter(l=>l.inOffice===false).length;
+  const lastLog=logs[0];
+
+  function miniMap(lat,lng,inOffice){
+    if(!lat||!lng) return `<div style="background:#f1f5f9;border-radius:8px;height:120px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px">No location data</div>`;
+    const oLat=D.settings.officeLat,oLng=D.settings.officeLng;
+    const minLat=Math.min(lat,oLat)-.003,maxLat=Math.max(lat,oLat)+.003,minLng=Math.min(lng,oLng)-.003,maxLng=Math.max(lng,oLng)+.003;
+    const toX=(ln,w)=>((ln-minLng)/(maxLng-minLng))*w;
+    const toY=(la,h)=>(1-(la-minLat)/(maxLat-minLat))*h;
+    const w=340,h=140;
+    const ux=toX(lng,w),uy=toY(lat,h),ox=toX(oLng,w),oy=toY(oLat,h);
+    return `<svg width="100%" viewBox="0 0 ${w} ${h}" style="border-radius:8px;border:1px solid var(--border);background:#f8fafc">
+      <rect width="${w}" height="${h}" fill="#f0f9ff"/>
+      <line x1="${ox}" y1="${oy}" x2="${ux}" y2="${uy}" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <circle cx="${ox}" cy="${oy}" r="14" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+      <text x="${ox}" y="${oy+4}" text-anchor="middle" font-size="12">🏢</text>
+      <circle cx="${ux}" cy="${uy}" r="14" fill="${inOffice?'#dcfce7':'#fee2e2'}" stroke="${inOffice?'#22c55e':'#ef4444'}" stroke-width="1.5"/>
+      <text x="${ux}" y="${uy+4}" text-anchor="middle" font-size="12">${inOffice?'✅':'📍'}</text>
+      <text x="4" y="12" font-size="9" fill="#94a3b8">🏢 Office</text>
+      <text x="4" y="22" font-size="9" fill="#94a3b8">${oLat.toFixed(4)}, ${oLng.toFixed(4)}</text>
+    </svg>`;
+  }
+
+  return `
+  <div class="page-hd"><div><div class="pg-title">Login location logs</div><div class="pg-sub">Geolocation recorded at each sign-in</div></div>
+  <button class="btn btn-sec" onclick="nav('settings')">⚙ Set office location</button></div>
+  <div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <div class="stat"><div class="stat-lbl">Total logins</div><div class="stat-val">${total}</div><div class="stat-sub">With geo capture</div></div>
+    <div class="stat"><div class="stat-lbl">In-office logins</div><div class="stat-val">${inOff}</div><div class="stat-sub">${total?Math.round(inOff/total*100):0}% of logins</div></div>
+    <div class="stat"><div class="stat-lbl">Remote logins</div><div class="stat-val">${outOff}</div><div class="stat-sub">${total?Math.round(outOff/total*100):0}% of logins</div></div>
+  </div>
+  ${lastLog&&lastLog.lat?`
+  <div class="card" style="margin-bottom:1rem">
+    <div class="card-hd"><h3>Last login location</h3><span class="muted">${lastLog.time}</span></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start">
+      <div>${miniMap(lastLog.lat,lastLog.lng,lastLog.inOffice)}</div>
+      <div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">${lastLog.user}</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="font-size:12px"><span style="color:var(--muted)">Location:</span> ${lastLog.address||'Unknown'}</div>
+          <div style="font-size:12px"><span style="color:var(--muted)">Coordinates:</span> ${lastLog.lat.toFixed(5)}, ${lastLog.lng.toFixed(5)}</div>
+          <div style="font-size:12px"><span style="color:var(--muted)">Accuracy:</span> ±${Math.round(lastLog.accuracy||0)}m</div>
+          <div style="font-size:12px"><span style="color:var(--muted)">Status:</span> ${lastLog.inOffice===true?'<span style="color:#166534;font-weight:600">✅ In-office</span>':lastLog.inOffice===false?'<span style="color:#b45309;font-weight:600">📍 Remote</span>':'<span style="color:var(--muted)">Unknown</span>'}</div>
+          <div style="font-size:12px"><span style="color:var(--muted)">Office zone:</span> ${(D.settings.officeRadius||500)}m radius</div>
+        </div>
+      </div>
+    </div>
+  </div>`:''}
+  <div class="card" style="padding:0">
+    <div class="card-hd" style="padding:1rem 1rem 0"><h3>All login records</h3></div>
+    ${logs.length===0?`<div style="text-align:center;padding:2rem;color:var(--muted)">No login records yet. Sign out and sign back in to capture location.</div>`:
+    `<table style="margin-top:8px"><thead><tr>
+      <th style="width:15%;padding-left:12px">User</th>
+      <th style="width:18%">Time</th>
+      <th style="width:20%">Location</th>
+      <th style="width:17%">Coordinates</th>
+      <th style="width:8%">Accuracy</th>
+      <th style="width:10%">Method</th>
+      <th style="width:12%">Status</th>
+    </tr></thead><tbody>
+    ${logs.map(l=>`<tr>
+      <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:6px">${av(l.user,24)}${l.user}</div></td>
+      <td style="color:var(--muted)">${l.time}</td>
+      <td>${l.address||'—'}</td>
+      <td style="color:var(--muted);font-size:11px">${l.lat?`${l.lat.toFixed(4)}, ${l.lng.toFixed(4)}`:'No location'}</td>
+      <td style="color:var(--muted)">±${Math.round(l.accuracy||0)}m</td>
+      <td>${l.method==='face'?'<span class="badge bb">🎭 Face</span>':'<span class="badge bx">🔑 Password</span>'}</td>
+      <td>${l.inOffice===true?'<span class="badge bg">In-office</span>':l.inOffice===false?'<span class="badge ba">Remote</span>':'<span class="badge bx">Unknown</span>'}</td>
+    </tr>`).join('')}
+    </tbody></table>`}
+  </div>`;
+}
+
+// ─── NOTIFICATIONS ───────────────────────────────────────────────
+function pgNotifications(){
+  const uc=unreadCount();
+  return `
+  <div class="page-hd"><div><div class="pg-title">Notifications</div><div class="pg-sub">${uc} unread</div></div>
+  ${uc>0?`<button class="btn btn-sec" onclick="markAllRead()">Mark all read</button>`:''}</div>
+  <div class="card">
+    ${D.notifications.map(n=>`<div class="notif-row" style="cursor:pointer;background:${n.read?'':'#fafbff'};margin:0 -1rem;padding:9px 1rem" onclick="markRead(${n.id})">
+      <div class="ni ni-${n.type}">${n.type==='warning'?'⚠':n.type==='success'?'✓':'ℹ'}</div>
+      <div style="flex:1"><div style="font-size:13px;font-weight:${n.read?400:600}">${n.msg}</div><div style="font-size:11px;color:var(--muted)">${n.time}</div></div>
+      ${!n.read?'<div style="width:8px;height:8px;border-radius:50%;background:#3b82f6;flex-shrink:0;margin-top:4px"></div>':''}
+    </div>`).join('')||'<div style="text-align:center;color:var(--muted);padding:2rem">No notifications</div>'}
+  </div>`;
+}
+function markRead(id){const n=D.notifications.find(x=>x.id===id);if(n){n.read=true;save();nav('notifications');}}
+function markAllRead(){D.notifications.forEach(n=>n.read=true);save();nav('notifications');}
+
+// ─── SETTINGS ────────────────────────────────────────────────────
+function pgSettings(){
+  const s=D.settings;
+  const deptCounts=DEPTS.map(d=>({d,c:D.employees.filter(e=>e.dept===d).length}));
+  const max=Math.max(...deptCounts.map(x=>x.c),1);
+  return `
+  <div class="page-hd"><div class="pg-title">Settings</div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+    <div class="card">
+      <div class="card-hd"><h3>Company details</h3></div>
+      <div class="fld"><label>Company name</label><input type="text" id="st-cn" value="${s.company||''}"></div>
+      <div class="fld"><label>HR email</label><input type="email" id="st-em" value="${s.email||''}"></div>
+      <div class="frow"><div class="fld"><label>Timezone</label><select id="st-tz"><option ${s.tz==='Asia/Kolkata'?'selected':''}>Asia/Kolkata</option><option>Asia/Dubai</option><option>UTC</option><option>America/New_York</option></select></div>
+      <div class="fld"><label>Currency</label><select id="st-cu"><option ${s.currency==='INR'?'selected':''}>INR</option><option>USD</option><option>EUR</option></select></div></div>
+      <div class="fld"><label>Work hours/day</label><input type="number" id="st-wh" value="${s.hours||9}" min="1" max="24"></div>
+      <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px"><div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--text)">📍 Office location (for geo-login)</div></div>
+      <div class="frow"><div class="fld"><label>Office latitude</label><input type="number" id="st-olat" value="${s.officeLat||17.3850}" step="0.0001" placeholder="17.3850"></div>
+      <div class="fld"><label>Office longitude</label><input type="number" id="st-olng" value="${s.officeLng||78.4867}" step="0.0001" placeholder="78.4867"></div></div>
+      <div class="fld"><label>Allowed radius (meters) — employees within this distance count as "in-office"</label><input type="number" id="st-orad" value="${s.officeRadius||500}" min="50" max="5000" step="50"></div>
+      <button class="btn btn-sec" style="margin-bottom:10px;width:100%" onclick="useMyLocation()">📍 Use my current location as office</button>
+      <div id="st-msg"></div>
+      <button class="btn btn-primary" onclick="saveSettings()">Save changes</button>
+    </div>
+    <div class="card">
+      <div class="card-hd"><h3>My account</h3></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem">${av(D.user.name,48)}<div><div style="font-weight:600;font-size:14px">${D.user.name}</div><div style="font-size:12px;color:var(--muted)">${D.user.email}</div></div></div>
+      <div class="fld"><label>Display name</label><input type="text" id="st-name" value="${D.user.name}"></div>
+      <div class="fld"><label>Email</label><input type="email" id="st-uemail" value="${D.user.email}"></div>
+      <div class="fld"><label>New password</label><input type="password" id="st-pw" placeholder="Leave blank to keep current"></div>
+      <button class="btn btn-primary" onclick="saveProfile()">Update profile</button>
+    </div>
+    <div class="card">
+      <div class="card-hd"><h3>Department headcount</h3></div>
+      ${deptCounts.map(({d,c})=>`<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>${d}</span><span style="color:var(--muted)">${c} employees</span></div><div class="prog-bar"><div class="prog-fill" style="width:${Math.round(c/max*100)}%;background:#3b82f6"></div></div></div>`).join('')}
+    </div>
+    <div class="card">
+      <div class="card-hd"><h3>Leave policy</h3></div>
+      ${[['Casual leave','12 days/year'],['Sick leave','8 days/year'],['Earned leave','20 days/year'],['Maternity leave','26 weeks'],['Paternity leave','2 weeks']].map(([t,v])=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f3f4f6;font-size:13px"><span>${t}</span><span style="color:var(--muted)">${v}</span></div>`).join('')}
+    </div>
+  </div>`;
+}
+function saveSettings(){
+  D.settings={company:$('st-cn').value,email:$('st-em').value,tz:$('st-tz').value,currency:$('st-cu').value,hours:parseInt($('st-wh').value)||9,officeLat:parseFloat($('st-olat').value)||17.385,officeLng:parseFloat($('st-olng').value)||78.4867,officeRadius:parseInt($('st-orad').value)||500};
+  save();$('st-msg').innerHTML=`<div class="alert alert-s" style="margin-bottom:8px">Settings saved!</div>`;
+  setTimeout(()=>{if($('st-msg'))$('st-msg').innerHTML='';},2000);
+}
+function useMyLocation(){
+  if(!navigator.geolocation){alert('Geolocation not supported');return;}
+  navigator.geolocation.getCurrentPosition(pos=>{
+    if($('st-olat'))$('st-olat').value=pos.coords.latitude.toFixed(6);
+    if($('st-olng'))$('st-olng').value=pos.coords.longitude.toFixed(6);
+    alert(`Office location set to:\n${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}\n\nClick "Save changes" to confirm.`);
+  },()=>alert('Could not get location. Please enter coordinates manually.'),{enableHighAccuracy:true});
+}
+function saveProfile(){
+  D.user.name=$('st-name').value||D.user.name;
+  D.user.email=$('st-uemail').value||D.user.email;
+  const pw=$('st-pw').value;if(pw&&pw.length>=6)D.user.password=pw;
+  save();nav('settings');
+}
+
+// ─── UTILS ───────────────────────────────────────────────────────
+function closeModal(id){const el=$(id);if(el)el.innerHTML='';}
+function bindPage(){}
+
+renderApp();
+</script>
+</body>
+</html>
