@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WorkForce Portal</title>
+<title>Kreayotoo Solutions Portal</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--navy:#1a1a4e;--navy2:#2d2d8f;--navy3:#12123a;--bg:#f0f2f5;--white:#fff;--border:#e2e5ea;--text:#111;--muted:#6b7280;--green-bg:#dcfce7;--green-txt:#166534;--red-bg:#fee2e2;--red-txt:#991b1b;--amber-bg:#fef3c7;--amber-txt:#92400e;--blue-bg:#eff6ff;--blue-txt:#1e40af;--purple-bg:#f5f3ff;--purple-txt:#4c1d95}
@@ -70,7 +70,7 @@ tr:hover td{background:#fafafa}
 .si-dot{position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;background:#ef4444}
 .main{flex:1;padding:1.25rem;min-width:0;overflow-x:hidden}
 .app{display:flex;flex-direction:column;min-height:100vh}
-.body-row{display:flex;flex:1}
+.body-row{display:flex;flex:1;min-height:0}
 .prog-bar{background:#e5e7eb;border-radius:4px;height:6px;overflow:hidden}
 .prog-fill{height:6px;border-radius:4px}
 .alert{padding:8px 12px;border-radius:7px;font-size:12px;margin-bottom:10px}
@@ -135,6 +135,88 @@ tr:hover td{background:#fafafa}
 .method-btn:hover{border-color:var(--navy2);background:#f8f9ff}
 .method-btn.active{border-color:var(--navy2);background:#eff6ff;color:var(--navy2)}
 .method-ic{width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.reg-wrap{display:flex;min-height:100vh}
+.reg-right{flex:1;display:flex;align-items:center;justify-content:center;padding:2rem;background:#f8fafc;overflow-y:auto}
+.reg-card{width:100%;max-width:420px;background:var(--white);border:1px solid var(--border);border-radius:14px;padding:1.75rem}
+.steps-bar{display:flex;gap:0;margin-bottom:1.5rem}
+.step-dot{flex:1;height:4px;background:#e5e7eb;border-radius:2px;transition:.3s}
+.step-dot.done{background:#0f766e}
+.step-dot.active{background:#0f766e;opacity:.5}
+
+/* ── RESPONSIVE ───────────────────────────────────────────── */
+@media (max-width:768px){
+  /* Login */
+  .login-wrap{flex-direction:column}
+  .login-left{min-height:auto!important;padding:1.5rem!important;flex:none!important}
+  .login-left>div{max-width:100%!important}
+  .login-left>div>div:first-child{margin-bottom:1rem!important}
+  .login-left>div>div:nth-child(2){display:none}
+  .login-left>div>div:last-child{display:none}
+  .login-right{min-height:auto!important;padding:1.25rem!important;flex:none!important}
+  .login-card{max-width:100%!important;padding:1.25rem!important}
+  /* Registration */
+  .reg-wrap{flex-direction:column}
+  .login-left .login-logo{width:52px!important;height:52px!important}
+  /* Topbar */
+  .topbar{gap:8px;padding:0 .75rem;height:46px}
+  .tb-logo{font-size:13px}
+  .topbar span{display:none}
+  /* Sidebar → bottom nav on mobile */
+  .sidebar{width:100%!important;min-height:auto!important;height:54px!important;flex-direction:row!important;justify-content:space-around!important;padding:0 .5rem!important;position:fixed!important;bottom:0!important;top:auto!important;left:0;right:0;z-index:90;gap:0!important}
+  .si{width:40px!important;height:40px!important;font-size:18px!important}
+  /* Main content - add bottom padding for fixed nav */
+  .main{padding:.875rem .875rem 70px .875rem!important}
+  .body-row{flex-direction:column}
+  /* Stats grid */
+  .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  /* Modules grid */
+  .modules-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+  /* Two col layouts → single */
+  .two-col{grid-template-columns:1fr!important}
+  .frow{grid-template-columns:1fr!important}
+  /* Page header */
+  .page-hd{flex-wrap:wrap;gap:8px}
+  .page-hd .btn{font-size:12px;padding:6px 10px}
+  /* Tables - horizontal scroll */
+  .card{overflow-x:auto}
+  table{min-width:480px}
+  /* Modal */
+  .modal{padding:1rem;max-height:95vh}
+  .modal-bg{padding:.5rem;align-items:flex-end}
+  .modal{border-radius:14px 14px 0 0;max-width:100%!important}
+  /* Search bar */
+  .search-bar input,.search-bar select{width:100%!important;max-width:100%!important}
+  /* Employee portal sidebar */
+  .sidebar[style*="065f46"]{background:#065f46!important}
+}
+
+@media (max-width:480px){
+  .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .modules-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  .pg-title{font-size:15px}
+  .topbar{height:44px}
+  .main{padding:.75rem .75rem 64px .75rem!important}
+  .card{padding:.75rem}
+  /* Settings grid → single column */
+  div[style*="grid-template-columns:1fr 1fr"]{display:block!important}
+  div[style*="grid-template-columns:1fr 1fr"]>*{margin-bottom:1rem}
+}
+
+@media (min-width:769px){
+  /* Desktop enhancements */
+  .login-wrap{flex-direction:row}
+  .sidebar{position:sticky;top:50px;height:calc(100vh - 50px)}
+  .stat-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .modules-grid{grid-template-columns:repeat(8,minmax(0,1fr))}
+  .two-col{grid-template-columns:2fr 1fr}
+  .frow{grid-template-columns:1fr 1fr}
+}
+
+@media (min-width:1200px){
+  .main{padding:1.5rem}
+  .stat-val{font-size:26px}
+  .pg-title{font-size:20px}
+}
 </style>
 </head>
 <body>
@@ -157,54 +239,115 @@ const badge = s => {
   return `<span class="badge ${map[s]||'bx'}">${s}</span>`;
 };
 
-// ─── DATA LAYER ────────────────────────────────────────────────────
-const STORE_KEY = 'wf_portal_v1';
+// ─── SUPABASE CONFIG ──────────────────────────────────────────────
+const SB_URL = 'https://ecigerazcsildhklbxri.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjaWdlcmF6Y3NpbGRoa2xieHJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNzEwNjAsImV4cCI6MjA5MTg0NzA2MH0.cun4QLVdJ1U4VmvHDJ1tS5AzrAywVwKtpaGiykapkUM';
+const SB_HDR = {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'};
+
+async function sb(table,method='GET',body=null,query=''){
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/${table}${query}`,{method,headers:SB_HDR,body:body?JSON.stringify(body):null});
+    if(!r.ok){console.error('SB',table,method,await r.text());return null;}
+    if(method==='DELETE')return true;
+    const t=await r.text();return t?JSON.parse(t):true;
+  }catch(e){console.error('SB err',e);return null;}
+}
+
+// ─── DATA LAYER ───────────────────────────────────────────────────
+const STORE_KEY = 'wf_portal_v2';
 const DEPTS = ['Engineering','HR','Sales','Finance','Operations','Marketing','Legal'];
 
-function loadData(){
-  try{ return JSON.parse(localStorage.getItem(STORE_KEY)) || null; }catch(e){return null;}
-}
-function saveData(d){ localStorage.setItem(STORE_KEY, JSON.stringify(d)); }
+function loadData(){ try{return JSON.parse(localStorage.getItem(STORE_KEY))||null;}catch(e){return null;} }
+function saveData(d){ localStorage.setItem(STORE_KEY,JSON.stringify(d)); }
 
 function initData(){
   return {
-    user:{email:'admin@company.com',password:'admin123',name:'Admin User'},
-    employees:[
-      {id:'EMP-101',name:'Kiran Kumar',email:'kiran@co.com',phone:'9876543210',dept:'Engineering',role:'Lead Developer',status:'Active',salary:75000,joined:'2023-01-15'},
-      {id:'EMP-102',name:'Priya Sharma',email:'priya@co.com',phone:'9876543211',dept:'HR',role:'HR Manager',status:'Active',salary:65000,joined:'2023-02-01'},
-      {id:'EMP-103',name:'Ravi Nair',email:'ravi@co.com',phone:'9876543212',dept:'Sales',role:'Sales Executive',status:'Active',salary:55000,joined:'2023-03-10'},
-      {id:'EMP-104',name:'Ananya Reddy',email:'ananya@co.com',phone:'9876543213',dept:'Finance',role:'Accountant',status:'Pending',salary:50000,joined:'2024-01-05'},
-      {id:'EMP-105',name:'Suresh Babu',email:'suresh@co.com',phone:'9876543214',dept:'Operations',role:'Ops Manager',status:'Active',salary:60000,joined:'2023-04-20'},
-      {id:'EMP-106',name:'Deepa Menon',email:'deepa@co.com',phone:'9876543215',dept:'Marketing',role:'Marketing Lead',status:'Active',salary:58000,joined:'2023-05-15'},
-    ],
-    attendance:[],
-    leaves:[
-      {id:1,emp:'Priya Sharma',type:'Casual',from:'2026-04-18',to:'2026-04-19',days:2,status:'Pending',reason:'Personal work'},
-      {id:2,emp:'Ravi Nair',type:'Sick',from:'2026-04-15',to:'2026-04-15',days:1,status:'Approved',reason:'Fever'},
-    ],
-    expenses:[
-      {id:1,emp:'Kiran Kumar',cat:'Travel',amount:4500,date:'2026-04-10',status:'Approved',desc:'Client visit Hyderabad'},
-      {id:2,emp:'Ravi Nair',cat:'Food',amount:850,date:'2026-04-12',status:'Pending',desc:'Team lunch'},
-    ],
-    performance:[
-      {id:1,emp:'Kiran Kumar',quarter:'Q1 2026',rating:4.5,goals:5,achieved:4,notes:'Excellent technical leadership'},
-      {id:2,emp:'Priya Sharma',quarter:'Q1 2026',rating:4.2,goals:4,achieved:4,notes:'Strong HR initiatives'},
-    ],
-    notifications:[
-      {id:1,type:'warning',msg:'2 employees have not activated their accounts',time:'Today 9:00 AM',read:false},
-      {id:2,type:'info',msg:'Priya Sharma applied for leave',time:'Today 10:30 AM',read:false},
-      {id:3,type:'success',msg:'Welcome to WorkForce Portal!',time:'Just now',read:false},
-    ],
-    settings:{company:'My Company',email:'hr@company.com',tz:'Asia/Kolkata',currency:'INR',hours:9,officeRadius:500,officeLat:17.3850,officeLng:78.4867},
-    loginLogs:[],
-    loggedIn:false
+    user:{email:'claudekreayotoo@gmail.com',password:'Kreayotoo@123',name:'Kreayotoo Solutions'},
+    employees:[],attendance:[],leaves:[],expenses:[],performance:[],
+    notifications:[{id:1,type:'success',msg:'Welcome to Kreayotoo Solutions Portal!',time:'Just now',read:false}],
+    settings:{company:'Kreayotoo Solutions',email:'claudekreayotoo@gmail.com',tz:'Asia/Kolkata',currency:'INR',hours:9,officeRadius:500,officeLat:17.3850,officeLng:78.4867},
+    officeLocations:[{id:'LOC-1',name:'Head Office — Hyderabad',lat:17.3850,lng:78.4867,radius:500,color:'#3b82f6'}],
+    loginLogs:[],loggedIn:false
   };
 }
 
 let D = loadData() || initData();
+let currentRole='admin', currentEmployee=null, SB_READY=false;
 
 function save(){ saveData(D); }
 function unreadCount(){ return D.notifications.filter(n=>!n.read).length; }
+
+// ─── SYNC FROM SUPABASE ───────────────────────────────────────────
+async function syncFromSupabase(){
+  showSyncBanner('Syncing with database…');
+  try{
+    const [emps,att,lvs,exp,perf,notifs,sets]=await Promise.all([
+      sb('employees','GET',null,'?order=created_at'),
+      sb('attendance','GET',null,'?order=date.desc&limit=500'),
+      sb('leaves','GET',null,'?order=created_at.desc'),
+      sb('expenses','GET',null,'?order=created_at.desc'),
+      sb('performance','GET',null,'?order=created_at.desc'),
+      sb('notifications','GET',null,'?order=created_at.desc&limit=50'),
+      sb('settings','GET',null,'?limit=1'),
+    ]);
+    if(emps) D.employees=emps.map(e=>({id:e.emp_id||e.id,_uuid:e.id,name:e.name,email:e.email,phone:e.phone||'',dob:e.dob||'',dept:e.department||'',role:e.role||'',status:e.status||'Active',salary:e.salary||0,joined:e.date_of_joining||'',selfRegistered:e.self_registered||false,passwordHash:e.password_hash||'emp@123'}));
+    if(att) D.attendance=att.map(a=>({_uuid:a.id,empId:a.employee_id,empName:a.employee_name,date:a.date,status:a.status,in:a.in_time,out:a.out_time}));
+    if(lvs) D.leaves=lvs.map(l=>({_uuid:l.id,id:l.id,emp:l.employee_name,type:l.leave_type,from:l.from_date,to:l.to_date,days:l.days,reason:l.reason,status:l.status}));
+    if(exp) D.expenses=exp.map(e=>({_uuid:e.id,id:e.id,emp:e.employee_name,cat:e.category,amount:e.amount,date:e.expense_date,desc:e.description,status:e.status}));
+    if(perf) D.performance=perf.map(p=>({_uuid:p.id,id:p.id,emp:p.employee_name,quarter:p.quarter,rating:p.rating,goals:p.goals_set,achieved:p.goals_achieved,notes:p.review_notes}));
+    if(notifs) D.notifications=notifs.map(n=>({_uuid:n.id,id:n.id,type:n.type,msg:n.message,time:new Date(n.created_at).toLocaleString('en-IN'),read:n.is_read}));
+    if(sets&&sets.length){const s=sets[0];D.settings={...D.settings,company:s.company_name,email:s.company_email,tz:s.timezone,currency:s.currency,hours:s.work_hours,officeLat:s.office_lat,officeLng:s.office_lng,officeRadius:s.office_radius,_uuid:s.id};}
+    SB_READY=true;saveData(D);hideSyncBanner();
+  }catch(e){console.error('Sync failed',e);hideSyncBanner();}
+}
+
+function showSyncBanner(msg){
+  let el=$('sync-banner');
+  if(!el){el=document.createElement('div');el.id='sync-banner';el.style.cssText='position:fixed;top:0;left:0;right:0;background:#1a1a4e;color:#fff;text-align:center;font-size:12px;padding:6px;z-index:9999';document.body.appendChild(el);}
+  el.textContent=msg;el.style.display='block';
+}
+function hideSyncBanner(){const el=$('sync-banner');if(el)el.style.display='none';}
+
+// ─── SUPABASE WRITE HELPERS ───────────────────────────────────────
+function empUuid(empId){ const e=D.employees.find(x=>x.id===empId||x._uuid===empId); return e?e._uuid:empId; }
+
+async function sbSaveEmployee(emp){
+  const payload={emp_id:emp.id,name:emp.name,email:emp.email,phone:emp.phone||null,dob:emp.dob||null,department:emp.dept||'Engineering',role:emp.role||'Employee',status:emp.status||'Active',salary:emp.salary||0,date_of_joining:emp.joined||todayStr(),self_registered:emp.selfRegistered||false,password_hash:emp.passwordHash||'emp@123'};
+  if(emp._uuid){return await sb('employees','PATCH',payload,`?id=eq.${emp._uuid}`);}
+  else{const r=await sb('employees','POST',payload);if(r&&r[0])emp._uuid=r[0].id;return r;}
+}
+async function sbDeleteEmployee(emp){ if(emp._uuid)await sb('employees','DELETE',null,`?id=eq.${emp._uuid}`); }
+async function sbSaveAttendance(rec){
+  const eUuid=empUuid(rec.empId);
+  const payload={employee_id:eUuid,employee_name:rec.empName,date:rec.date,status:rec.status,in_time:rec.in||null,out_time:rec.out||null};
+  if(rec._uuid){return await sb('attendance','PATCH',payload,`?id=eq.${rec._uuid}`);}
+  else{const r=await sb('attendance','POST',payload);if(r&&r[0])rec._uuid=r[0].id;return r;}
+}
+async function sbSaveLeave(lv){
+  const emp=D.employees.find(e=>e.name===lv.emp);
+  const payload={employee_id:emp?emp._uuid:null,employee_name:lv.emp,leave_type:lv.type,from_date:lv.from,to_date:lv.to,days:lv.days,reason:lv.reason||'',status:lv.status||'Pending'};
+  const r=await sb('leaves','POST',payload);if(r&&r[0])lv._uuid=r[0].id;return r;
+}
+async function sbUpdateLeaveStatus(lv){ if(lv._uuid)await sb('leaves','PATCH',{status:lv.status},`?id=eq.${lv._uuid}`); }
+async function sbSaveExpense(exp){
+  const emp=D.employees.find(e=>e.name===exp.emp);
+  const payload={employee_id:emp?emp._uuid:null,employee_name:exp.emp,category:exp.cat,amount:exp.amount,expense_date:exp.date,description:exp.desc||'',status:exp.status||'Pending'};
+  const r=await sb('expenses','POST',payload);if(r&&r[0])exp._uuid=r[0].id;return r;
+}
+async function sbUpdateExpStatus(exp){ if(exp._uuid)await sb('expenses','PATCH',{status:exp.status},`?id=eq.${exp._uuid}`); }
+async function sbSavePerformance(p){
+  const emp=D.employees.find(e=>e.name===p.emp);
+  return await sb('performance','POST',{employee_id:emp?emp._uuid:null,employee_name:p.emp,quarter:p.quarter,rating:p.rating,goals_set:p.goals,goals_achieved:p.achieved,review_notes:p.notes||''});
+}
+async function sbSaveNotification(n){ return await sb('notifications','POST',{message:n.msg,type:n.type,is_read:false}); }
+async function sbMarkNotifRead(n){ if(n._uuid)await sb('notifications','PATCH',{is_read:true},`?id=eq.${n._uuid}`); }
+async function sbSaveSettings(){
+  const s=D.settings;
+  if(s._uuid)await sb('settings','PATCH',{company_name:s.company,company_email:s.email,timezone:s.tz,currency:s.currency,work_hours:s.hours,office_lat:s.officeLat,office_lng:s.officeLng,office_radius:s.officeRadius},`?id=eq.${s._uuid}`);
+}
+async function sbLoginLog(log){
+  await sb('login_logs','POST',{user_name:log.user,user_email:log.email,latitude:log.lat,longitude:log.lng,accuracy:log.accuracy,address:log.address,in_office:log.inOffice,method:log.method||'password'});
+}
 
 // ─── ROUTER ────────────────────────────────────────────────────────
 let currentPage = 'dashboard';
@@ -217,11 +360,12 @@ function nav(page){
 // ─── RENDER ENGINE ─────────────────────────────────────────────────
 function renderApp(){
   if(!D.loggedIn){ $('root').innerHTML = renderLogin(); bindLogin(); return; }
+  if(currentRole==='employee') { renderEmployeeApp(); return; }
   const uc = unreadCount();
   $('root').innerHTML = `
   <div class="app">
     <div class="topbar">
-      <div class="tb-logo">WORK<span>FORCE</span></div>
+      <div class="tb-logo" style="display:flex;align-items:center;gap:8px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42 42" width="28" height="28"><polygon points="21,2 38,11 38,31 21,40 4,31 4,11" fill="#1a3a5c" stroke="#4ecdc4" stroke-width="2"/><polyline points="10,16 18,21 10,26" fill="none" stroke="#4ecdc4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="22,16 14,21 22,26" fill="none" stroke="#4ecdc4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>KREAYOTOO<span> Solutions</span></div>
       <div style="flex:1"></div>
       <div style="position:relative;cursor:pointer;font-size:16px;color:#fff" onclick="nav('notifications')">
         🔔${uc>0?`<div class="si-dot" style="top:-2px;right:-2px"></div>`:''}
@@ -252,19 +396,28 @@ function getDistanceM(lat1,lng1,lat2,lng2){
   return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
 }
 
+function getNearestOffice(lat,lng){
+  const locs=(D.officeLocations&&D.officeLocations.length)?D.officeLocations:[{id:'default',name:'Office',lat:D.settings.officeLat||17.385,lng:D.settings.officeLng||78.4867,radius:D.settings.officeRadius||500}];
+  let nearest=null,minDist=Infinity;
+  locs.forEach(loc=>{
+    const d=getDistanceM(lat,lng,loc.lat,loc.lng);
+    if(d<minDist){minDist=d;nearest={...loc,dist:d,inZone:d<=loc.radius};}
+  });
+  return nearest;
+}
+
 function geoBoxHTML(){
   const s=geoState;
   if(s.status==='idle') return `<div class="geo-box"><div class="geo-icon">📍</div><div><div class="geo-status">Detecting your location…</div><div class="geo-sub">Location will be recorded with login</div></div></div>`;
   if(s.status==='loading') return `<div class="geo-box"><div class="geo-icon">🔄</div><div><div class="geo-status">Getting your location…</div><div class="geo-sub">Please allow location access when prompted</div></div></div>`;
   if(s.status==='error') return `<div class="geo-box geo-err"><div class="geo-icon">⚠</div><div><div class="geo-status">Location unavailable</div><div class="geo-sub">${s.error||'Permission denied — login will still work'}</div></div></div>`;
   if(s.status==='ok'){
-    const oLat=D&&D.settings?D.settings.officeLat:17.385,oLng=D&&D.settings?D.settings.officeLng:78.4867,oR=D&&D.settings?D.settings.officeRadius:500;
-    const dist=getDistanceM(s.lat,s.lng,oLat,oLng);
-    const inOffice=dist<=oR;
+    const nearest=getNearestOffice(s.lat,s.lng);
+    const inOffice=nearest&&nearest.inZone;
     return `<div class="geo-box ${inOffice?'geo-ok':'geo-warn'}"><div class="geo-icon">${inOffice?'✅':'📍'}</div><div>
-      <div class="geo-status">${inOffice?'Within office zone':'Outside office zone'}</div>
+      <div class="geo-status">${inOffice?`Within zone: ${nearest.name}`:'Outside all office zones'}</div>
       <div class="geo-sub">${s.address||s.city||'Location captured'} &nbsp;·&nbsp; ±${Math.round(s.accuracy||0)}m accuracy</div>
-      <div class="geo-sub" style="margin-top:1px">${dist<1000?Math.round(dist)+'m':((dist/1000).toFixed(1))+'km'} from office</div>
+      ${nearest?`<div class="geo-sub" style="margin-top:1px">Nearest: ${nearest.name} — ${nearest.dist<1000?Math.round(nearest.dist)+'m':((nearest.dist/1000).toFixed(1))+'km'} away</div>`:''}
     </div></div>`;
   }
   return '';
@@ -502,46 +655,84 @@ async function enrollFace(){
 
 function faceSignIn(name){
   // Sign in purely by face match — log it
-  const log={id:Date.now(),user:name,email:D.user.name===name?D.user.email:'face-auth',time:new Date().toLocaleString('en-IN'),lat:geoState.lat,lng:geoState.lng,accuracy:geoState.accuracy,address:geoState.address||geoState.city||'Unknown',geoStatus:geoState.status,inOffice:geoState.status==='ok'?getDistanceM(geoState.lat,geoState.lng,D.settings.officeLat,D.settings.officeLng)<=D.settings.officeRadius:null,method:'face'};
+  const nearest=geoState.status==='ok'?getNearestOffice(geoState.lat,geoState.lng):null;
+  const log={id:Date.now(),user:name,email:D.user.name===name?D.user.email:'face-auth',time:new Date().toLocaleString('en-IN'),lat:geoState.lat,lng:geoState.lng,accuracy:geoState.accuracy,address:geoState.address||geoState.city||'Unknown',geoStatus:geoState.status,inOffice:nearest?nearest.inZone:null,nearestOffice:nearest?nearest.name:null,method:'face'};
   if(!D.loginLogs)D.loginLogs=[];
   D.loginLogs.unshift(log);
   D.loggedIn=true;frStopCamera();save();renderApp();
 }
 function renderLogin(){
   return `<div class="login-wrap">
-  <div class="login-left">
-    <div class="login-logo">WF</div>
-    <h1>WorkForce Portal</h1>
-    <p>Complete HR & employee management</p>
-    ${['Face recognition login','Geo-location tracking','Employee directory','Attendance & payroll','Leave management','Performance reviews'].map(f=>`<div class="feat"><div class="fdot"></div>${f}</div>`).join('')}
+  <div class="login-left" style="flex:1.1;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3rem 2.5rem;color:#fff;min-height:100vh">
+    <div style="max-width:340px;width:100%">
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:2.5rem">
+        <div class="login-logo" style="font-size:9px;letter-spacing:.04em;text-align:center;line-height:1.4;padding:8px;font-weight:800;flex-shrink:0;width:72px;height:72px">KREAYOTOO<br>SOLUTIONS</div>
+        <div>
+          <div style="font-family:Arial Black,sans-serif;font-weight:900;font-size:26px;color:#fff;letter-spacing:1px;line-height:1.1">KREAYOTOO</div>
+          <div style="font-size:10px;color:#80cdc5;letter-spacing:2.5px;font-weight:600;margin-top:4px">SOLUTIONS (P) LTD</div>
+          <div style="font-size:8.5px;color:rgba(255,255,255,0.45);letter-spacing:2px;margin-top:3px">WE CREATE FOR YOU</div>
+        </div>
+      </div>
+      <div style="border-top:1px solid rgba(255,255,255,.12);padding-top:2rem;margin-bottom:2rem">
+        <div style="font-size:22px;font-weight:700;margin-bottom:.5rem">HR & Employee Portal</div>
+        <div style="font-size:13px;opacity:.6;line-height:1.7">Complete workforce management for your team — all in one place.</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${['🎭 Face recognition login','📍 Geo-location tracking','👤 Employee self-service','📅 Attendance marking','🏖 Leave management','💰 Payslip access'].map(f=>`<div style="display:flex;align-items:center;gap:10px;font-size:13px;opacity:.8"><div style="width:6px;height:6px;border-radius:50%;background:#80cdc5;flex-shrink:0"></div>${f}</div>`).join('')}
+      </div>
+    </div>
   </div>
-  <div class="login-right" style="background:#f8fafc;overflow-y:auto">
-    <div class="login-card" style="max-width:370px;width:100%">
-      <h2 style="margin-bottom:.2rem">Welcome back</h2>
-      <p class="login-sub">Choose how to sign in</p>
-      <div class="login-methods">
-        <button class="method-btn active" id="meth-face" onclick="setLoginMethod('face')">
-          <div class="method-ic" style="background:#0f172a">🎭</div>
-          <div><div>Face recognition</div><div style="font-size:11px;color:var(--muted);font-weight:400">Scan your face to sign in instantly</div></div>
-        </button>
-        <button class="method-btn" id="meth-pass" onclick="setLoginMethod('pass')">
-          <div class="method-ic" style="background:#eff6ff">🔑</div>
-          <div><div>Email & password</div><div style="font-size:11px;color:var(--muted);font-weight:400">Traditional login</div></div>
-        </button>
+  <div class="login-right" style="flex:1;background:#f8fafc;overflow-y:auto;display:flex;align-items:center;justify-content:center;padding:2rem;min-height:100vh">
+    <div class="login-card" style="max-width:380px;width:100%;background:#fff;border-radius:14px;padding:2rem;border:1px solid #e2e5ea">
+      <h2 style="font-size:22px;font-weight:700;margin-bottom:.25rem;color:#111">Welcome back</h2>
+      <p class="login-sub" style="margin-bottom:1.5rem">Select your role to sign in</p>
+      <div style="display:flex;gap:0;margin-bottom:1.25rem;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <button id="tab-admin" onclick="switchLoginTab('admin')" style="flex:1;padding:10px;border:none;background:var(--navy);color:#fff;font-weight:700;font-size:13px;cursor:pointer">👑 Admin</button>
+        <button id="tab-emp" onclick="switchLoginTab('emp')" style="flex:1;padding:10px;border:none;background:var(--white);color:var(--muted);font-weight:600;font-size:13px;cursor:pointer">👤 Employee</button>
       </div>
-      <div id="face-login-section">${renderFaceLogin()}</div>
-      <div id="pass-login-section" class="hidden">
-        <div id="geo-box-wrap">${geoBoxHTML()}</div>
-        <div id="login-err"></div>
-        <div class="fld"><label>Email</label><input type="email" id="l-email" value="admin@company.com"></div>
-        <div class="fld"><label>Password</label><input type="password" id="l-pass" value="admin123"></div>
-        <button class="btn btn-primary" style="width:100%;padding:10px" onclick="doLogin()">Sign in</button>
-        <p style="text-align:center;font-size:11px;color:var(--muted);margin-top:8px">Default: admin@company.com / admin123</p>
+      <div id="admin-login-tab">
+        <div class="login-methods">
+          <button class="method-btn active" id="meth-face" onclick="setLoginMethod('face')">
+            <div class="method-ic" style="background:#0f172a">🎭</div>
+            <div><div>Face recognition</div><div style="font-size:11px;color:var(--muted);font-weight:400">Scan your face to sign in instantly</div></div>
+          </button>
+          <button class="method-btn" id="meth-pass" onclick="setLoginMethod('pass')">
+            <div class="method-ic" style="background:#eff6ff">🔑</div>
+            <div><div>Email & password</div><div style="font-size:11px;color:var(--muted);font-weight:400">Traditional login</div></div>
+          </button>
+        </div>
+        <div id="face-login-section">${renderFaceLogin()}</div>
+        <div id="pass-login-section" class="hidden">
+          <div id="geo-box-wrap">${geoBoxHTML()}</div>
+          <div id="login-err"></div>
+          <div class="fld"><label>Email</label><input type="email" id="l-email" value="claudekreayotoo@gmail.com"></div>
+          <div class="fld"><label>Password</label><input type="password" id="l-pass" value="Kreayotoo@123"></div>
+          <button class="btn btn-primary" style="width:100%;padding:10px" onclick="doLogin()">Sign in as Admin</button>
+        </div>
+        <div class="login-toggle" style="margin-top:10px">Trouble? <span onclick="setLoginMethod('pass')">Use password instead</span> · <span onclick="showSignup()">Change password</span></div>
       </div>
-      <div class="login-toggle" style="margin-top:10px">Trouble? <span onclick="setLoginMethod('pass')">Use password instead</span> · <span onclick="showSignup()">Change password</span></div>
+      <div id="emp-login-tab" class="hidden">
+        <div id="geo-box-wrap-emp">${geoBoxHTML()}</div>
+        <div id="emp-login-err"></div>
+        <div class="fld"><label>Your work email</label><input type="email" id="emp-email" placeholder="yourname@company.com" onkeydown="if(event.key==='Enter')doEmpLogin()"></div>
+        <div class="fld"><label>Password</label><input type="password" id="emp-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doEmpLogin()"></div>
+        <button class="btn btn-primary" style="width:100%;padding:10px;background:#0f766e" onclick="doEmpLogin()">Sign in as Employee</button>
+        <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--muted)">
+          New here? <span style="color:#0f766e;cursor:pointer;font-weight:700" onclick="showRegister()">Create your account →</span>
+        </div>
+        <div style="margin-top:8px;text-align:center;font-size:11px;color:var(--muted)">Already registered? Default password is <strong>emp@123</strong></div>
+      </div>
     </div>
   </div>
   </div>`;
+}
+function switchLoginTab(tab){
+  $('admin-login-tab').classList.toggle('hidden',tab!=='admin');
+  $('emp-login-tab').classList.toggle('hidden',tab!=='emp');
+  $('tab-admin').style.cssText=`flex:1;padding:10px;border:none;background:${tab==='admin'?'var(--navy)':'var(--white)'};color:${tab==='admin'?'#fff':'var(--muted)'};font-weight:700;font-size:13px;cursor:pointer`;
+  $('tab-emp').style.cssText=`flex:1;padding:10px;border:none;background:${tab==='emp'?'#0f766e':'var(--white)'};color:${tab==='emp'?'#fff':'var(--muted)'};font-weight:600;font-size:13px;cursor:pointer`;
+  if(tab==='emp'){frStopCamera();captureGeo();}
+  else{frStopCamera();setTimeout(startFaceScan,100);captureGeo();}
 }
 function setLoginMethod(method){
   ['face','pass'].forEach(m=>{
@@ -559,19 +750,444 @@ function bindLogin(){
 function doLogin(){
   const em=$('l-email').value.trim(),pw=$('l-pass').value;
   if(em===D.user.email&&pw===D.user.password){
-    const log={id:Date.now(),user:D.user.name,email:D.user.email,time:new Date().toLocaleString('en-IN'),lat:geoState.lat,lng:geoState.lng,accuracy:geoState.accuracy,address:geoState.address||geoState.city||'Unknown',geoStatus:geoState.status,inOffice:geoState.status==='ok'?getDistanceM(geoState.lat,geoState.lng,D.settings.officeLat,D.settings.officeLng)<=D.settings.officeRadius:null};
+    const nearest=geoState.status==='ok'?getNearestOffice(geoState.lat,geoState.lng):null;
+    const log={id:Date.now(),user:D.user.name,email:D.user.email,time:new Date().toLocaleString('en-IN'),lat:geoState.lat,lng:geoState.lng,accuracy:geoState.accuracy,address:geoState.address||geoState.city||'Unknown',geoStatus:geoState.status,inOffice:nearest?nearest.inZone:null,nearestOffice:nearest?nearest.name:null,method:'password'};
     if(!D.loginLogs)D.loginLogs=[];
     D.loginLogs.unshift(log);if(D.loginLogs.length>100)D.loginLogs=D.loginLogs.slice(0,100);
-    D.loggedIn=true;save();renderApp();
+    sbLoginLog(log);
+    currentRole='admin';D.loggedIn=true;save();
+    syncFromSupabase().then(()=>renderApp());
   } else {$('login-err').innerHTML=`<div class="alert alert-e">Wrong email or password</div>`;}
+}
+function doEmpLogin(){
+  const em=($('emp-email')||{}).value?.trim(),pw=($('emp-pass')||{}).value;
+  if(!em||!pw){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Enter your email and password</div>`;return;}
+  if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e" style="color:#0f766e;background:#f0fdf4;border-color:#bbf7d0">Checking credentials…</div>`;
+  // Check Supabase directly for password
+  sb('employees','GET',null,`?email=eq.${encodeURIComponent(em.toLowerCase())}&limit=1`).then(rows=>{
+    if(!rows||!rows.length){
+      // fallback to local
+      const emp=D.employees.find(e=>e.email.toLowerCase()===em.toLowerCase());
+      if(!emp){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">No employee found with that email. <span style="cursor:pointer;text-decoration:underline" onclick="showRegister()">Register here</span></div>`;return;}
+      const storedPw=emp.passwordHash||'emp@123';
+      if(pw!==storedPw){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Wrong password</div>`;return;}
+      loginAsEmployee(emp);
+    } else {
+      const row=rows[0];
+      const storedPw=row.password_hash||'emp@123';
+      if(pw!==storedPw){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Wrong password</div>`;return;}
+      const emp={id:row.emp_id||row.id,_uuid:row.id,name:row.name,email:row.email,phone:row.phone||'',dob:row.dob||'',dept:row.department||'',role:row.role||'',status:row.status||'Active',salary:row.salary||0,joined:row.date_of_joining||'',selfRegistered:row.self_registered||false,passwordHash:row.password_hash||'emp@123'};
+      // update local cache
+      const idx=D.employees.findIndex(e=>e.email.toLowerCase()===em.toLowerCase());
+      if(idx>=0)D.employees[idx]=emp; else D.employees.push(emp);
+      save();
+      loginAsEmployee(emp);
+    }
+  });
+}
+function loginAsEmployee(emp){
+  const nearest=geoState.status==='ok'?getNearestOffice(geoState.lat,geoState.lng):null;
+  const log={id:Date.now(),user:emp.name,email:emp.email,time:new Date().toLocaleString('en-IN'),lat:geoState.lat,lng:geoState.lng,accuracy:geoState.accuracy,address:geoState.address||geoState.city||'Unknown',geoStatus:geoState.status,inOffice:nearest?nearest.inZone:null,nearestOffice:nearest?nearest.name:null,method:'password'};
+  if(!D.loginLogs)D.loginLogs=[];D.loginLogs.unshift(log);
+  sbLoginLog(log);
+  currentRole='employee';currentEmployee=emp;D.loggedIn=true;save();renderApp();
 }
 function showSignup(){
   const np=prompt('Enter new password (min 6 chars):');
   if(np&&np.length>=6){D.user.password=np;save();alert('Password updated! Use it to sign in.');}
 }
-function logout(){D.loggedIn=false;geoState={status:'idle'};frStopCamera();save();renderApp();}
 
-// ─── DASHBOARD ───────────────────────────────────────────────────
+// ─── SELF REGISTRATION ────────────────────────────────────────────
+function showRegister(){
+  D.loggedIn=false;
+  $('root').innerHTML=renderRegister();
+}
+
+function renderRegister(){
+  return `<div class="reg-wrap">
+  <div class="login-left" style="flex:1;padding:2rem;display:flex;flex-direction:column;align-items:center;justify-content:center">
+    <div style="max-width:320px;width:100%">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:2rem"><div class="login-logo" style="font-size:9px;letter-spacing:.04em;text-align:center;line-height:1.4;padding:6px;font-weight:800;flex-shrink:0">KREAYOTOO<br>SOLUTIONS</div><div><div style="font-family:Arial Black,sans-serif;font-weight:900;font-size:20px;color:#fff;letter-spacing:1px;line-height:1.1">KREAYOTOO</div><div style="font-size:9px;color:#80cdc5;letter-spacing:2.5px;font-weight:600;margin-top:3px">SOLUTIONS (P) LTD</div><div style="font-size:8px;color:rgba(255,255,255,0.5);letter-spacing:1.5px;margin-top:2px">WE CREATE FOR YOU</div></div></div>
+      <h1 style="font-size:20px;margin-bottom:.4rem">Employee Registration</h1>
+      <p style="font-size:12px;opacity:.6;margin-bottom:1.5rem">Create your account to access the portal</p>
+      ${['Fill in your details','Set your password','Access your portal instantly'].map(f=>`<div class="feat"><div class="fdot"></div>${f}</div>`).join('')}
+      <div style="margin-top:2rem;font-size:12px;opacity:.6">Already have an account?<br><span style="opacity:1;cursor:pointer;text-decoration:underline" onclick="renderApp()">Sign in here</span></div>
+    </div>
+  </div>
+  <div class="reg-right">
+    <div class="reg-card">
+      <h2 style="font-size:18px;margin-bottom:.25rem">Create your account</h2>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:1.25rem">Fill in your details to get started</p>
+
+      <div class="steps-bar">
+        <div class="step-dot done" id="sdot-1"></div>
+        <div style="width:6px"></div>
+        <div class="step-dot active" id="sdot-2"></div>
+        <div style="width:6px"></div>
+        <div class="step-dot" id="sdot-3"></div>
+      </div>
+
+      <div id="reg-step-1">
+        <div style="font-size:13px;font-weight:700;margin-bottom:1rem;color:var(--text)">Step 1 — Personal details</div>
+        <div class="fld"><label>Full name *</label><input type="text" id="reg-name" placeholder="e.g. Kiran Kumar" oninput="clearRegErr()"></div>
+        <div class="frow">
+          <div class="fld"><label>Date of birth *</label><input type="date" id="reg-dob" oninput="clearRegErr()"></div>
+          <div class="fld"><label>Phone number *</label><input type="text" id="reg-phone" placeholder="9876543210" oninput="clearRegErr()"></div>
+        </div>
+        <div class="fld"><label>Work email *</label><input type="email" id="reg-email" placeholder="yourname@company.com" oninput="clearRegErr()"></div>
+        <div id="reg-err-1"></div>
+        <button class="btn btn-primary" style="width:100%;padding:10px;background:#0f766e;margin-top:.5rem" onclick="regStep1Next()">Continue →</button>
+      </div>
+
+      <div id="reg-step-2" class="hidden">
+        <div style="font-size:13px;font-weight:700;margin-bottom:1rem;color:var(--text)">Step 2 — Set your password</div>
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;margin-bottom:1rem;font-size:12px;color:#166534">
+          Signing up as: <strong id="reg-name-preview"></strong>
+        </div>
+        <div class="fld"><label>Create password *</label><input type="password" id="reg-pw" placeholder="Min 6 characters" oninput="clearRegErr()"></div>
+        <div class="fld"><label>Confirm password *</label><input type="password" id="reg-pw2" placeholder="Repeat password" oninput="clearRegErr()"></div>
+        <div id="reg-err-2"></div>
+        <div style="display:flex;gap:8px;margin-top:.5rem">
+          <button class="btn btn-sec" style="flex:1" onclick="regBack()">← Back</button>
+          <button class="btn btn-primary" style="flex:2;background:#0f766e" onclick="regStep2Next()">Continue →</button>
+        </div>
+      </div>
+
+      <div id="reg-step-3" class="hidden">
+        <div style="font-size:13px;font-weight:700;margin-bottom:1rem;color:var(--text)">Step 3 — Your work details</div>
+        <div class="fld"><label>Department</label>
+          <select id="reg-dept">${DEPTS.map(d=>`<option>${d}</option>`).join('')}</select>
+        </div>
+        <div class="fld"><label>Job role / Designation</label>
+          <input type="text" id="reg-role" placeholder="e.g. Software Engineer">
+        </div>
+        <div class="fld"><label>Employee ID <span style="font-weight:400;color:var(--muted)">(if you know it — optional)</span></label>
+          <input type="text" id="reg-empid" placeholder="e.g. EMP-107">
+        </div>
+        <div id="reg-err-3"></div>
+        <div style="display:flex;gap:8px;margin-top:.5rem">
+          <button class="btn btn-sec" style="flex:1" onclick="regBack2()">← Back</button>
+          <button class="btn btn-primary" style="flex:2;background:#0f766e" onclick="submitRegistration()">Create account</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  </div>`;
+}
+
+let regData={};
+
+function clearRegErr(){
+  ['reg-err-1','reg-err-2','reg-err-3'].forEach(id=>{const el=$(id);if(el)el.innerHTML='';});
+}
+
+function regStep1Next(){
+  const name=($('reg-name')||{}).value?.trim();
+  const dob=($('reg-dob')||{}).value;
+  const phone=($('reg-phone')||{}).value?.trim();
+  const email=($('reg-email')||{}).value?.trim().toLowerCase();
+  const err=$('reg-err-1');
+  if(!name||!dob||!phone||!email){if(err)err.innerHTML=`<div class="alert alert-e">Please fill in all fields</div>`;return;}
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){if(err)err.innerHTML=`<div class="alert alert-e">Enter a valid email address</div>`;return;}
+  if(phone.replace(/\D/g,'').length<10){if(err)err.innerHTML=`<div class="alert alert-e">Enter a valid 10-digit phone number</div>`;return;}
+  const dup=D.employees.find(e=>e.email.toLowerCase()===email);
+  if(dup){if(err)err.innerHTML=`<div class="alert alert-e">This email is already registered. <span style="cursor:pointer;text-decoration:underline" onclick="renderApp()">Sign in instead</span></div>`;return;}
+  regData={name,dob,phone,email};
+  if($('reg-name-preview'))$('reg-name-preview').textContent=name;
+  $('reg-step-1').classList.add('hidden');
+  $('reg-step-2').classList.remove('hidden');
+  $('sdot-1').className='step-dot done';
+  $('sdot-2').className='step-dot done';
+  $('sdot-3').className='step-dot active';
+}
+
+function regBack(){
+  $('reg-step-2').classList.add('hidden');
+  $('reg-step-1').classList.remove('hidden');
+  $('sdot-2').className='step-dot active';
+  $('sdot-3').className='step-dot';
+}
+
+function regStep2Next(){
+  const pw=($('reg-pw')||{}).value;
+  const pw2=($('reg-pw2')||{}).value;
+  const err=$('reg-err-2');
+  if(!pw||pw.length<6){if(err)err.innerHTML=`<div class="alert alert-e">Password must be at least 6 characters</div>`;return;}
+  if(pw!==pw2){if(err)err.innerHTML=`<div class="alert alert-e">Passwords do not match</div>`;return;}
+  regData.password=pw;
+  $('reg-step-2').classList.add('hidden');
+  $('reg-step-3').classList.remove('hidden');
+  $('sdot-3').className='step-dot done';
+}
+
+function regBack2(){
+  $('reg-step-3').classList.add('hidden');
+  $('reg-step-2').classList.remove('hidden');
+  $('sdot-3').className='step-dot active';
+}
+
+async function submitRegistration(){
+  const dept=($('reg-dept')||{}).value||'Engineering';
+  const role=($('reg-role')||{}).value?.trim()||'Employee';
+  const empid=($('reg-empid')||{}).value?.trim();
+  const nextNum=D.employees.length+101;
+  const id=empid||('EMP-'+String(nextNum).padStart(3,'0'));
+  const emp={id,name:regData.name,email:regData.email,phone:regData.phone,dob:regData.dob,dept,role,status:'Active',salary:0,joined:todayStr(),selfRegistered:true,passwordHash:regData.password};
+  // Save to Supabase first
+  showSyncBanner('Creating your account…');
+  const res=await sbSaveEmployee(emp);
+  if(res&&res[0]) emp._uuid=res[0].id;
+  D.employees.push(emp);
+  const notif={msg:`New employee ${regData.name} self-registered (${dept})`,type:'info',read:false};
+  D.notifications.unshift({id:Date.now(),...notif,time:'Just now'});
+  sbSaveNotification(notif);
+  save();hideSyncBanner();
+  currentRole='employee';currentEmployee=emp;D.loggedIn=true;
+  const nearest=geoState.status==='ok'?getNearestOffice(geoState.lat,geoState.lng):null;
+  const log={id:Date.now(),user:emp.name,email:emp.email,time:new Date().toLocaleString('en-IN'),lat:geoState.lat,lng:geoState.lng,accuracy:geoState.accuracy,address:geoState.address||geoState.city||'Unknown',geoStatus:geoState.status,inOffice:nearest?nearest.inZone:null,nearestOffice:nearest?nearest.name:null,method:'register'};
+  if(!D.loginLogs)D.loginLogs=[];D.loginLogs.unshift(log);
+  sbLoginLog(log);
+  save();renderApp();
+}
+function logout(){D.loggedIn=false;currentRole='admin';currentEmployee=null;geoState={status:'idle'};frStopCamera();save();renderApp();}
+
+// ─── EMPLOYEE PORTAL ─────────────────────────────────────────────
+let empPage = 'emp-dashboard';
+
+function navEmp(page){ empPage=page; renderEmployeeApp(); }
+
+function renderEmployeeApp(){
+  const emp = currentEmployee;
+  if(!emp){ logout(); return; }
+  $('root').innerHTML = `
+  <div class="app">
+    <div class="topbar" style="background:#0f766e">
+      <div class="tb-logo" style="display:flex;align-items:center;gap:8px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42 42" width="28" height="28"><polygon points="21,2 38,11 38,31 21,40 4,31 4,11" fill="#0d4d40" stroke="#a7f3d0" stroke-width="2"/><polyline points="10,16 18,21 10,26" fill="none" stroke="#a7f3d0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="22,16 14,21 22,26" fill="none" stroke="#a7f3d0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>KREAYOTOO<span style="color:#a7f3d0"> Solutions</span></div>
+      <div style="flex:1"></div>
+      <div style="width:30px;height:30px;border-radius:50%;background:#a7f3d0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#065f46">${initials(emp.name)}</div>
+      <span style="font-size:12px;color:rgba(255,255,255,.8)">${emp.name}</span>
+      <span style="font-size:10px;background:rgba(255,255,255,.15);padding:2px 8px;border-radius:20px;color:#fff">${emp.dept}</span>
+      <button class="btn btn-sec" style="font-size:12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff" onclick="logout()">Log out</button>
+    </div>
+    <div class="body-row">
+      <div class="sidebar" style="background:#065f46">
+        ${[['⊞','emp-dashboard','Dashboard'],['📅','emp-attendance','Mark Attendance'],['🏖','emp-leave','My Leaves'],['💰','emp-payslip','My Payslip'],['📊','emp-performance','My Performance'],['👤','emp-profile','My Profile']].map(([ic,pg,tt])=>`
+        <div class="si ${empPage===pg?'act':''}" title="${tt}" onclick="navEmp('${pg}')" style="${empPage===pg?'background:rgba(255,255,255,.2);color:#fff':''}">${ic}</div>`).join('')}
+      </div>
+      <div class="main" id="emp-main"></div>
+    </div>
+  </div>`;
+  const pages={
+    'emp-dashboard':empDashboard,'emp-attendance':empAttendance,
+    'emp-leave':empLeave,'emp-payslip':empPayslip,
+    'emp-performance':empPerformance,'emp-profile':empProfile
+  };
+  if(pages[empPage]) $('emp-main').innerHTML = pages[empPage]();
+}
+
+function empDashboard(){
+  const emp=currentEmployee;
+  const myAtt=D.attendance.filter(a=>a.empId===emp.id);
+  const present=myAtt.filter(a=>a.status==='Present').length;
+  const myLeaves=D.leaves.filter(l=>l.emp===emp.name);
+  const approved=myLeaves.filter(l=>l.status==='Approved').reduce((s,l)=>s+(l.days||0),0);
+  const todayAtt=D.attendance.find(a=>a.empId===emp.id&&a.date===todayStr());
+  const pf=Math.round((emp.salary||0)*.12),tds=Math.round((emp.salary||0)*.1),net=(emp.salary||0)-pf-tds;
+  return `
+  <div class="page-hd">
+    <div><div class="pg-title">Hi, ${emp.name.split(' ')[0]}! 👋</div><div class="pg-sub">${dateLabel()} · ${emp.role} · ${emp.dept}</div></div>
+  </div>
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-lbl">Days present</div><div class="stat-val">${present}</div><div class="stat-sub">This month</div></div>
+    <div class="stat"><div class="stat-lbl">Leave taken</div><div class="stat-val">${approved}</div><div class="stat-sub">Days this year</div></div>
+    <div class="stat"><div class="stat-lbl">Net salary</div><div class="stat-val">₹${fmt(net)}</div><div class="stat-sub">This month</div></div>
+    <div class="stat"><div class="stat-lbl">Today</div><div class="stat-val" style="font-size:14px">${todayAtt?todayAtt.status:'Not marked'}</div><div class="stat-sub">${todayAtt?`In: ${todayAtt.in||'--'}`:'Mark attendance below'}</div></div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div class="card">
+      <div class="card-hd"><h3>Quick actions</h3></div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button class="btn btn-primary" style="background:#0f766e" onclick="navEmp('emp-attendance')">📅 Mark today's attendance</button>
+        <button class="btn btn-primary" style="background:#0f766e" onclick="navEmp('emp-leave')">🏖 Apply for leave</button>
+        <button class="btn btn-primary" style="background:#0f766e" onclick="navEmp('emp-payslip')">💰 View payslip</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><h3>My info</h3></div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:13px">
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Employee ID</span><span style="font-weight:600">${emp.id}</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Department</span><span>${emp.dept}</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Role</span><span>${emp.role}</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Joined</span><span>${emp.joined}</span></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--muted)">Status</span><span>${badge(emp.status)}</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-hd"><h3>Recent attendance</h3></div>
+    ${myAtt.length===0?'<div style="text-align:center;color:var(--muted);padding:1rem">No attendance records yet</div>':
+    `<table><thead><tr><th style="width:25%">Date</th><th style="width:20%">In</th><th style="width:20%">Out</th><th style="width:20%">Status</th></tr></thead>
+    <tbody>${myAtt.slice(0,7).map(a=>`<tr><td>${a.date}</td><td>${a.in||'--'}</td><td>${a.out||'--'}</td><td>${badge(a.status)}</td></tr>`).join('')}</tbody></table>`}
+  </div>`;
+}
+
+function empAttendance(){
+  const emp=currentEmployee;
+  const today=todayStr();
+  const existing=D.attendance.find(a=>a.empId===emp.id&&a.date===today);
+  return `
+  <div class="page-hd"><div class="pg-title">Mark attendance</div></div>
+  <div class="card" style="max-width:480px">
+    <div class="card-hd"><h3>Today — ${today}</h3></div>
+    ${existing?`<div class="alert alert-s" style="margin-bottom:1rem">✅ Attendance already marked for today: <strong>${existing.status}</strong></div>`:''}
+    <div id="geo-box-emp" style="margin-bottom:1rem">${geoBoxHTML()}</div>
+    <div class="frow">
+      <div class="fld"><label>In time</label><input type="time" id="emp-in" value="${existing?.in||'09:00'}"></div>
+      <div class="fld"><label>Out time</label><input type="time" id="emp-out" value="${existing?.out||'18:00'}"></div>
+    </div>
+    <div class="fld"><label>Status</label>
+      <select id="emp-att-status">
+        <option ${existing?.status==='Present'?'selected':''}>Present</option>
+        <option ${existing?.status==='Half Day'?'selected':''}>Half Day</option>
+        <option ${existing?.status==='Absent'?'selected':''}>Absent</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" style="width:100%;background:#0f766e" onclick="submitEmpAtt()">${existing?'Update attendance':'Mark attendance'}</button>
+  </div>
+  <div class="card" style="margin-top:1rem;padding:0">
+    <div class="card-hd" style="padding:1rem 1rem 0"><h3>My attendance history</h3></div>
+    <table style="margin-top:8px"><thead><tr><th style="width:30%;padding-left:12px">Date</th><th style="width:20%">In</th><th style="width:20%">Out</th><th style="width:30%">Status</th></tr></thead>
+    <tbody>${D.attendance.filter(a=>a.empId===emp.id).slice(0,20).map(a=>`<tr><td style="padding-left:12px">${a.date}</td><td>${a.in||'--'}</td><td>${a.out||'--'}</td><td>${badge(a.status)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;padding:1rem;color:var(--muted)">No records yet</td></tr>'}</tbody></table>
+  </div>`;
+}
+
+function submitEmpAtt(){
+  const emp=currentEmployee,today=todayStr();
+  const status=$('emp-att-status').value,inT=$('emp-in').value,outT=$('emp-out').value;
+  D.attendance=D.attendance.filter(a=>!(a.empId===emp.id&&a.date===today));
+  D.attendance.unshift({empId:emp.id,empName:emp.name,date:today,status,in:inT,out:outT});
+  D.notifications.unshift({id:Date.now(),type:'info',msg:`${emp.name} marked attendance: ${status} on ${today}`,time:'Just now',read:false});
+  save();alert(`✅ Attendance marked: ${status}`);navEmp('emp-attendance');
+}
+
+function empLeave(){
+  const emp=currentEmployee;
+  const myLeaves=D.leaves.filter(l=>l.emp===emp.name);
+  const approved=myLeaves.filter(l=>l.status==='Approved').reduce((s,l)=>s+(l.days||0),0);
+  const pending=myLeaves.filter(l=>l.status==='Pending').length;
+  return `
+  <div class="page-hd"><div class="pg-title">My leaves</div></div>
+  <div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <div class="stat"><div class="stat-lbl">Days taken</div><div class="stat-val">${approved}</div></div>
+    <div class="stat"><div class="stat-lbl">Pending</div><div class="stat-val">${pending}</div></div>
+    <div class="stat"><div class="stat-lbl">Balance</div><div class="stat-val">${Math.max(0,20-approved)}</div><div class="stat-sub">of 20 days/year</div></div>
+  </div>
+  <div class="card" style="margin-bottom:1rem">
+    <div class="card-hd"><h3>Apply for leave</h3></div>
+    <div class="frow">
+      <div class="fld"><label>Leave type</label><select id="lv-type"><option>Casual</option><option>Sick</option><option>Earned</option><option>Maternity</option><option>Paternity</option></select></div>
+      <div class="fld"><label>Reason</label><input type="text" id="lv-reason" placeholder="Brief reason"></div>
+    </div>
+    <div class="frow">
+      <div class="fld"><label>From date</label><input type="date" id="lv-from" value="${todayStr()}"></div>
+      <div class="fld"><label>To date</label><input type="date" id="lv-to" value="${todayStr()}"></div>
+    </div>
+    <button class="btn btn-primary" style="background:#0f766e" onclick="submitEmpLeave()">Submit leave request</button>
+  </div>
+  <div class="card" style="padding:0">
+    <div class="card-hd" style="padding:1rem 1rem 0"><h3>My leave history</h3></div>
+    <table style="margin-top:8px"><thead><tr><th style="width:12%;padding-left:12px">Type</th><th style="width:16%">From</th><th style="width:16%">To</th><th style="width:8%">Days</th><th style="width:28%">Reason</th><th style="width:20%">Status</th></tr></thead>
+    <tbody>${myLeaves.map(l=>`<tr><td style="padding-left:12px">${badge(l.type)}</td><td>${l.from}</td><td>${l.to}</td><td>${l.days}</td><td>${l.reason}</td><td>${badge(l.status)}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:1rem;color:var(--muted)">No leave requests</td></tr>'}</tbody></table>
+  </div>`;
+}
+
+function submitEmpLeave(){
+  const emp=currentEmployee;
+  const from=$('lv-from').value,to=$('lv-to').value;
+  if(!from||!to)return;
+  const days=Math.max(1,Math.round((new Date(to)-new Date(from))/86400000)+1);
+  D.leaves.unshift({id:Date.now(),emp:emp.name,type:$('lv-type').value,from,to,days,status:'Pending',reason:$('lv-reason').value||'—'});
+  D.notifications.unshift({id:Date.now()+1,type:'info',msg:`${emp.name} applied for ${days}-day ${$('lv-type').value} leave`,time:'Just now',read:false});
+  save();alert('✅ Leave request submitted! Waiting for admin approval.');navEmp('emp-leave');
+}
+
+function empPayslip(){
+  const emp=currentEmployee;
+  const pf=Math.round((emp.salary||0)*.12),tds=Math.round((emp.salary||0)*.1),net=(emp.salary||0)-pf-tds;
+  return `
+  <div class="page-hd"><div class="pg-title">My payslip</div></div>
+  <div class="card" style="max-width:520px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
+      <div><div style="font-size:16px;font-weight:700">${D.settings.company||'Kreayotoo Solutions'}</div><div style="font-size:12px;color:var(--muted)">Payslip for April 2026</div></div>
+      <div style="text-align:right"><div style="font-weight:600">${emp.name}</div><div style="font-size:12px;color:var(--muted)">${emp.id} · ${emp.role}</div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:0">
+      ${[['Basic salary','Earnings',fmt(emp.salary),'#166534'],['Provident Fund (12%)','Deduction',fmt(pf),'#991b1b'],['TDS (10%)','Deduction',fmt(tds),'#991b1b']].map(([l,t,v,c])=>`
+      <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6;font-size:13px">
+        <div>${l}<span style="font-size:11px;margin-left:6px;color:${t==='Earnings'?'#166534':'#991b1b'};background:${t==='Earnings'?'#dcfce7':'#fee2e2'};padding:1px 6px;border-radius:10px">${t}</span></div>
+        <div style="font-weight:600;color:${c}">₹${v}</div>
+      </div>`).join('')}
+      <div style="display:flex;justify-content:space-between;padding:14px 0;font-size:16px;font-weight:700">
+        <div>Net pay</div><div style="color:#0f766e">₹${fmt(net)}</div>
+      </div>
+    </div>
+    <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;font-size:12px;color:#166534;margin-top:.5rem">
+      💳 Salary credited to your registered bank account on the last working day of the month.
+    </div>
+  </div>`;
+}
+
+function empPerformance(){
+  const emp=currentEmployee;
+  const myPerf=D.performance.filter(p=>p.emp===emp.name);
+  return `
+  <div class="page-hd"><div class="pg-title">My performance</div></div>
+  ${myPerf.length===0?`<div class="card" style="text-align:center;color:var(--muted);padding:2rem">No performance reviews yet. Your manager will add reviews here.</div>`:
+  myPerf.map(p=>`<div class="card" style="margin-bottom:1rem">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div><div style="font-weight:700;font-size:14px">${p.quarter}</div></div>
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px;font-weight:700;color:#0f766e">${p.rating}/5</span>${badge(p.rating>=4?'Approved':p.rating>=3?'Pending':'Rejected')}</div>
+    </div>
+    <div style="margin-bottom:8px"><div style="font-size:12px;color:var(--muted);margin-bottom:4px">Goals: ${p.achieved}/${p.goals} achieved</div>
+    <div style="background:#e5e7eb;border-radius:4px;height:8px;overflow:hidden"><div style="height:8px;border-radius:4px;width:${Math.round(p.achieved/Math.max(p.goals,1)*100)}%;background:${p.rating>=4?'#22c55e':p.rating>=3?'#f59e0b':'#ef4444'}"></div></div></div>
+    <div style="font-size:13px;color:var(--muted);font-style:italic">"${p.notes}"</div>
+  </div>`).join('')}`;
+}
+
+function empProfile(){
+  const emp=currentEmployee;
+  return `
+  <div class="page-hd"><div class="pg-title">My profile</div></div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+    <div class="card">
+      <div class="card-hd"><h3>Personal details</h3></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem">${av(emp.name,52)}<div><div style="font-weight:700;font-size:15px">${emp.name}</div><div style="font-size:12px;color:var(--muted)">${emp.role} · ${emp.dept}</div></div></div>
+      ${[['Employee ID',emp.id],['Email',emp.email],['Phone',emp.phone||'—'],['Joined',emp.joined],['Status',emp.status]].map(([l,v])=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f3f4f6;font-size:13px"><span style="color:var(--muted)">${l}</span><span style="font-weight:500">${v}</span></div>`).join('')}
+    </div>
+    <div class="card">
+      <div class="card-hd"><h3>Change password</h3></div>
+      <div class="fld"><label>Current password</label><input type="password" id="cp-cur" placeholder="Current password"></div>
+      <div class="fld"><label>New password</label><input type="password" id="cp-new" placeholder="Min 6 characters"></div>
+      <div class="fld"><label>Confirm new password</label><input type="password" id="cp-conf" placeholder="Repeat new password"></div>
+      <div id="cp-msg"></div>
+      <button class="btn btn-primary" style="width:100%;background:#0f766e" onclick="changeEmpPw()">Update password</button>
+    </div>
+  </div>`;
+}
+
+function changeEmpPw(){
+  const emp=currentEmployee;
+  if(!D.empPasswords)D.empPasswords={};
+  const cur=$('cp-cur').value,nw=$('cp-new').value,conf=$('cp-conf').value;
+  const stored=D.empPasswords[emp.id]||'emp@123';
+  if(cur!==stored){$('cp-msg').innerHTML=`<div class="alert alert-e">Current password is wrong</div>`;return;}
+  if(nw.length<6){$('cp-msg').innerHTML=`<div class="alert alert-e">New password must be at least 6 characters</div>`;return;}
+  if(nw!==conf){$('cp-msg').innerHTML=`<div class="alert alert-e">Passwords don't match</div>`;return;}
+  D.empPasswords[emp.id]=nw;save();
+  $('cp-msg').innerHTML=`<div class="alert alert-s">✅ Password updated successfully!</div>`;
+  $('cp-cur').value='';$('cp-new').value='';$('cp-conf').value='';
+}
 function pgDashboard(){
   const active=D.employees.filter(e=>e.status==='Active').length;
   const pLeaves=D.leaves.filter(l=>l.status==='Pending').length;
@@ -604,36 +1220,174 @@ function pgDashboard(){
 }
 
 // ─── EMPLOYEES ───────────────────────────────────────────────────
+let empPage_num = 1;
+const EMP_PER_PAGE = 25;
+
 function pgEmployees(){
   return `
-  <div class="page-hd"><div class="pg-title">Employee directory</div><button class="btn btn-primary" onclick="openEmpModal()">+ Add employee</button></div>
+  <div class="page-hd"><div class="pg-title">Employee directory <span style="font-size:13px;font-weight:400;color:var(--muted)">${D.employees.length} total</span></div>
+  <div style="display:flex;gap:8px">
+    <button class="btn btn-sec" onclick="openBulkImport()">📥 Bulk import CSV</button>
+    <button class="btn btn-primary" onclick="openEmpModal()">+ Add employee</button>
+  </div></div>
   <div class="search-bar">
-    <input type="text" id="emp-q" placeholder="Search name, email, dept…" style="max-width:240px" oninput="filterEmps()">
-    <select id="emp-d" style="width:160px" onchange="filterEmps()"><option value="">All departments</option>${DEPTS.map(d=>`<option>${d}</option>`).join('')}</select>
-    <select id="emp-s" style="width:130px" onchange="filterEmps()"><option value="">All statuses</option><option>Active</option><option>Pending</option><option>Inactive</option></select>
+    <input type="text" id="emp-q" placeholder="Search name, email, dept, role…" style="max-width:260px" oninput="empPage_num=1;filterEmps()">
+    <select id="emp-d" style="width:160px" onchange="empPage_num=1;filterEmps()"><option value="">All departments</option>${DEPTS.map(d=>`<option>${d}</option>`).join('')}</select>
+    <select id="emp-s" style="width:130px" onchange="empPage_num=1;filterEmps()"><option value="">All statuses</option><option>Active</option><option>Pending</option><option>Inactive</option></select>
+    <select id="emp-reg" style="width:150px" onchange="empPage_num=1;filterEmps()"><option value="">All types</option><option value="self">Self-registered</option><option value="admin">Admin-added</option></select>
   </div>
   <div class="card" style="padding:0">
-    <table><thead><tr><th style="width:4%;padding-left:12px">#</th><th style="width:22%">Name</th><th style="width:15%">Dept</th><th style="width:16%">Role</th><th style="width:20%">Email</th><th style="width:11%">Salary</th><th style="width:9%">Status</th><th style="width:3%"></th></tr></thead>
-    <tbody id="emp-tbody">${empRows(D.employees)}</tbody></table>
+    <table><thead><tr>
+      <th style="width:3%;padding-left:10px">#</th>
+      <th style="width:18%">Name</th>
+      <th style="width:13%">Dept</th>
+      <th style="width:13%">Role</th>
+      <th style="width:17%">Email</th>
+      <th style="width:10%">Phone</th>
+      <th style="width:9%">DOB</th>
+      <th style="width:8%">Status</th>
+      <th style="width:9%">Actions</th>
+    </tr></thead>
+    <tbody id="emp-tbody">${empRows(D.employees,0,EMP_PER_PAGE)}</tbody></table>
   </div>
-  <div id="emp-modal-wrap"></div>`;
+  <div id="emp-pagination" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;font-size:13px;color:var(--muted)">
+    ${empPagination(D.employees.length)}
+  </div>
+  <div id="emp-modal-wrap"></div>
+  <div id="bulk-import-wrap"></div>`;
 }
-function empRows(list){
-  return list.map((e,i)=>`<tr>
-    <td style="padding-left:12px;color:var(--muted)">${i+1}</td>
-    <td><div style="display:flex;align-items:center;gap:8px">${av(e.name)}${e.name}</div></td>
-    <td>${e.dept}</td><td>${e.role}</td><td style="color:var(--muted)">${e.email}</td>
-    <td>₹${fmt(e.salary)}</td><td>${badge(e.status)}</td>
-    <td style="display:flex;gap:2px"><button class="btn-icon" onclick="openEmpModal('${e.id}')">✏</button><button class="btn-icon btn-del" onclick="delEmp('${e.id}','${e.name}')">🗑</button></td>
+
+function getFilteredEmps(){
+  const q=($('emp-q')||{}).value?.toLowerCase()||'';
+  const d=($('emp-d')||{}).value||'';
+  const s=($('emp-s')||{}).value||'';
+  const reg=($('emp-reg')||{}).value||'';
+  return D.employees.filter(e=>{
+    const mq=!q||e.name.toLowerCase().includes(q)||e.email.toLowerCase().includes(q)||(e.dept||'').toLowerCase().includes(q)||(e.role||'').toLowerCase().includes(q)||(e.phone||'').includes(q);
+    const md=!d||e.dept===d;
+    const ms=!s||e.status===s;
+    const mr=!reg||(reg==='self'&&e.selfRegistered)||(reg==='admin'&&!e.selfRegistered);
+    return mq&&md&&ms&&mr;
+  });
+}
+
+function empRows(list, start, end){
+  return list.slice(start,end).map((e,i)=>`<tr>
+    <td style="padding-left:10px;color:var(--muted);font-size:11px">${start+i+1}</td>
+    <td><div style="display:flex;align-items:center;gap:7px">${av(e.name,26)}<div><div style="font-size:12px;font-weight:600">${e.name}</div>${e.selfRegistered?'<div style="font-size:10px;color:#0f766e;font-weight:600">Self-registered</div>':''}</div></div></td>
+    <td style="font-size:12px">${e.dept||'—'}</td>
+    <td style="font-size:12px">${e.role||'—'}</td>
+    <td style="color:var(--muted);font-size:11px">${e.email}</td>
+    <td style="font-size:12px">${e.phone||'—'}</td>
+    <td style="font-size:11px;color:var(--muted)">${e.dob||'—'}</td>
+    <td>${badge(e.status||'Active')}</td>
+    <td><div style="display:flex;gap:2px">
+      <button class="btn-icon" title="Edit" onclick="openEmpModal('${e.id}')">✏</button>
+      <button class="btn-icon btn-del" title="Delete" onclick="delEmp('${e.id}','${e.name}')">🗑</button>
+      <button class="btn-icon" title="Set password" onclick="setEmpPw('${e.id}','${e.name}')">🔑</button>
+    </div></td>
   </tr>`).join('');
 }
+
+function empPagination(total){
+  const filtered=getFilteredEmps();
+  const pages=Math.ceil(filtered.length/EMP_PER_PAGE)||1;
+  const start=(empPage_num-1)*EMP_PER_PAGE+1,end=Math.min(empPage_num*EMP_PER_PAGE,filtered.length);
+  return `<span>Showing ${filtered.length?start:0}–${end} of ${filtered.length} employees</span>
+  <div style="display:flex;gap:4px">
+    <button class="btn btn-sec" style="padding:4px 10px;font-size:12px" onclick="empChangePage(${empPage_num-1})" ${empPage_num<=1?'disabled':''}>← Prev</button>
+    <span style="padding:4px 10px;background:#f1f5f9;border-radius:6px;font-size:12px">${empPage_num} / ${pages}</span>
+    <button class="btn btn-sec" style="padding:4px 10px;font-size:12px" onclick="empChangePage(${empPage_num+1})" ${empPage_num>=pages?'disabled':''}>Next →</button>
+  </div>`;
+}
+
+function empChangePage(p){
+  const filtered=getFilteredEmps();
+  const pages=Math.ceil(filtered.length/EMP_PER_PAGE)||1;
+  empPage_num=Math.max(1,Math.min(p,pages));
+  filterEmps();
+}
+
 function filterEmps(){
-  const q=($('emp-q')||{}).value||'',d=($('emp-d')||{}).value||'',s=($('emp-s')||{}).value||'';
-  const list=D.employees.filter(e=>{
-    const mq=!q||e.name.toLowerCase().includes(q.toLowerCase())||e.email.toLowerCase().includes(q.toLowerCase())||e.dept.toLowerCase().includes(q.toLowerCase());
-    return mq&&(!d||e.dept===d)&&(!s||e.status===s);
+  const list=getFilteredEmps();
+  const start=(empPage_num-1)*EMP_PER_PAGE,end=start+EMP_PER_PAGE;
+  if($('emp-tbody'))$('emp-tbody').innerHTML=empRows(list,start,end);
+  if($('emp-pagination'))$('emp-pagination').innerHTML=empPagination(list.length);
+}
+
+function openBulkImport(){
+  const wrap=$('bulk-import-wrap');if(!wrap)return;
+  wrap.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('bulk-import-wrap')">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-hd"><h3>📥 Bulk import employees (CSV)</h3><button class="xbtn" onclick="closeModal('bulk-import-wrap')">×</button></div>
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400e;margin-bottom:1rem">
+      CSV format: <strong>name, email, phone, dob, department, role, salary</strong><br>
+      One employee per line. First row can be a header (will be skipped).
+    </div>
+    <div style="margin-bottom:.75rem">
+      <button class="btn btn-sec" style="font-size:12px" onclick="downloadSampleCSV()">⬇ Download sample CSV</button>
+    </div>
+    <div class="fld"><label>Paste CSV data here</label>
+      <textarea id="csv-input" rows="8" placeholder="name,email,phone,dob,department,role,salary&#10;Kiran Kumar,kiran@co.com,9876543210,1990-05-15,Engineering,Developer,50000&#10;Priya Sharma,priya@co.com,9876543211,1992-03-20,HR,HR Manager,45000"></textarea>
+    </div>
+    <div id="csv-preview" style="font-size:12px;color:var(--muted);margin-bottom:.5rem"></div>
+    <div id="csv-err"></div>
+    <div class="modal-ftr">
+      <button class="btn btn-sec" onclick="closeModal('bulk-import-wrap')">Cancel</button>
+      <button class="btn btn-primary" onclick="importCSV()">Import employees</button>
+    </div>
+  </div></div>`;
+  if($('csv-input')) $('csv-input').addEventListener('input', previewCSV);
+}
+
+function downloadSampleCSV(){
+  const csv='name,email,phone,dob,department,role,salary\nKiran Kumar,kiran@kreayotoo.com,9876543210,1990-05-15,Engineering,Lead Developer,75000\nPriya Sharma,priya@kreayotoo.com,9876543211,1992-03-20,HR,HR Manager,65000\nRavi Nair,ravi@kreayotoo.com,9876543212,1988-07-10,Sales,Sales Executive,55000';
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='employee_import_sample.csv';a.click();
+}
+
+function parseCSVLine(line){
+  const result=[],re=/("([^"]*)"|([^,]*))(,|$)/g;
+  let m;while((m=re.exec(line))!==null){result.push((m[2]!==undefined?m[2]:m[3]||'').trim());if(m[4]==='')break;}
+  return result;
+}
+
+function previewCSV(){
+  const raw=($('csv-input')||{}).value||'';
+  const lines=raw.trim().split('\n').filter(l=>l.trim());
+  const prev=$('csv-preview');if(!prev)return;
+  if(!lines.length){prev.innerHTML='';return;}
+  let dataLines=lines;
+  if(lines[0].toLowerCase().includes('name')&&lines[0].toLowerCase().includes('email')) dataLines=lines.slice(1);
+  prev.innerHTML=`<span style="color:#0f766e;font-weight:600">${dataLines.length} employee${dataLines.length!==1?'s':''} found in CSV</span>`;
+}
+
+function importCSV(){
+  const raw=($('csv-input')||{}).value||'';
+  const lines=raw.trim().split('\n').filter(l=>l.trim());
+  const err=$('csv-err');
+  if(!lines.length){if(err)err.innerHTML=`<div class="alert alert-e">No data found</div>`;return;}
+  let dataLines=lines;
+  if(lines[0].toLowerCase().includes('name')&&lines[0].toLowerCase().includes('email')) dataLines=lines.slice(1);
+  let added=0,skipped=0;
+  if(!D.empPasswords)D.empPasswords={};
+  dataLines.forEach(line=>{
+    const cols=parseCSVLine(line);
+    if(cols.length<2)return;
+    const [name,email,phone,dob,dept,role,salary]=cols;
+    if(!name||!email){skipped++;return;}
+    const dup=D.employees.find(e=>e.email.toLowerCase()===email.toLowerCase());
+    if(dup){skipped++;return;}
+    const id='EMP-'+String(D.employees.length+101+added).padStart(3,'0');
+    D.employees.push({id,name:name.trim(),email:email.trim().toLowerCase(),phone:phone||'',dob:dob||'',dept:dept||'Engineering',role:role||'Employee',status:'Active',salary:parseInt(salary)||0,joined:todayStr()});
+    D.empPasswords[id]='emp@123';
+    added++;
   });
-  if($('emp-tbody')) $('emp-tbody').innerHTML=empRows(list);
+  save();
+  closeModal('bulk-import-wrap');
+  D.notifications.unshift({id:Date.now(),type:'success',msg:`Bulk import: ${added} employees added, ${skipped} skipped (duplicates/invalid)`,time:'Just now',read:false});
+  save();nav('employees');
+  setTimeout(()=>alert(`✅ Import complete!\n${added} employees added\n${skipped} skipped (duplicate email or missing data)\n\nDefault password for all: emp@123`),100);
 }
 
 let editingEmpId=null;
@@ -647,24 +1401,47 @@ function openEmpModal(id){
   <div class="frow"><div class="fld"><label>Full name</label><input type="text" id="ef-name" value="${e.name||''}"></div>
   <div class="fld"><label>Email</label><input type="email" id="ef-email" value="${e.email||''}"></div></div>
   <div class="frow"><div class="fld"><label>Phone</label><input type="text" id="ef-ph" value="${e.phone||''}"></div>
-  <div class="fld"><label>Date of joining</label><input type="date" id="ef-doj" value="${e.joined||''}"></div></div>
+  <div class="fld"><label>Date of birth</label><input type="date" id="ef-dob-birth" value="${e.dob||''}"></div></div>
+  <div class="frow"><div class="fld"><label>Date of joining</label><input type="date" id="ef-doj" value="${e.joined||''}"></div>
+  <div class="fld"><label>Employee ID</label><input type="text" id="ef-empid-val" value="${e.id||''}"></div></div>
   <div class="frow"><div class="fld"><label>Department</label><select id="ef-dept">${DEPTS.map(d=>`<option ${e.dept===d?'selected':''}>${d}</option>`).join('')}</select></div>
   <div class="fld"><label>Role</label><input type="text" id="ef-role" value="${e.role||''}"></div></div>
-  <div class="frow"><div class="fld"><label>Salary (₹/month)</label><input type="number" id="ef-sal" value="${e.salary||30000}"></div>
-  <div class="fld"><label>Status</label><select id="ef-st"><option ${e.status==='Active'?'selected':''}>Active</option><option ${e.status==='Pending'?'selected':''}>Pending</option><option ${e.status==='Inactive'?'selected':''}>Inactive</option></select></div></div>
+  <div class="frow"><div class="fld"><label>Salary (₹/month)</label><input type="number" id="ef-sal" value="${e.salary||0}"></div>
+  <div class="fld"><label>Status</label><select id="ef-st"><option ${(e.status||'Active')==='Active'?'selected':''}>Active</option><option ${e.status==='Pending'?'selected':''}>Pending</option><option ${e.status==='Inactive'?'selected':''}>Inactive</option></select></div></div>
   <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('emp-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="saveEmp()">${id?'Save changes':'Add employee'}</button></div>
   </div></div>`;
 }
 function saveEmp(){
-  const data={name:$('ef-name').value,email:$('ef-email').value,phone:$('ef-ph').value,joined:$('ef-doj').value,dept:$('ef-dept').value,role:$('ef-role').value,salary:parseInt($('ef-sal').value)||30000,status:$('ef-st').value};
+  const data={name:$('ef-name').value,email:$('ef-email').value,phone:$('ef-ph').value,dob:$('ef-dob-birth').value,joined:$('ef-doj').value,dept:$('ef-dept').value,role:$('ef-role').value,salary:parseInt($('ef-sal').value)||0,status:$('ef-st').value};
   if(!data.name||!data.email){alert('Name and email are required');return;}
-  if(editingEmpId){Object.assign(D.employees.find(e=>e.id===editingEmpId),data);}
-  else{data.id='EMP-'+(100+D.employees.length+1);D.employees.push(data);D.notifications.unshift({id:Date.now(),type:'info',msg:`New employee ${data.name} added.`,time:'Just now',read:false});}
+  if(editingEmpId){
+    const existing=D.employees.find(e=>e.id===editingEmpId);
+    Object.assign(existing,data);
+    sbSaveEmployee(existing);
+  } else {
+    const newId=$('ef-empid-val').value.trim()||'EMP-'+String(D.employees.length+101).padStart(3,'0');
+    data.id=newId;data.passwordHash='emp@123';
+    D.employees.push(data);
+    sbSaveEmployee(data).then(r=>{if(r&&r[0])data._uuid=r[0].id;save();});
+    const notif={msg:`New employee ${data.name} added by admin.`,type:'info',read:false};
+    D.notifications.unshift({id:Date.now(),...notif,time:'Just now'});
+    sbSaveNotification(notif);
+  }
   save();nav(currentPage);
 }
-function delEmp(id,name){
+async function delEmp(id,name){
   if(!confirm(`Delete ${name}? This cannot be undone.`))return;
+  const emp=D.employees.find(e=>e.id===id);
+  if(emp)await sbDeleteEmployee(emp);
   D.employees=D.employees.filter(e=>e.id!==id);save();nav(currentPage);
+}
+async function setEmpPw(id,name){
+  const np=prompt(`Set password for ${name}:\n(Default is emp@123)`);
+  if(np&&np.length>=4){
+    const emp=D.employees.find(e=>e.id===id);
+    if(emp){emp.passwordHash=np;await sbSaveEmployee(emp);}
+    save();alert(`✅ Password set for ${name}`);
+  }
 }
 
 // ─── ATTENDANCE ──────────────────────────────────────────────────
@@ -707,16 +1484,24 @@ function pgAttendance(){
 function markAllAtt(status){
   document.querySelectorAll('.att-st').forEach(s=>s.value=status);
 }
-function saveAtt(){
+async function saveAtt(){
   const date=window._attDate||todayStr();
+  showSyncBanner('Saving attendance…');
+  const promises=[];
   document.querySelectorAll('.att-st').forEach(s=>{
     const id=s.dataset.id,emp=D.employees.find(e=>e.id===id);
+    if(!emp)return;
     const inT=document.querySelector(`.att-in[data-id="${id}"]`).value;
     const outT=document.querySelector(`.att-out[data-id="${id}"]`).value;
-    D.attendance=D.attendance.filter(a=>!(a.empId===id&&a.date===date));
-    D.attendance.unshift({empId:id,empName:emp.name,date,status:s.value,in:inT,out:outT});
+    const existing=D.attendance.find(a=>(a.empId===id||a.empId===emp._uuid)&&a.date===date);
+    D.attendance=D.attendance.filter(a=>!((a.empId===id||a.empId===emp._uuid)&&a.date===date));
+    const rec={empId:emp._uuid||id,empName:emp.name,date,status:s.value,in:inT,out:outT};
+    if(existing)rec._uuid=existing._uuid;
+    D.attendance.unshift(rec);
+    promises.push(sbSaveAttendance(rec));
   });
-  save();alert('Attendance saved!');
+  await Promise.all(promises);
+  save();hideSyncBanner();alert('✅ Attendance saved!');
 }
 
 // ─── LEAVE ───────────────────────────────────────────────────────
@@ -736,8 +1521,9 @@ function pgLeave(){
   </div>
   <div id="leave-modal-wrap"></div>`;
 }
-function updateLeave(id,status){
-  const l=D.leaves.find(x=>x.id===id);if(l)l.status=status;save();nav('leave');
+async function updateLeave(id,status){
+  const l=D.leaves.find(x=>x.id===id||x._uuid===id);
+  if(l){l.status=status;await sbUpdateLeaveStatus(l);save();nav('leave');}
 }
 function openLeaveModal(){
   $('leave-modal-wrap').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('leave-modal-wrap')">
@@ -750,11 +1536,13 @@ function openLeaveModal(){
   <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('leave-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="submitLeave()">Submit</button></div>
   </div></div>`;
 }
-function submitLeave(){
+async function submitLeave(){
   const from=$('lv-from').value,to=$('lv-to').value;
   if(!from||!to)return;
   const days=Math.max(1,Math.round((new Date(to)-new Date(from))/86400000)+1);
-  D.leaves.unshift({id:Date.now(),emp:$('lv-emp').value,type:$('lv-type').value,from,to,days,status:'Pending',reason:$('lv-reason').value||'—'});
+  const lv={id:Date.now(),emp:$('lv-emp').value,type:$('lv-type').value,from,to,days,status:'Pending',reason:$('lv-reason').value||'—'};
+  D.leaves.unshift(lv);
+  await sbSaveLeave(lv);
   save();nav('leave');
 }
 
@@ -804,7 +1592,7 @@ function pgExpenses(){
   </div>
   <div id="exp-modal-wrap"></div>`;
 }
-function updateExp(id,status){const e=D.expenses.find(x=>x.id===id);if(e){e.status=status;save();nav('expenses');}}
+async function updateExp(id,status){const e=D.expenses.find(x=>x.id===id||x._uuid===id);if(e){e.status=status;await sbUpdateExpStatus(e);save();nav('expenses');}}
 function openExpModal(){
   $('exp-modal-wrap').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('exp-modal-wrap')">
   <div class="modal"><div class="modal-hd"><h3>Add expense claim</h3><button class="xbtn" onclick="closeModal('exp-modal-wrap')">×</button></div>
@@ -816,9 +1604,11 @@ function openExpModal(){
   <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('exp-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="submitExp()">Submit</button></div>
   </div></div>`;
 }
-function submitExp(){
+async function submitExp(){
   const amt=parseFloat($('ex-amt').value);if(!amt)return alert('Enter an amount');
-  D.expenses.unshift({id:Date.now(),emp:$('ex-emp').value,cat:$('ex-cat').value,amount:amt,date:$('ex-date').value,status:'Pending',desc:$('ex-desc').value||'—'});
+  const exp={id:Date.now(),emp:$('ex-emp').value,cat:$('ex-cat').value,amount:amt,date:$('ex-date').value,status:'Pending',desc:$('ex-desc').value||'—'};
+  D.expenses.unshift(exp);
+  await sbSaveExpense(exp);
   save();nav('expenses');
 }
 
@@ -862,74 +1652,101 @@ function submitPerf(){
 // ─── LOCATION LOGS ───────────────────────────────────────────────
 function pgLocations(){
   if(!D.loginLogs)D.loginLogs=[];
+  if(!D.officeLocations)D.officeLocations=[];
   const logs=D.loginLogs;
   const total=logs.length,inOff=logs.filter(l=>l.inOffice===true).length,outOff=logs.filter(l=>l.inOffice===false).length;
   const lastLog=logs[0];
 
-  function miniMap(lat,lng,inOffice){
+  function miniMap(lat,lng,inOffice,nearestOfficeName){
     if(!lat||!lng) return `<div style="background:#f1f5f9;border-radius:8px;height:120px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px">No location data</div>`;
-    const oLat=D.settings.officeLat,oLng=D.settings.officeLng;
-    const minLat=Math.min(lat,oLat)-.003,maxLat=Math.max(lat,oLat)+.003,minLng=Math.min(lng,oLng)-.003,maxLng=Math.max(lng,oLng)+.003;
-    const toX=(ln,w)=>((ln-minLng)/(maxLng-minLng))*w;
-    const toY=(la,h)=>(1-(la-minLat)/(maxLat-minLat))*h;
-    const w=340,h=140;
-    const ux=toX(lng,w),uy=toY(lat,h),ox=toX(oLng,w),oy=toY(oLat,h);
-    return `<svg width="100%" viewBox="0 0 ${w} ${h}" style="border-radius:8px;border:1px solid var(--border);background:#f8fafc">
-      <rect width="${w}" height="${h}" fill="#f0f9ff"/>
-      <line x1="${ox}" y1="${oy}" x2="${ux}" y2="${uy}" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3"/>
-      <circle cx="${ox}" cy="${oy}" r="14" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
-      <text x="${ox}" y="${oy+4}" text-anchor="middle" font-size="12">🏢</text>
-      <circle cx="${ux}" cy="${uy}" r="14" fill="${inOffice?'#dcfce7':'#fee2e2'}" stroke="${inOffice?'#22c55e':'#ef4444'}" stroke-width="1.5"/>
+    const locs=D.officeLocations.length?D.officeLocations:[{name:'Office',lat:D.settings.officeLat||17.385,lng:D.settings.officeLng||78.4867,color:'#3b82f6'}];
+    const allLats=[lat,...locs.map(l=>l.lat)],allLngs=[lng,...locs.map(l=>l.lng)];
+    const minLat=Math.min(...allLats)-.004,maxLat=Math.max(...allLats)+.004;
+    const minLng=Math.min(...allLngs)-.004,maxLng=Math.max(...allLngs)+.004;
+    const w=340,h=150;
+    const toX=ln=>((ln-minLng)/(maxLng-minLng||.001))*w;
+    const toY=la=>(1-(la-minLat)/(maxLat-minLat||.001))*h;
+    const ux=toX(lng),uy=toY(lat);
+    const officeMarkers=locs.map(l=>`
+      <line x1="${toX(l.lng)}" y1="${toY(l.lat)}" x2="${ux}" y2="${uy}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,2"/>
+      <circle cx="${toX(l.lng)}" cy="${toY(l.lat)}" r="12" fill="${l.color||'#3b82f6'}22" stroke="${l.color||'#3b82f6'}" stroke-width="1.5"/>
+      <text x="${toX(l.lng)}" y="${toY(l.lat)+4}" text-anchor="middle" font-size="11">🏢</text>`).join('');
+    return `<svg width="100%" viewBox="0 0 ${w} ${h}" style="border-radius:8px;border:1px solid var(--border);background:#f0f9ff">
+      ${officeMarkers}
+      <circle cx="${ux}" cy="${uy}" r="13" fill="${inOffice?'#dcfce7':'#fee2e2'}" stroke="${inOffice?'#22c55e':'#ef4444'}" stroke-width="2"/>
       <text x="${ux}" y="${uy+4}" text-anchor="middle" font-size="12">${inOffice?'✅':'📍'}</text>
-      <text x="4" y="12" font-size="9" fill="#94a3b8">🏢 Office</text>
-      <text x="4" y="22" font-size="9" fill="#94a3b8">${oLat.toFixed(4)}, ${oLng.toFixed(4)}</text>
+      <text x="4" y="12" font-size="9" fill="#64748b">Employee location</text>
     </svg>`;
   }
 
+  // Per-office stats
+  const officeStats=D.officeLocations.map(loc=>{
+    const count=logs.filter(l=>l.nearestOffice===loc.name&&l.inOffice===true).length;
+    return {name:loc.name,color:loc.color,count};
+  });
+
   return `
-  <div class="page-hd"><div><div class="pg-title">Login location logs</div><div class="pg-sub">Geolocation recorded at each sign-in</div></div>
-  <button class="btn btn-sec" onclick="nav('settings')">⚙ Set office location</button></div>
-  <div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-    <div class="stat"><div class="stat-lbl">Total logins</div><div class="stat-val">${total}</div><div class="stat-sub">With geo capture</div></div>
-    <div class="stat"><div class="stat-lbl">In-office logins</div><div class="stat-val">${inOff}</div><div class="stat-sub">${total?Math.round(inOff/total*100):0}% of logins</div></div>
-    <div class="stat"><div class="stat-lbl">Remote logins</div><div class="stat-val">${outOff}</div><div class="stat-sub">${total?Math.round(outOff/total*100):0}% of logins</div></div>
+  <div class="page-hd">
+    <div><div class="pg-title">Login location logs</div><div class="pg-sub">Checked against ${D.officeLocations.length} office location${D.officeLocations.length!==1?'s':''}</div></div>
+    <button class="btn btn-primary" onclick="nav('settings')">⚙ Manage office locations</button>
   </div>
+
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-lbl">Total logins</div><div class="stat-val">${total}</div></div>
+    <div class="stat"><div class="stat-lbl">In-office</div><div class="stat-val">${inOff}</div><div class="stat-sub">${total?Math.round(inOff/total*100):0}% of logins</div></div>
+    <div class="stat"><div class="stat-lbl">Remote</div><div class="stat-val">${outOff}</div><div class="stat-sub">${total?Math.round(outOff/total*100):0}% of logins</div></div>
+    <div class="stat"><div class="stat-lbl">Office zones</div><div class="stat-val">${D.officeLocations.length}</div><div class="stat-sub">Configured</div></div>
+  </div>
+
+  ${officeStats.length>0?`
+  <div class="card" style="margin-bottom:1rem">
+    <div class="card-hd"><h3>Logins per office location</h3></div>
+    <div style="display:grid;grid-template-columns:repeat(${Math.min(officeStats.length,4)},minmax(0,1fr));gap:10px">
+      ${officeStats.map(o=>`<div style="border-left:4px solid ${o.color};padding:10px 12px;background:#f8fafc;border-radius:0 8px 8px 0">
+        <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:4px">${o.name}</div>
+        <div style="font-size:22px;font-weight:700">${o.count}</div>
+        <div style="font-size:11px;color:var(--muted)">in-office logins</div>
+      </div>`).join('')}
+    </div>
+  </div>`:''}
+
   ${lastLog&&lastLog.lat?`
   <div class="card" style="margin-bottom:1rem">
-    <div class="card-hd"><h3>Last login location</h3><span class="muted">${lastLog.time}</span></div>
+    <div class="card-hd"><h3>Last login</h3><span class="muted">${lastLog.time}</span></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start">
-      <div>${miniMap(lastLog.lat,lastLog.lng,lastLog.inOffice)}</div>
-      <div>
-        <div style="font-size:13px;font-weight:600;margin-bottom:8px">${lastLog.user}</div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          <div style="font-size:12px"><span style="color:var(--muted)">Location:</span> ${lastLog.address||'Unknown'}</div>
-          <div style="font-size:12px"><span style="color:var(--muted)">Coordinates:</span> ${lastLog.lat.toFixed(5)}, ${lastLog.lng.toFixed(5)}</div>
-          <div style="font-size:12px"><span style="color:var(--muted)">Accuracy:</span> ±${Math.round(lastLog.accuracy||0)}m</div>
-          <div style="font-size:12px"><span style="color:var(--muted)">Status:</span> ${lastLog.inOffice===true?'<span style="color:#166534;font-weight:600">✅ In-office</span>':lastLog.inOffice===false?'<span style="color:#b45309;font-weight:600">📍 Remote</span>':'<span style="color:var(--muted)">Unknown</span>'}</div>
-          <div style="font-size:12px"><span style="color:var(--muted)">Office zone:</span> ${(D.settings.officeRadius||500)}m radius</div>
-        </div>
+      <div>${miniMap(lastLog.lat,lastLog.lng,lastLog.inOffice,lastLog.nearestOffice)}</div>
+      <div style="display:flex;flex-direction:column;gap:7px;font-size:12px">
+        <div style="font-weight:700;font-size:14px">${lastLog.user}</div>
+        <div><span style="color:var(--muted)">Location:</span> ${lastLog.address||'Unknown'}</div>
+        <div><span style="color:var(--muted)">Coordinates:</span> ${lastLog.lat.toFixed(5)}, ${lastLog.lng.toFixed(5)}</div>
+        <div><span style="color:var(--muted)">Accuracy:</span> ±${Math.round(lastLog.accuracy||0)}m</div>
+        <div><span style="color:var(--muted)">Nearest office:</span> <strong>${lastLog.nearestOffice||'—'}</strong></div>
+        <div><span style="color:var(--muted)">Status:</span> ${lastLog.inOffice===true?'<span style="color:#166534;font-weight:700">✅ In-office</span>':lastLog.inOffice===false?'<span style="color:#b45309;font-weight:700">📍 Remote</span>':'<span style="color:var(--muted)">Unknown</span>'}</div>
+        <div><span style="color:var(--muted)">Method:</span> ${lastLog.method==='face'?'🎭 Face':'🔑 Password'}</div>
       </div>
     </div>
   </div>`:''}
+
   <div class="card" style="padding:0">
-    <div class="card-hd" style="padding:1rem 1rem 0"><h3>All login records</h3></div>
-    ${logs.length===0?`<div style="text-align:center;padding:2rem;color:var(--muted)">No login records yet. Sign out and sign back in to capture location.</div>`:
+    <div class="card-hd" style="padding:1rem 1rem 0"><h3>All login records</h3>
+    <span class="muted">${logs.length} total</span></div>
+    ${logs.length===0?`<div style="text-align:center;padding:2rem;color:var(--muted)">No login records yet. Sign out and back in to capture your first location.</div>`:
     `<table style="margin-top:8px"><thead><tr>
-      <th style="width:15%;padding-left:12px">User</th>
-      <th style="width:18%">Time</th>
-      <th style="width:20%">Location</th>
-      <th style="width:17%">Coordinates</th>
-      <th style="width:8%">Accuracy</th>
-      <th style="width:10%">Method</th>
+      <th style="width:13%;padding-left:12px">User</th>
+      <th style="width:17%">Time</th>
+      <th style="width:18%">Address</th>
+      <th style="width:18%">Nearest office</th>
+      <th style="width:14%">Coordinates</th>
+      <th style="width:8%">Method</th>
       <th style="width:12%">Status</th>
     </tr></thead><tbody>
     ${logs.map(l=>`<tr>
-      <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:6px">${av(l.user,24)}${l.user}</div></td>
-      <td style="color:var(--muted)">${l.time}</td>
-      <td>${l.address||'—'}</td>
-      <td style="color:var(--muted);font-size:11px">${l.lat?`${l.lat.toFixed(4)}, ${l.lng.toFixed(4)}`:'No location'}</td>
-      <td style="color:var(--muted)">±${Math.round(l.accuracy||0)}m</td>
-      <td>${l.method==='face'?'<span class="badge bb">🎭 Face</span>':'<span class="badge bx">🔑 Password</span>'}</td>
+      <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:6px">${av(l.user,22)}${l.user}</div></td>
+      <td style="color:var(--muted);font-size:11px">${l.time}</td>
+      <td style="font-size:11px">${l.address||'—'}</td>
+      <td style="font-size:11px;font-weight:500">${l.nearestOffice||'—'}</td>
+      <td style="color:var(--muted);font-size:11px">${l.lat?`${l.lat.toFixed(4)}, ${l.lng.toFixed(4)}`:'No data'}</td>
+      <td>${l.method==='face'?'<span class="badge bb">🎭 Face</span>':'<span class="badge bx">🔑 Pass</span>'}</td>
       <td>${l.inOffice===true?'<span class="badge bg">In-office</span>':l.inOffice===false?'<span class="badge ba">Remote</span>':'<span class="badge bx">Unknown</span>'}</td>
     </tr>`).join('')}
     </tbody></table>`}
@@ -956,8 +1773,10 @@ function markAllRead(){D.notifications.forEach(n=>n.read=true);save();nav('notif
 // ─── SETTINGS ────────────────────────────────────────────────────
 function pgSettings(){
   const s=D.settings;
+  if(!D.officeLocations)D.officeLocations=[];
   const deptCounts=DEPTS.map(d=>({d,c:D.employees.filter(e=>e.dept===d).length}));
   const max=Math.max(...deptCounts.map(x=>x.c),1);
+  const locColors=['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
   return `
   <div class="page-hd"><div class="pg-title">Settings</div></div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
@@ -968,11 +1787,6 @@ function pgSettings(){
       <div class="frow"><div class="fld"><label>Timezone</label><select id="st-tz"><option ${s.tz==='Asia/Kolkata'?'selected':''}>Asia/Kolkata</option><option>Asia/Dubai</option><option>UTC</option><option>America/New_York</option></select></div>
       <div class="fld"><label>Currency</label><select id="st-cu"><option ${s.currency==='INR'?'selected':''}>INR</option><option>USD</option><option>EUR</option></select></div></div>
       <div class="fld"><label>Work hours/day</label><input type="number" id="st-wh" value="${s.hours||9}" min="1" max="24"></div>
-      <div style="border-top:1px solid var(--border);margin:12px 0;padding-top:12px"><div style="font-size:12px;font-weight:700;margin-bottom:10px;color:var(--text)">📍 Office location (for geo-login)</div></div>
-      <div class="frow"><div class="fld"><label>Office latitude</label><input type="number" id="st-olat" value="${s.officeLat||17.3850}" step="0.0001" placeholder="17.3850"></div>
-      <div class="fld"><label>Office longitude</label><input type="number" id="st-olng" value="${s.officeLng||78.4867}" step="0.0001" placeholder="78.4867"></div></div>
-      <div class="fld"><label>Allowed radius (meters) — employees within this distance count as "in-office"</label><input type="number" id="st-orad" value="${s.officeRadius||500}" min="50" max="5000" step="50"></div>
-      <button class="btn btn-sec" style="margin-bottom:10px;width:100%" onclick="useMyLocation()">📍 Use my current location as office</button>
       <div id="st-msg"></div>
       <button class="btn btn-primary" onclick="saveSettings()">Save changes</button>
     </div>
@@ -984,6 +1798,31 @@ function pgSettings(){
       <div class="fld"><label>New password</label><input type="password" id="st-pw" placeholder="Leave blank to keep current"></div>
       <button class="btn btn-primary" onclick="saveProfile()">Update profile</button>
     </div>
+
+    <div class="card" style="grid-column:1/-1">
+      <div class="card-hd">
+        <h3>📍 Office locations <span style="font-size:11px;font-weight:400;color:var(--muted);margin-left:6px">${D.officeLocations.length} location${D.officeLocations.length!==1?'s':''} configured</span></h3>
+        <button class="btn btn-primary" onclick="openAddLocModal()">+ Add location</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:1rem">
+        ${D.officeLocations.map((loc,i)=>`
+        <div style="border:1px solid var(--border);border-radius:10px;padding:12px;position:relative;border-left:4px solid ${loc.color||locColors[i%locColors.length]}">
+          <div style="font-weight:700;font-size:13px;margin-bottom:4px">${loc.name}</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:2px">📌 ${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">⭕ Radius: ${loc.radius}m</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn-g" onclick="editLocModal('${loc.id}')">Edit</button>
+            <button class="btn-r" onclick="deleteLoc('${loc.id}')">Delete</button>
+            <button class="btn btn-sec" style="font-size:11px;padding:3px 8px" onclick="useCurrentLoc('${loc.id}')">📍 Update to my location</button>
+          </div>
+        </div>`).join('')}
+        ${D.officeLocations.length===0?`<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:2rem;background:#f8fafc;border-radius:8px">No office locations added yet. Click "+ Add location" to get started.</div>`:''}
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400e">
+        💡 <strong>Tip:</strong> Add one location per office/branch. Employees logging in from within the radius of any location will show as "In-office". Those outside all zones show as "Remote".
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-hd"><h3>Department headcount</h3></div>
       ${deptCounts.map(({d,c})=>`<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>${d}</span><span style="color:var(--muted)">${c} employees</span></div><div class="prog-bar"><div class="prog-fill" style="width:${Math.round(c/max*100)}%;background:#3b82f6"></div></div></div>`).join('')}
@@ -992,10 +1831,79 @@ function pgSettings(){
       <div class="card-hd"><h3>Leave policy</h3></div>
       ${[['Casual leave','12 days/year'],['Sick leave','8 days/year'],['Earned leave','20 days/year'],['Maternity leave','26 weeks'],['Paternity leave','2 weeks']].map(([t,v])=>`<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f3f4f6;font-size:13px"><span>${t}</span><span style="color:var(--muted)">${v}</span></div>`).join('')}
     </div>
-  </div>`;
+  </div>
+  <div id="loc-modal-wrap"></div>`;
+}
+
+function openAddLocModal(editId){
+  const existing=editId?D.officeLocations.find(l=>l.id===editId):null;
+  const colors=['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#06b6d4','#84cc16'];
+  const wrap=$('loc-modal-wrap');if(!wrap)return;
+  wrap.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('loc-modal-wrap')">
+  <div class="modal"><div class="modal-hd"><h3>${editId?'Edit location':'Add office location'}</h3><button class="xbtn" onclick="closeModal('loc-modal-wrap')">×</button></div>
+  <div class="fld"><label>Location name</label><input type="text" id="loc-name" placeholder="e.g. Head Office Hyderabad" value="${existing?existing.name:''}"></div>
+  <div class="frow">
+    <div class="fld"><label>Latitude</label><input type="number" id="loc-lat" step="0.0001" placeholder="17.3850" value="${existing?existing.lat:''}"></div>
+    <div class="fld"><label>Longitude</label><input type="number" id="loc-lng" step="0.0001" placeholder="78.4867" value="${existing?existing.lng:''}"></div>
+  </div>
+  <div class="fld"><label>Allowed radius (meters)</label><input type="number" id="loc-rad" min="50" max="10000" step="50" value="${existing?existing.radius:500}" placeholder="500"></div>
+  <div class="fld"><label>Color tag</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px">
+      ${colors.map(c=>`<div onclick="selectLocColor(this,'${c}')" data-color="${c}" style="width:28px;height:28px;border-radius:50%;background:${c};cursor:pointer;border:${(existing?existing.color:colors[0])===c?'3px solid #111':'3px solid transparent'}"></div>`).join('')}
+    </div>
+    <input type="hidden" id="loc-color" value="${existing?existing.color:colors[0]}">
+  </div>
+  <button class="btn btn-sec" style="width:100%;margin-bottom:8px" onclick="captureLocFromGPS()">📍 Use my current GPS location</button>
+  <div id="loc-gps-status" style="font-size:12px;color:var(--muted);margin-bottom:8px"></div>
+  <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('loc-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="saveLocModal('${editId||''}')">Save location</button></div>
+  </div></div>`;
+}
+function editLocModal(id){openAddLocModal(id);}
+function selectLocColor(el,color){
+  document.querySelectorAll('[data-color]').forEach(e=>e.style.border='3px solid transparent');
+  el.style.border='3px solid #111';
+  if($('loc-color'))$('loc-color').value=color;
+}
+function captureLocFromGPS(){
+  const s=$('loc-gps-status');if(s)s.textContent='Getting GPS…';
+  if(!navigator.geolocation){if(s)s.textContent='GPS not available';return;}
+  navigator.geolocation.getCurrentPosition(pos=>{
+    if($('loc-lat'))$('loc-lat').value=pos.coords.latitude.toFixed(6);
+    if($('loc-lng'))$('loc-lng').value=pos.coords.longitude.toFixed(6);
+    if(s)s.textContent=`✅ Location set: ${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+  },err=>{if(s)s.textContent='Could not get GPS location';},{enableHighAccuracy:true});
+}
+function useCurrentLoc(id){
+  if(!navigator.geolocation){alert('GPS not available');return;}
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const loc=D.officeLocations.find(l=>l.id===id);
+    if(loc){loc.lat=parseFloat(pos.coords.latitude.toFixed(6));loc.lng=parseFloat(pos.coords.longitude.toFixed(6));save();nav('settings');alert(`✅ ${loc.name} location updated to your current position!`);}
+  },()=>alert('Could not get GPS location'),{enableHighAccuracy:true});
+}
+function saveLocModal(editId){
+  const name=($('loc-name')||{}).value?.trim();
+  const lat=parseFloat(($('loc-lat')||{}).value);
+  const lng=parseFloat(($('loc-lng')||{}).value);
+  const radius=parseInt(($('loc-rad')||{}).value)||500;
+  const color=($('loc-color')||{}).value||'#3b82f6';
+  if(!name||isNaN(lat)||isNaN(lng)){alert('Please fill in name, latitude and longitude');return;}
+  if(!D.officeLocations)D.officeLocations=[];
+  if(editId){
+    const loc=D.officeLocations.find(l=>l.id===editId);
+    if(loc){Object.assign(loc,{name,lat,lng,radius,color});}
+  } else {
+    D.officeLocations.push({id:'LOC-'+Date.now(),name,lat,lng,radius,color});
+  }
+  save();closeModal('loc-modal-wrap');nav('settings');
+}
+function deleteLoc(id){
+  const loc=D.officeLocations.find(l=>l.id===id);
+  if(!loc||!confirm(`Delete "${loc.name}"?`))return;
+  D.officeLocations=D.officeLocations.filter(l=>l.id!==id);
+  save();nav('settings');
 }
 function saveSettings(){
-  D.settings={company:$('st-cn').value,email:$('st-em').value,tz:$('st-tz').value,currency:$('st-cu').value,hours:parseInt($('st-wh').value)||9,officeLat:parseFloat($('st-olat').value)||17.385,officeLng:parseFloat($('st-olng').value)||78.4867,officeRadius:parseInt($('st-orad').value)||500};
+  D.settings={...D.settings,company:$('st-cn').value,email:$('st-em').value,tz:$('st-tz').value,currency:$('st-cu').value,hours:parseInt($('st-wh').value)||9};
   save();$('st-msg').innerHTML=`<div class="alert alert-s" style="margin-bottom:8px">Settings saved!</div>`;
   setTimeout(()=>{if($('st-msg'))$('st-msg').innerHTML='';},2000);
 }
@@ -1022,3 +1930,4 @@ renderApp();
 </script>
 </body>
 </html>
+
