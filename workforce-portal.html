@@ -595,6 +595,28 @@ function parseAnyDate(raw){
 function renderApp(){
   if(!D.loggedIn){ $('root').innerHTML = renderLogin(); bindLogin(); return; }
   if(currentRole==='employee') { renderEmployeeApp(); return; }
+
+  // Start auto-refresh for admin (every 30 seconds)
+  if(!window._adminRefreshTimer){
+    window._adminRefreshTimer = setInterval(async()=>{
+      if(!D.loggedIn||currentRole!=='admin') { clearInterval(window._adminRefreshTimer); window._adminRefreshTimer=null; return; }
+      const prevEmpCount = D.employees.length;
+      const prevLeaveCount = (D.leaves||[]).filter(l=>l.status==='Pending').length;
+      await syncFromSupabase();
+      const newEmpCount = D.employees.length;
+      const newLeaveCount = (D.leaves||[]).filter(l=>l.status==='Pending').length;
+      // Show toast if new employee registered
+      if(newEmpCount > prevEmpCount){
+        showToast(`👤 ${newEmpCount - prevEmpCount} new employee(s) joined!`, 'success');
+        nav(currentPage);
+      }
+      // Show toast if new leave request
+      if(newLeaveCount > prevLeaveCount){
+        showToast(`🏖 New leave request pending approval`, 'info');
+        nav(currentPage);
+      }
+    }, 30000);
+  }
   const uc = unreadCount();
   $('root').innerHTML = `
   <div class="app">
@@ -1278,7 +1300,31 @@ async function submitRegistration(){
   hideSyncBanner();
   renderEmployeeApp();
 }
-function logout(){D.loggedIn=false;currentRole='admin';currentEmployee=null;currentCompany=null;geoState={status:'idle'};frStopCamera();save();renderApp();}
+function logout(){
+  D.loggedIn=false;currentRole='admin';currentEmployee=null;currentCompany=null;
+  geoState={status:'idle'};frStopCamera();
+  // Clear auto-refresh timer
+  if(window._adminRefreshTimer){clearInterval(window._adminRefreshTimer);window._adminRefreshTimer=null;}
+  save();renderApp();
+}
+
+function showToast(msg, type='info'){
+  let wrap=$('toast-wrap');
+  if(!wrap){
+    wrap=document.createElement('div');
+    wrap.id='toast-wrap';
+    wrap.style.cssText='position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;max-width:320px';
+    document.body.appendChild(wrap);
+  }
+  const colors={success:'#166534',info:'#1e40af',warning:'#92400e',error:'#991b1b'};
+  const bg={success:'#f0fdf4',info:'#eff6ff',warning:'#fffbeb',error:'#fef2f2'};
+  const border={success:'#bbf7d0',info:'#bfdbfe',warning:'#fde68a',error:'#fecaca'};
+  const t=document.createElement('div');
+  t.style.cssText=`background:${bg[type]};border:1px solid ${border[type]};color:${colors[type]};padding:10px 14px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,.1);animation:slideIn .3s ease`;
+  t.textContent=msg;
+  wrap.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300);},4000);
+}
 
 // ─── EMPLOYEE PORTAL ─────────────────────────────────────────────
 let empPage = 'emp-dashboard';
@@ -2772,7 +2818,8 @@ async function init(){
         </div>
       </div>
     </div>
-    <style>@keyframes loading{0%{width:0%}50%{width:70%}100%{width:100%}}</style>`;
+    <style>@keyframes loading{0%{width:0%}50%{width:70%}100%{width:100%}}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}</style>`;
     // Sync fresh data from Supabase
     await syncFromSupabase();
     // Now render with fresh data
