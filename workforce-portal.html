@@ -331,57 +331,56 @@ function hideSyncBanner(){const el=$('sync-banner');if(el)el.style.display='none
 function empUuid(empId){ const e=D.employees.find(x=>x.id===empId||x._uuid===empId); return e?e._uuid:empId; }
 
 async function sbSaveEmployee(emp){
-  // Only send columns that exist in the schema
-  // Extra columns (dob, password_hash etc) added via ALTER TABLE in Supabase
   const payload={
-    emp_id:emp.id,
-    name:emp.name,
-    email:emp.email,
-    department:emp.dept||'Engineering',
-    role:emp.role||'Employee',
-    status:emp.status||'Active',
-    salary:emp.salary||0,
+    emp_id:emp.id, name:emp.name, email:emp.email,
+    department:emp.dept||'Engineering', role:emp.role||'Employee',
+    status:emp.status||'Active', salary:emp.salary||0,
     date_of_joining:emp.joined||todayStr()
   };
-  // Only add optional fields if they have values
   if(emp.phone) payload.phone=emp.phone;
   if(emp.dob){
-    // Convert any date format to YYYY-MM-DD for Supabase
     let dob=emp.dob.trim();
-    // Handle DD MM YYYY or DD/MM/YYYY or DD-MM-YYYY
     const parts=dob.split(/[\s\/\-\.]/);
-    if(parts.length===3){
-      if(parts[0].length<=2&&parseInt(parts[0])<=31){
-        // DD MM YYYY → YYYY-MM-DD
-        dob=`${parts[2].padStart(4,'20')}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
-      }
+    if(parts.length===3&&parts[0].length<=2&&parseInt(parts[0])<=31){
+      dob=`${parts[2].padStart(4,'20')}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
     }
-    // Validate it's a proper date
     if(/^\d{4}-\d{2}-\d{2}$/.test(dob)) payload.dob=dob;
   }
-  if(emp.selfRegistered!==undefined) payload.self_registered=emp.selfRegistered||false;
+  if(emp.selfRegistered!==undefined) payload.self_registered=!!emp.selfRegistered;
   if(emp.passwordHash) payload.password_hash=emp.passwordHash;
   if(emp.empType) payload.emp_type=emp.empType;
 
-  let r;
-  if(emp._uuid){
-    r=await sb('employees','PATCH',payload,`?id=eq.${emp._uuid}`);
-  } else {
-    // Use upsert to handle duplicates - merge if emp_id already exists
-    try{
-      const res=await fetch(`${SB_URL}/rest/v1/employees`,{
-        method:'POST',
-        headers:{...SB_HDR,'Prefer':'return=representation,resolution=merge-duplicates'},
-        body:JSON.stringify(payload)
-      });
-      if(!res.ok){const e=await res.text();console.error('❌ Failed to save employee:',emp.name,e);return null;}
-      const t=await res.text();r=t?JSON.parse(t):true;
-      if(r&&r[0])emp._uuid=r[0].id;
-    }catch(e){console.error('❌ Save error:',e.message);return null;}
+  try{
+    // If we have a UUID, just update
+    if(emp._uuid){
+      const r=await sb('employees','PATCH',payload,`?id=eq.${emp._uuid}`);
+      if(r!==null){console.log('✅ Updated:',emp.name);return r;}
+    }
+    // Check if employee with this emp_id already exists
+    const existing=await sb('employees','GET',null,`?emp_id=eq.${encodeURIComponent(emp.id)}&select=id`);
+    if(existing&&existing.length>0){
+      // Update existing record
+      emp._uuid=existing[0].id;
+      const r=await sb('employees','PATCH',payload,`?id=eq.${emp._uuid}`);
+      console.log('✅ Updated existing:',emp.name);
+      return r;
+    }
+    // Also check by email
+    const byEmail=await sb('employees','GET',null,`?email=eq.${encodeURIComponent(emp.email)}&select=id`);
+    if(byEmail&&byEmail.length>0){
+      emp._uuid=byEmail[0].id;
+      const r=await sb('employees','PATCH',payload,`?id=eq.${emp._uuid}`);
+      console.log('✅ Updated by email:',emp.name);
+      return r;
+    }
+    // Insert new record
+    const r=await sb('employees','POST',payload);
+    if(r&&r[0]){emp._uuid=r[0].id;console.log('✅ Inserted:',emp.name);}
+    return r;
+  }catch(e){
+    console.error('❌ sbSaveEmployee error:',emp.name,e.message);
+    return null;
   }
-  if(!r) console.error('❌ Failed to save employee:',emp.name);
-  else console.log('✅ Saved to Supabase:',emp.name);
-  return r;
 }
 async function sbDeleteEmployee(emp){ if(emp._uuid)await sb('employees','DELETE',null,`?id=eq.${emp._uuid}`); }
 
@@ -1546,7 +1545,6 @@ function previewCSV(){
 }
 
 async function importCSV(){
-  // Use file upload text if available, otherwise use pasted text
   const raw=window._csvRawText||($('csv-input')||{}).value||'';
   window._csvRawText=null;
   const lines=raw.trim().split('\n').filter(l=>l.trim());
@@ -1556,53 +1554,79 @@ async function importCSV(){
   if(lines[0].toLowerCase().includes('name')&&lines[0].toLowerCase().includes('email')) dataLines=lines.slice(1);
   if(!dataLines.length){if(err)err.innerHTML=`<div class="alert alert-e">No employee data found after header</div>`;return;}
 
-  // Show progress
   const btn=document.querySelector('#bulk-import-wrap .btn-primary');
   if(btn){btn.disabled=true;btn.textContent='Importing…';}
-  showSyncBanner(`Importing ${dataLines.length} employees to database…`);
+  showSyncBanner(`Saving ${dataLines.length} employees…`);
 
-  let added=0,skipped=0;
-  const promises=[];
-
+  // Parse all rows first
+  const toImport=[];
   for(const line of dataLines){
     const cols=parseCSVLine(line);
-    if(cols.length<2){skipped++;continue;}
+    if(cols.length<2) continue;
     const [name,email,phone,rawDob,dept,role,salary]=cols;
-    // Normalize DOB to YYYY-MM-DD
+    if(!name||!email) continue;
     let dob='';
     if(rawDob&&rawDob.trim()){
       const dp=rawDob.trim().split(/[\s\/\-\.]/);
       if(dp.length===3&&dp[0].length<=2&&parseInt(dp[0])<=31){
         dob=`${dp[2].padStart(4,'20')}-${dp[1].padStart(2,'0')}-${dp[0].padStart(2,'0')}`;
-      } else {
-        dob=rawDob.trim();
-      }
+      } else { dob=rawDob.trim(); }
     }
-    if(!name||!email){skipped++;continue;}
-    const cleanEmail=email.trim().toLowerCase();
-    const dup=D.employees.find(e=>e.email.toLowerCase()===cleanEmail);
-    if(dup){skipped++;continue;}
-    const id='EMP-'+String(D.employees.length+101+added).padStart(3,'0');
-    const emp={id,name:name.trim(),email:cleanEmail,phone:(phone||'').trim(),dob:(dob||'').trim(),dept:(dept||'Engineering').trim(),role:(role||'Employee').trim(),status:'Active',salary:parseInt(salary)||0,joined:todayStr(),passwordHash:'emp@123',empType:'office'};
-    D.employees.push(emp);
-    // Save to Supabase
-    promises.push(sbSaveEmployee(emp));
-    added++;
+    toImport.push({name:name.trim(),email:email.trim().toLowerCase(),phone:(phone||'').trim(),dob,dept:(dept||'Engineering').trim(),role:(role||'Employee').trim(),salary:parseInt(salary)||0});
   }
 
-  // Wait for all Supabase saves
-  await Promise.all(promises);
+  let saved=0, failed=0;
 
-  // Save notification to Supabase
-  const notif={msg:`Bulk import: ${added} employees added, ${skipped} skipped`,type:'success',read:false};
+  for(let i=0;i<toImport.length;i++){
+    const row=toImport[i];
+    showSyncBanner(`Saving ${i+1}/${toImport.length}: ${row.name}…`);
+
+    // Check if employee already exists in Supabase by email
+    const existing=await sb('employees','GET',null,`?email=eq.${encodeURIComponent(row.email)}&select=id,emp_id`);
+    
+    const empId=(existing&&existing.length>0)?existing[0].emp_id:('EMP-'+String(D.employees.length+101+saved).padStart(3,'0'));
+    const empUUID=(existing&&existing.length>0)?existing[0].id:null;
+
+    const payload={
+      emp_id:empId, name:row.name, email:row.email,
+      department:row.dept, role:row.role, status:'Active',
+      salary:row.salary, date_of_joining:todayStr(),
+      password_hash:'emp@123', emp_type:'office'
+    };
+    if(row.phone) payload.phone=row.phone;
+    if(row.dob&&/^\d{4}-\d{2}-\d{2}$/.test(row.dob)) payload.dob=row.dob;
+
+    let r;
+    if(empUUID){
+      // Update existing
+      r=await sb('employees','PATCH',payload,`?id=eq.${empUUID}`);
+    } else {
+      // Insert new
+      r=await sb('employees','POST',payload);
+    }
+
+    if(r){
+      const uuid=empUUID||(r[0]?r[0].id:null);
+      // Update local cache
+      const localIdx=D.employees.findIndex(e=>e.email===row.email);
+      const empObj={id:empId,_uuid:uuid,name:row.name,email:row.email,phone:row.phone,dob:row.dob,dept:row.dept,role:row.role,status:'Active',salary:row.salary,joined:todayStr(),passwordHash:'emp@123',empType:'office'};
+      if(localIdx>=0) D.employees[localIdx]=empObj;
+      else D.employees.push(empObj);
+      saved++;
+    } else {
+      failed++;
+      console.error('❌ Failed:',row.name);
+    }
+  }
+
+  const notif={msg:`Import complete: ${saved} saved, ${failed} failed`,type:'success',read:false};
   D.notifications.unshift({id:Date.now(),...notif,time:'Just now'});
   sbSaveNotification(notif);
-
   save();
   hideSyncBanner();
   closeModal('bulk-import-wrap');
   nav('employees');
-  setTimeout(()=>alert(`✅ Import complete!\n\n${added} employees added to database\n${skipped} skipped (duplicates or missing data)\n\nDefault password for all: emp@123`),100);
+  setTimeout(()=>alert(`✅ Import complete!\n\n${saved} employees saved to database\n${failed} failed\n\nAll data is saved permanently.`),100);
 }
 
 let editingEmpId=null;
