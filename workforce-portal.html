@@ -79,9 +79,12 @@ tr:hover td{background:#fafafa}
 .muted{font-size:11px;color:var(--muted)}
 .modules-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;margin-bottom:1rem}
 .mod-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:.7rem;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;transition:all .2s ease;position:relative}
-.mod-card:hover{border-color:rgba(45,45,143,.4);transform:scale(1.08);box-shadow:0 6px 20px rgba(45,45,143,.15);background:#f8f9ff;z-index:1}
-.mod-ic{width:36px;height:36px;border-radius:8px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:16px}
-.mod-lb{font-size:11px;font-weight:600;color:var(--muted);text-align:center}
+.mod-card:hover{border-color:var(--navy2);transform:scale(1.15);box-shadow:0 8px 24px rgba(45,45,143,.25);background:#eef0ff;z-index:10}
+.mod-card:hover .mod-ic{background:var(--navy);font-size:20px;width:40px;height:40px}
+.mod-card:hover .mod-lb{color:var(--navy2);font-weight:700;font-size:12px}
+.mod-card:active{transform:scale(1.05)}
+.mod-ic{width:36px;height:36px;border-radius:8px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .2s ease}
+.mod-lb{font-size:11px;font-weight:600;color:var(--muted);text-align:center;transition:all .2s ease}
 .mod-dot{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;background:#ef4444}
 
 /* LOGIN */
@@ -171,6 +174,8 @@ tr:hover td{background:#fafafa}
   .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
   /* Modules grid */
   .modules-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+  .mod-card{padding:.5rem!important}
+  .mod-card:hover{transform:scale(1.05)!important}
   /* Two col layouts → single */
   .two-col{grid-template-columns:1fr!important}
   .frow{grid-template-columns:1fr!important}
@@ -1363,7 +1368,7 @@ function pgDashboard(){
     <div class="stat"><div class="stat-lbl">Pending leaves</div><div class="stat-val">${pLeaves}</div><div class="stat-sub">Awaiting approval</div></div>
     <div class="stat"><div class="stat-lbl">Open tasks</div><div class="stat-val">${pLeaves+pExp}</div><div class="stat-sub">Leaves + expenses</div></div>
   </div>
-  <div class="modules-grid" style="grid-template-columns:repeat(12,minmax(0,1fr))">${mods.map(([ic,lb,pg])=>`<div class="mod-card" onclick="nav('${pg}')"><div class="mod-ic">${ic}</div><div class="mod-lb">${lb}</div>${pg==='notifications'&&unreadCount()>0?'<div class="mod-dot"></div>':''}</div>`).join('')}</div>
+  <div class="modules-grid" style="grid-template-columns:repeat(auto-fill,minmax(80px,1fr))">${mods.map(([ic,lb,pg])=>`<div class="mod-card" onclick="nav('${pg}')"><div class="mod-ic">${ic}</div><div class="mod-lb">${lb}</div>${pg==='notifications'&&unreadCount()>0?'<div class="mod-dot"></div>':''}</div>`).join('')}</div>
   <div class="two-col">
     <div class="card">
       <div class="card-hd"><h3>Recent employees</h3><button class="btn-link" onclick="nav('employees')">View all →</button></div>
