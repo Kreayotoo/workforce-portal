@@ -254,11 +254,14 @@ async function sb(table,method='GET',body=null,query=''){
 }
 
 // ─── DATA LAYER ───────────────────────────────────────────────────
-const STORE_KEY = 'wf_portal_v2';
+const STORE_KEY = 'wf_portal_v3'; // bumped version clears old cache automatically
 const DEPTS = ['Engineering','HR','Sales','Finance','Operations','Marketing','Legal'];
 
 function loadData(){ try{return JSON.parse(localStorage.getItem(STORE_KEY))||null;}catch(e){return null;} }
 function saveData(d){ localStorage.setItem(STORE_KEY,JSON.stringify(d)); }
+
+// Clear any old cache versions on load
+['wf_portal_v1','wf_portal_v2'].forEach(k=>localStorage.removeItem(k));
 
 function initData(){
   return {
@@ -290,14 +293,16 @@ async function syncFromSupabase(){
       sb('notifications','GET',null,'?order=created_at.desc&limit=50'),
       sb('settings','GET',null,'?limit=1'),
     ]);
-    if(emps) D.employees=emps.map(e=>({id:e.emp_id||e.id,_uuid:e.id,name:e.name,email:e.email,phone:e.phone||'',dob:e.dob||'',dept:e.department||'',role:e.role||'',status:e.status||'Active',salary:e.salary||0,joined:e.date_of_joining||'',selfRegistered:e.self_registered||false,passwordHash:e.password_hash||'emp@123'}));
-    if(att) D.attendance=att.map(a=>({_uuid:a.id,empId:a.employee_id,empName:a.employee_name,date:a.date,status:a.status,in:a.in_time,out:a.out_time}));
-    if(lvs) D.leaves=lvs.map(l=>({_uuid:l.id,id:l.id,emp:l.employee_name,type:l.leave_type,from:l.from_date,to:l.to_date,days:l.days,reason:l.reason,status:l.status}));
-    if(exp) D.expenses=exp.map(e=>({_uuid:e.id,id:e.id,emp:e.employee_name,cat:e.category,amount:e.amount,date:e.expense_date,desc:e.description,status:e.status}));
-    if(perf) D.performance=perf.map(p=>({_uuid:p.id,id:p.id,emp:p.employee_name,quarter:p.quarter,rating:p.rating,goals:p.goals_set,achieved:p.goals_achieved,notes:p.review_notes}));
-    if(notifs) D.notifications=notifs.map(n=>({_uuid:n.id,id:n.id,type:n.type,msg:n.message,time:new Date(n.created_at).toLocaleString('en-IN'),read:n.is_read}));
+    // Always replace local data with Supabase data — never keep stale cache
+    D.employees = (emps||[]).map(e=>({id:e.emp_id||e.id,_uuid:e.id,name:e.name,email:e.email,phone:e.phone||'',dob:e.dob||'',dept:e.department||'',role:e.role||'',status:e.status||'Active',salary:e.salary||0,joined:e.date_of_joining||'',selfRegistered:e.self_registered||false,passwordHash:e.password_hash||'emp@123',empType:e.emp_type||'office'}));
+    D.attendance = (att||[]).map(a=>({_uuid:a.id,empId:a.employee_id,empName:a.employee_name,date:a.date,status:a.status,in:a.in_time,out:a.out_time}));
+    D.leaves = (lvs||[]).map(l=>({_uuid:l.id,id:l.id,emp:l.employee_name,type:l.leave_type,from:l.from_date,to:l.to_date,days:l.days,reason:l.reason,status:l.status}));
+    D.expenses = (exp||[]).map(e=>({_uuid:e.id,id:e.id,emp:e.employee_name,cat:e.category,amount:e.amount,date:e.expense_date,desc:e.description,status:e.status}));
+    D.performance = (perf||[]).map(p=>({_uuid:p.id,id:p.id,emp:p.employee_name,quarter:p.quarter,rating:p.rating,goals:p.goals_set,achieved:p.goals_achieved,notes:p.review_notes}));
+    if(notifs&&notifs.length) D.notifications=notifs.map(n=>({_uuid:n.id,id:n.id,type:n.type,msg:n.message,time:new Date(n.created_at).toLocaleString('en-IN'),read:n.is_read}));
     if(sets&&sets.length){const s=sets[0];D.settings={...D.settings,company:s.company_name,email:s.company_email,tz:s.timezone,currency:s.currency,hours:s.work_hours,officeLat:s.office_lat,officeLng:s.office_lng,officeRadius:s.office_radius,_uuid:s.id};}
     SB_READY=true;saveData(D);hideSyncBanner();
+    console.log(`✅ Synced: ${D.employees.length} employees, ${D.leaves.length} leaves, ${D.attendance.length} attendance records`);
   }catch(e){console.error('Sync failed',e);hideSyncBanner();}
 }
 
@@ -367,6 +372,7 @@ function renderApp(){
     <div class="topbar">
       <div class="tb-logo" style="display:flex;align-items:center;gap:8px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42 42" width="28" height="28"><polygon points="21,2 38,11 38,31 21,40 4,31 4,11" fill="#1a3a5c" stroke="#4ecdc4" stroke-width="2"/><polyline points="10,16 18,21 10,26" fill="none" stroke="#4ecdc4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="22,16 14,21 22,26" fill="none" stroke="#4ecdc4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>KREAYOTOO<span> Solutions</span></div>
       <div style="flex:1"></div>
+      <button onclick="syncFromSupabase().then(()=>{nav(currentPage);})" title="Sync latest data from database" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600">🔄 Refresh</button>
       <div style="position:relative;cursor:pointer;font-size:16px;color:#fff" onclick="nav('notifications')">
         🔔${uc>0?`<div class="si-dot" style="top:-2px;right:-2px"></div>`:''}
       </div>
@@ -1239,14 +1245,15 @@ function pgEmployees(){
   <div class="card" style="padding:0">
     <table><thead><tr>
       <th style="width:3%;padding-left:10px">#</th>
-      <th style="width:18%">Name</th>
-      <th style="width:13%">Dept</th>
-      <th style="width:13%">Role</th>
-      <th style="width:17%">Email</th>
-      <th style="width:10%">Phone</th>
-      <th style="width:9%">DOB</th>
+      <th style="width:16%">Name</th>
+      <th style="width:11%">Dept</th>
+      <th style="width:12%">Role</th>
+      <th style="width:15%">Email</th>
+      <th style="width:9%">Phone</th>
+      <th style="width:8%">DOB</th>
+      <th style="width:10%">Type</th>
       <th style="width:8%">Status</th>
-      <th style="width:9%">Actions</th>
+      <th style="width:8%">Actions</th>
     </tr></thead>
     <tbody id="emp-tbody">${empRows(D.employees,0,EMP_PER_PAGE)}</tbody></table>
   </div>
@@ -1272,6 +1279,8 @@ function getFilteredEmps(){
 }
 
 function empRows(list, start, end){
+  const typeMap={field:'🚧 Field',remote:'🏠 Remote',hybrid:'🔄 Hybrid',office:'🏢 Office'};
+  const typeBadge={field:'ba',remote:'bb',hybrid:'bp',office:'bg'};
   return list.slice(start,end).map((e,i)=>`<tr>
     <td style="padding-left:10px;color:var(--muted);font-size:11px">${start+i+1}</td>
     <td><div style="display:flex;align-items:center;gap:7px">${av(e.name,26)}<div><div style="font-size:12px;font-weight:600">${e.name}</div>${e.selfRegistered?'<div style="font-size:10px;color:#0f766e;font-weight:600">Self-registered</div>':''}</div></div></td>
@@ -1280,7 +1289,8 @@ function empRows(list, start, end){
     <td style="color:var(--muted);font-size:11px">${e.email}</td>
     <td style="font-size:12px">${e.phone||'—'}</td>
     <td style="font-size:11px;color:var(--muted)">${e.dob||'—'}</td>
-    <td>${badge(e.status||'Active')}</td>
+    <td><span class="badge ${typeBadge[e.empType||'office']}">${typeMap[e.empType||'office']}</span></td>
+    <td>${e.empType==='field'?`<button class="btn-link" style="font-size:11px" onclick="viewFieldTrail('${e.id}','${e.name}')">📍 Trail</button>`:badge(e.status||'Active')}</td>
     <td><div style="display:flex;gap:2px">
       <button class="btn-icon" title="Edit" onclick="openEmpModal('${e.id}')">✏</button>
       <button class="btn-icon btn-del" title="Delete" onclick="delEmp('${e.id}','${e.name}')">🗑</button>
@@ -1408,11 +1418,19 @@ function openEmpModal(id){
   <div class="fld"><label>Role</label><input type="text" id="ef-role" value="${e.role||''}"></div></div>
   <div class="frow"><div class="fld"><label>Salary (₹/month)</label><input type="number" id="ef-sal" value="${e.salary||0}"></div>
   <div class="fld"><label>Status</label><select id="ef-st"><option ${(e.status||'Active')==='Active'?'selected':''}>Active</option><option ${e.status==='Pending'?'selected':''}>Pending</option><option ${e.status==='Inactive'?'selected':''}>Inactive</option></select></div></div>
+  <div class="fld"><label>Employee type</label>
+    <select id="ef-type">
+      <option value="office" ${(e.empType||'office')==='office'?'selected':''}>🏢 Office employee</option>
+      <option value="field" ${e.empType==='field'?'selected':''}>🚧 Field employee (moves daily)</option>
+      <option value="remote" ${e.empType==='remote'?'selected':''}>🏠 Remote employee (works from home)</option>
+      <option value="hybrid" ${e.empType==='hybrid'?'selected':''}>🔄 Hybrid employee</option>
+    </select>
+  </div>
   <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('emp-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="saveEmp()">${id?'Save changes':'Add employee'}</button></div>
   </div></div>`;
 }
 function saveEmp(){
-  const data={name:$('ef-name').value,email:$('ef-email').value,phone:$('ef-ph').value,dob:$('ef-dob-birth').value,joined:$('ef-doj').value,dept:$('ef-dept').value,role:$('ef-role').value,salary:parseInt($('ef-sal').value)||0,status:$('ef-st').value};
+  const data={name:$('ef-name').value,email:$('ef-email').value,phone:$('ef-ph').value,dob:$('ef-dob-birth').value,joined:$('ef-doj').value,dept:$('ef-dept').value,role:$('ef-role').value,salary:parseInt($('ef-sal').value)||0,status:$('ef-st').value,empType:$('ef-type').value||'office'};
   if(!data.name||!data.email){alert('Name and email are required');return;}
   if(editingEmpId){
     const existing=D.employees.find(e=>e.id===editingEmpId);
@@ -1654,104 +1672,181 @@ function pgLocations(){
   if(!D.loginLogs)D.loginLogs=[];
   if(!D.officeLocations)D.officeLocations=[];
   const logs=D.loginLogs;
-  const total=logs.length,inOff=logs.filter(l=>l.inOffice===true).length,outOff=logs.filter(l=>l.inOffice===false).length;
-  const lastLog=logs[0];
+  const total=logs.length;
+  const inOff=logs.filter(l=>l.inOffice===true).length;
+  const outOff=logs.filter(l=>l.inOffice===false).length;
+  const uniqueEmps=[...new Set(logs.map(l=>l.user))];
 
-  function miniMap(lat,lng,inOffice,nearestOfficeName){
-    if(!lat||!lng) return `<div style="background:#f1f5f9;border-radius:8px;height:120px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px">No location data</div>`;
-    const locs=D.officeLocations.length?D.officeLocations:[{name:'Office',lat:D.settings.officeLat||17.385,lng:D.settings.officeLng||78.4867,color:'#3b82f6'}];
-    const allLats=[lat,...locs.map(l=>l.lat)],allLngs=[lng,...locs.map(l=>l.lng)];
-    const minLat=Math.min(...allLats)-.004,maxLat=Math.max(...allLats)+.004;
-    const minLng=Math.min(...allLngs)-.004,maxLng=Math.max(...allLngs)+.004;
-    const w=340,h=150;
-    const toX=ln=>((ln-minLng)/(maxLng-minLng||.001))*w;
-    const toY=la=>(1-(la-minLat)/(maxLat-minLat||.001))*h;
-    const ux=toX(lng),uy=toY(lat);
-    const officeMarkers=locs.map(l=>`
-      <line x1="${toX(l.lng)}" y1="${toY(l.lat)}" x2="${ux}" y2="${uy}" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,2"/>
-      <circle cx="${toX(l.lng)}" cy="${toY(l.lat)}" r="12" fill="${l.color||'#3b82f6'}22" stroke="${l.color||'#3b82f6'}" stroke-width="1.5"/>
-      <text x="${toX(l.lng)}" y="${toY(l.lat)+4}" text-anchor="middle" font-size="11">🏢</text>`).join('');
+  function statusBadge(log){
+    if(log.inOffice===true) return '<span class="badge bg">✅ In-office</span>';
+    const emp=D.employees.find(e=>e.name===log.user);
+    if(!log.lat) return '<span class="badge bx">📵 No GPS</span>';
+    return '<span class="badge ba">📍 Outside office</span>';
+  }
+
+  function trailSVG(empLogs){
+    const valid=empLogs.filter(l=>l.lat&&l.lng).slice(0,15);
+    if(!valid.length) return '<div style="background:#f1f5f9;border-radius:8px;height:130px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;text-align:center">No GPS data yet<br>Location captured on next login</div>';
+    const lats=valid.map(l=>l.lat),lngs=valid.map(l=>l.lng);
+    const pad=0.006;
+    const minLa=Math.min(...lats)-pad,maxLa=Math.max(...lats)+pad;
+    const minLn=Math.min(...lngs)-pad,maxLn=Math.max(...lngs)+pad;
+    const w=320,h=130;
+    const tx=ln=>((ln-minLn)/(maxLn-minLn||.001))*w;
+    const ty=la=>(1-(la-minLa)/(maxLa-minLa||.001))*h;
+    const pts=valid.map(l=>`${tx(l.lng)},${ty(l.lat)}`).join(' ');
+    const dots=valid.map((l,i)=>`<circle cx="${tx(l.lng)}" cy="${ty(l.lat)}" r="${i===0?9:5}" fill="${i===0?'#3b82f6':l.inOffice?'#22c55e':'#f59e0b'}" opacity="${Math.max(0.35,1-i*0.06)}"/><text x="${tx(l.lng)}" y="${ty(l.lat)+3.5}" text-anchor="middle" font-size="7" fill="#fff">${i===0?'●':i+1}</text>`).join('');
     return `<svg width="100%" viewBox="0 0 ${w} ${h}" style="border-radius:8px;border:1px solid var(--border);background:#f0f9ff">
-      ${officeMarkers}
-      <circle cx="${ux}" cy="${uy}" r="13" fill="${inOffice?'#dcfce7':'#fee2e2'}" stroke="${inOffice?'#22c55e':'#ef4444'}" stroke-width="2"/>
-      <text x="${ux}" y="${uy+4}" text-anchor="middle" font-size="12">${inOffice?'✅':'📍'}</text>
-      <text x="4" y="12" font-size="9" fill="#64748b">Employee location</text>
+      <polyline points="${pts}" fill="none" stroke="#93c5fd" stroke-width="2" stroke-dasharray="5,3"/>
+      ${dots}
+      <text x="3" y="10" font-size="8" fill="#64748b">🔵 Latest  🟡 Remote  🟢 In-office</text>
     </svg>`;
   }
 
-  // Per-office stats
-  const officeStats=D.officeLocations.map(loc=>{
-    const count=logs.filter(l=>l.nearestOffice===loc.name&&l.inOffice===true).length;
-    return {name:loc.name,color:loc.color,count};
-  });
-
   return `
   <div class="page-hd">
-    <div><div class="pg-title">Login location logs</div><div class="pg-sub">Checked against ${D.officeLocations.length} office location${D.officeLocations.length!==1?'s':''}</div></div>
-    <button class="btn btn-primary" onclick="nav('settings')">⚙ Manage office locations</button>
+    <div><div class="pg-title">Login location tracking</div><div class="pg-sub">Every employee login GPS captured automatically</div></div>
+    <button class="btn btn-primary" onclick="nav('settings')">⚙ Office locations</button>
   </div>
 
   <div class="stat-grid">
-    <div class="stat"><div class="stat-lbl">Total logins</div><div class="stat-val">${total}</div></div>
+    <div class="stat"><div class="stat-lbl">Total logins</div><div class="stat-val">${total}</div><div class="stat-sub">All employees</div></div>
     <div class="stat"><div class="stat-lbl">In-office</div><div class="stat-val">${inOff}</div><div class="stat-sub">${total?Math.round(inOff/total*100):0}% of logins</div></div>
-    <div class="stat"><div class="stat-lbl">Remote</div><div class="stat-val">${outOff}</div><div class="stat-sub">${total?Math.round(outOff/total*100):0}% of logins</div></div>
-    <div class="stat"><div class="stat-lbl">Office zones</div><div class="stat-val">${D.officeLocations.length}</div><div class="stat-sub">Configured</div></div>
+    <div class="stat"><div class="stat-lbl">Outside office</div><div class="stat-val">${outOff}</div><div class="stat-sub">Travel / remote / field</div></div>
+    <div class="stat"><div class="stat-lbl">Employees tracked</div><div class="stat-val">${uniqueEmps.length}</div><div class="stat-sub">Unique logins</div></div>
   </div>
 
-  ${officeStats.length>0?`
-  <div class="card" style="margin-bottom:1rem">
-    <div class="card-hd"><h3>Logins per office location</h3></div>
-    <div style="display:grid;grid-template-columns:repeat(${Math.min(officeStats.length,4)},minmax(0,1fr));gap:10px">
-      ${officeStats.map(o=>`<div style="border-left:4px solid ${o.color};padding:10px 12px;background:#f8fafc;border-radius:0 8px 8px 0">
-        <div style="font-size:11px;color:var(--muted);font-weight:600;margin-bottom:4px">${o.name}</div>
-        <div style="font-size:22px;font-weight:700">${o.count}</div>
-        <div style="font-size:11px;color:var(--muted)">in-office logins</div>
-      </div>`).join('')}
-    </div>
-  </div>`:''}
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 16px;margin-bottom:1rem;font-size:13px;color:#1e40af">
+    <strong>📍 How this works:</strong> Every time any employee logs in — whether from office, home, another city, or a client site — their GPS location is automatically captured and shown here. No manual entry needed.
+  </div>
 
-  ${lastLog&&lastLog.lat?`
   <div class="card" style="margin-bottom:1rem">
-    <div class="card-hd"><h3>Last login</h3><span class="muted">${lastLog.time}</span></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start">
-      <div>${miniMap(lastLog.lat,lastLog.lng,lastLog.inOffice,lastLog.nearestOffice)}</div>
-      <div style="display:flex;flex-direction:column;gap:7px;font-size:12px">
-        <div style="font-weight:700;font-size:14px">${lastLog.user}</div>
-        <div><span style="color:var(--muted)">Location:</span> ${lastLog.address||'Unknown'}</div>
-        <div><span style="color:var(--muted)">Coordinates:</span> ${lastLog.lat.toFixed(5)}, ${lastLog.lng.toFixed(5)}</div>
-        <div><span style="color:var(--muted)">Accuracy:</span> ±${Math.round(lastLog.accuracy||0)}m</div>
-        <div><span style="color:var(--muted)">Nearest office:</span> <strong>${lastLog.nearestOffice||'—'}</strong></div>
-        <div><span style="color:var(--muted)">Status:</span> ${lastLog.inOffice===true?'<span style="color:#166534;font-weight:700">✅ In-office</span>':lastLog.inOffice===false?'<span style="color:#b45309;font-weight:700">📍 Remote</span>':'<span style="color:var(--muted)">Unknown</span>'}</div>
-        <div><span style="color:var(--muted)">Method:</span> ${lastLog.method==='face'?'🎭 Face':'🔑 Password'}</div>
+    <div class="card-hd">
+      <h3>Per-employee location history</h3>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="loc-emp-filter" onchange="renderLocTrails()" style="width:180px;font-size:12px">
+          <option value="">All employees</option>
+          ${uniqueEmps.map(n=>`<option>${n}</option>`).join('')}
+        </select>
+        <select id="loc-date-filter" onchange="renderLocTrails()" style="width:140px;font-size:12px">
+          <option value="">All dates</option>
+          <option value="today">Today</option>
+          <option value="week">This week</option>
+          <option value="month">This month</option>
+        </select>
       </div>
     </div>
-  </div>`:''}
+    <div id="loc-trails-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem">
+      ${uniqueEmps.slice(0,6).map(name=>{
+        const empLogs=logs.filter(l=>l.user===name);
+        const last=empLogs[0];
+        const emp=D.employees.find(e=>e.name===name);
+        return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            ${av(name,30)}
+            <div style="min-width:0">
+              <div style="font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
+              <div style="font-size:10px;color:var(--muted)">${emp?emp.role+' · '+emp.dept:'Employee'}</div>
+            </div>
+          </div>
+          ${trailSVG(empLogs)}
+          <div style="margin-top:8px;font-size:11px">
+            <div style="color:var(--muted)">Last login: ${last?last.time:'Never'}</div>
+            <div style="color:var(--muted);margin-top:2px">📍 ${last&&last.address?last.address:'No location data'}</div>
+            <div style="margin-top:4px;display:flex;align-items:center;gap:6px">
+              ${last?statusBadge(last):''}<span style="color:var(--muted)">${empLogs.length} login${empLogs.length!==1?'s':''}</span>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+    ${uniqueEmps.length>6?`<div style="text-align:center;margin-top:12px"><button class="btn btn-sec" onclick="showAllTrails()">Show all ${uniqueEmps.length} employees</button></div>`:''}
+  </div>
 
   <div class="card" style="padding:0">
-    <div class="card-hd" style="padding:1rem 1rem 0"><h3>All login records</h3>
-    <span class="muted">${logs.length} total</span></div>
-    ${logs.length===0?`<div style="text-align:center;padding:2rem;color:var(--muted)">No login records yet. Sign out and back in to capture your first location.</div>`:
+    <div class="card-hd" style="padding:1rem 1rem 0">
+      <h3>Complete login log</h3>
+      <span class="muted">${logs.length} records</span>
+    </div>
+    ${logs.length===0?`<div style="text-align:center;padding:2rem;color:var(--muted)">No login records yet.<br>Location is captured automatically on next login.</div>`:
     `<table style="margin-top:8px"><thead><tr>
-      <th style="width:13%;padding-left:12px">User</th>
-      <th style="width:17%">Time</th>
-      <th style="width:18%">Address</th>
-      <th style="width:18%">Nearest office</th>
-      <th style="width:14%">Coordinates</th>
-      <th style="width:8%">Method</th>
+      <th style="width:14%;padding-left:12px">Employee</th>
+      <th style="width:16%">Date & time</th>
+      <th style="width:20%">Location / Address</th>
+      <th style="width:16%">Nearest office</th>
+      <th style="width:12%">Coordinates</th>
+      <th style="width:10%">Device</th>
       <th style="width:12%">Status</th>
     </tr></thead><tbody>
     ${logs.map(l=>`<tr>
-      <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:6px">${av(l.user,22)}${l.user}</div></td>
+      <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:6px">${av(l.user,22)}<div><div style="font-size:12px;font-weight:600">${l.user}</div><div style="font-size:10px;color:var(--muted)">${D.employees.find(e=>e.name===l.user)?.role||''}</div></div></div></td>
       <td style="color:var(--muted);font-size:11px">${l.time}</td>
-      <td style="font-size:11px">${l.address||'—'}</td>
+      <td style="font-size:11px">${l.address||'Location not captured'}</td>
       <td style="font-size:11px;font-weight:500">${l.nearestOffice||'—'}</td>
-      <td style="color:var(--muted);font-size:11px">${l.lat?`${l.lat.toFixed(4)}, ${l.lng.toFixed(4)}`:'No data'}</td>
+      <td style="color:var(--muted);font-size:11px">${l.lat?`${l.lat.toFixed(4)}, ${l.lng.toFixed(4)}`:'No GPS'}</td>
       <td>${l.method==='face'?'<span class="badge bb">🎭 Face</span>':'<span class="badge bx">🔑 Pass</span>'}</td>
-      <td>${l.inOffice===true?'<span class="badge bg">In-office</span>':l.inOffice===false?'<span class="badge ba">Remote</span>':'<span class="badge bx">Unknown</span>'}</td>
+      <td>${l.inOffice===true?'<span class="badge bg">✅ In-office</span>':l.lat?'<span class="badge ba">📍 Outside</span>':'<span class="badge bx">No GPS</span>'}</td>
     </tr>`).join('')}
     </tbody></table>`}
   </div>`;
 }
+
+function renderLocTrails(){
+  const empF=($('loc-emp-filter')||{}).value||'';
+  const dateF=($('loc-date-filter')||{}).value||'';
+  const grid=$('loc-trails-grid');if(!grid)return;
+  let logs=D.loginLogs||[];
+  const now=new Date();
+  if(dateF==='today') logs=logs.filter(l=>{try{return new Date(l.time).toDateString()===now.toDateString();}catch(e){return true;}});
+  if(dateF==='week') logs=logs.filter(l=>{try{return (now-new Date(l.time))<7*86400000;}catch(e){return true;}});
+  if(dateF==='month') logs=logs.filter(l=>{try{return new Date(l.time).getMonth()===now.getMonth();}catch(e){return true;}});
+  const emps=empF?[empF]:[...new Set(logs.map(l=>l.user))];
+  grid.style.gridTemplateColumns=`repeat(${Math.min(emps.length,3)},minmax(0,1fr))`;
+  grid.innerHTML=emps.map(name=>{
+    const empLogs=logs.filter(l=>l.user===name);
+    const last=empLogs[0];
+    const emp=D.employees.find(e=>e.name===name);
+    const valid=empLogs.filter(l=>l.lat&&l.lng).slice(0,15);
+    let trailHtml='';
+    if(!valid.length){trailHtml='<div style="background:#f1f5f9;border-radius:8px;height:130px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px;text-align:center">No GPS data</div>';}
+    else{
+      const pad=0.006,lats=valid.map(l=>l.lat),lngs=valid.map(l=>l.lng);
+      const minLa=Math.min(...lats)-pad,maxLa=Math.max(...lats)+pad,minLn=Math.min(...lngs)-pad,maxLn=Math.max(...lngs)+pad;
+      const w=320,h=130,tx=ln=>((ln-minLn)/(maxLn-minLn||.001))*w,ty=la=>(1-(la-minLa)/(maxLa-minLa||.001))*h;
+      const pts=valid.map(l=>`${tx(l.lng)},${ty(l.lat)}`).join(' ');
+      const dots=valid.map((l,i)=>`<circle cx="${tx(l.lng)}" cy="${ty(l.lat)}" r="${i===0?9:5}" fill="${i===0?'#3b82f6':l.inOffice?'#22c55e':'#f59e0b'}" opacity="${Math.max(0.35,1-i*0.06)}"/><text x="${tx(l.lng)}" y="${ty(l.lat)+3.5}" text-anchor="middle" font-size="7" fill="#fff">${i===0?'●':i+1}</text>`).join('');
+      trailHtml=`<svg width="100%" viewBox="0 0 ${w} ${h}" style="border-radius:8px;border:1px solid var(--border);background:#f0f9ff"><polyline points="${pts}" fill="none" stroke="#93c5fd" stroke-width="2" stroke-dasharray="5,3"/>${dots}<text x="3" y="10" font-size="8" fill="#64748b">🔵 Latest  🟡 Outside  🟢 In-office</text></svg>`;
+    }
+    const inOfficeCnt=empLogs.filter(l=>l.inOffice===true).length;
+    const badge=last?(last.inOffice===true?'<span class="badge bg">✅ In-office</span>':last.lat?'<span class="badge ba">📍 Outside</span>':'<span class="badge bx">No GPS</span>'):'';
+    return `<div style="border:1px solid var(--border);border-radius:10px;padding:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">${av(name,30)}<div style="min-width:0"><div style="font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div><div style="font-size:10px;color:var(--muted)">${emp?emp.role+' · '+emp.dept:'Employee'}</div></div></div>
+      ${trailHtml}
+      <div style="margin-top:8px;font-size:11px">
+        <div style="color:var(--muted)">Last: ${last?last.time:'Never'}</div>
+        <div style="color:var(--muted);margin-top:1px">📍 ${last&&last.address?last.address:'—'}</div>
+        <div style="margin-top:4px;display:flex;align-items:center;gap:6px">${badge}<span style="color:var(--muted)">${inOfficeCnt}/${empLogs.length} in-office</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function showAllTrails(){
+  const grid=$('loc-trails-grid');if(!grid)return;
+  const empFilter=($('loc-emp-filter')||{}).value||'';
+  const emps=empFilter?[empFilter]:[...new Set((D.loginLogs||[]).map(l=>l.user))];
+  grid.style.gridTemplateColumns=`repeat(${Math.min(emps.length,3)},minmax(0,1fr))`;
+  renderLocTrails();
+}
+
+function viewFieldTrail(id,name){
+  nav('locations');
+  setTimeout(()=>{
+    const sel=$('loc-emp-filter');
+    if(sel){sel.value=name;renderLocTrails();}
+  },100);
+}
+
 
 // ─── NOTIFICATIONS ───────────────────────────────────────────────
 function pgNotifications(){
@@ -1926,8 +2021,12 @@ function saveProfile(){
 function closeModal(id){const el=$(id);if(el)el.innerHTML='';}
 function bindPage(){}
 
-renderApp();
+// Always sync from Supabase on page load if logged in
+if(D.loggedIn){
+  syncFromSupabase().then(()=>renderApp());
+} else {
+  renderApp();
+}
 </script>
 </body>
 </html>
-
