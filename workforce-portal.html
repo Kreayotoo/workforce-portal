@@ -1052,18 +1052,37 @@ async function submitRegistration(){
   const dept=($('reg-dept')||{}).value||'Engineering';
   const role=($('reg-role')||{}).value?.trim()||'Employee';
   const empid=($('reg-empid')||{}).value?.trim();
+
+  showSyncBanner('Creating your account…');
+
+  // Check if email already exists in Supabase
+  const existing=await sb('employees','GET',null,`?email=eq.${encodeURIComponent(regData.email)}&select=id,emp_id`);
+  if(existing&&existing.length>0){
+    hideSyncBanner();
+    if($('reg-err-3'))$('reg-err-3').innerHTML=`<div class="alert alert-e">This email is already registered. <span style="cursor:pointer;text-decoration:underline" onclick="renderApp()">Sign in instead</span></div>`;
+    return;
+  }
+
   const nextNum=D.employees.length+101;
   const id=empid||('EMP-'+String(nextNum).padStart(3,'0'));
-  const emp={id,name:regData.name,email:regData.email,phone:regData.phone,dob:regData.dob,dept,role,status:'Active',salary:0,joined:todayStr(),selfRegistered:true,passwordHash:regData.password};
-  // Save to Supabase first
-  showSyncBanner('Creating your account…');
+  const emp={id,name:regData.name,email:regData.email,phone:regData.phone,dob:regData.dob,dept,role,status:'Active',salary:0,joined:todayStr(),selfRegistered:true,passwordHash:regData.password,empType:'office'};
+
   const res=await sbSaveEmployee(emp);
   if(res&&res[0]) emp._uuid=res[0].id;
+  else if(res&&Array.isArray(res)&&res.length>0) emp._uuid=res[0].id;
+
+  if(!emp._uuid){
+    hideSyncBanner();
+    if($('reg-err-3'))$('reg-err-3').innerHTML=`<div class="alert alert-e">Registration failed. Please try again.</div>`;
+    return;
+  }
+
   D.employees.push(emp);
   const notif={msg:`New employee ${regData.name} self-registered (${dept})`,type:'info',read:false};
   D.notifications.unshift({id:Date.now(),...notif,time:'Just now'});
   sbSaveNotification(notif);
-  save();hideSyncBanner();
+  save();
+  hideSyncBanner();
   currentRole='employee';currentEmployee=emp;D.loggedIn=true;
   const nearest=geoState.status==='ok'?getNearestOffice(geoState.lat,geoState.lng):null;
   const log={id:Date.now(),user:emp.name,email:emp.email,time:new Date().toLocaleString('en-IN'),lat:geoState.lat,lng:geoState.lng,accuracy:geoState.accuracy,address:geoState.address||geoState.city||'Unknown',geoStatus:geoState.status,inOffice:nearest?nearest.inZone:null,nearestOffice:nearest?nearest.name:null,method:'register'};
@@ -1183,13 +1202,23 @@ function empAttendance(){
   </div>`;
 }
 
-function submitEmpAtt(){
+async function submitEmpAtt(){
   const emp=currentEmployee,today=todayStr();
   const status=$('emp-att-status').value,inT=$('emp-in').value,outT=$('emp-out').value;
+  // Remove existing local record
   D.attendance=D.attendance.filter(a=>!(a.empId===emp.id&&a.date===today));
-  D.attendance.unshift({empId:emp.id,empName:emp.name,date:today,status,in:inT,out:outT});
-  D.notifications.unshift({id:Date.now(),type:'info',msg:`${emp.name} marked attendance: ${status} on ${today}`,time:'Just now',read:false});
-  save();alert(`✅ Attendance marked: ${status}`);navEmp('emp-attendance');
+  const rec={empId:emp._uuid||emp.id,empName:emp.name,date:today,status,in:inT,out:outT};
+  // Check if record exists in Supabase
+  const existing=await sb('attendance','GET',null,`?employee_name=eq.${encodeURIComponent(emp.name)}&date=eq.${today}&select=id`);
+  if(existing&&existing.length>0) rec._uuid=existing[0].id;
+  D.attendance.unshift(rec);
+  await sbSaveAttendance(rec);
+  const notif={msg:`${emp.name} marked attendance: ${status} on ${today}`,type:'info',read:false};
+  D.notifications.unshift({id:Date.now(),type:'info',...notif,time:'Just now'});
+  sbSaveNotification(notif);
+  save();
+  alert(`✅ Attendance marked: ${status}`);
+  navEmp('emp-attendance');
 }
 
 function empLeave(){
@@ -1223,14 +1252,20 @@ function empLeave(){
   </div>`;
 }
 
-function submitEmpLeave(){
+async function submitEmpLeave(){
   const emp=currentEmployee;
   const from=$('lv-from').value,to=$('lv-to').value;
   if(!from||!to)return;
   const days=Math.max(1,Math.round((new Date(to)-new Date(from))/86400000)+1);
-  D.leaves.unshift({id:Date.now(),emp:emp.name,type:$('lv-type').value,from,to,days,status:'Pending',reason:$('lv-reason').value||'—'});
-  D.notifications.unshift({id:Date.now()+1,type:'info',msg:`${emp.name} applied for ${days}-day ${$('lv-type').value} leave`,time:'Just now',read:false});
-  save();alert('✅ Leave request submitted! Waiting for admin approval.');navEmp('emp-leave');
+  const lv={id:Date.now(),emp:emp.name,type:$('lv-type').value,from,to,days,status:'Pending',reason:$('lv-reason').value||'—'};
+  D.leaves.unshift(lv);
+  await sbSaveLeave(lv);
+  const notif={msg:`${emp.name} applied for ${days}-day ${lv.type} leave`,type:'info',read:false};
+  D.notifications.unshift({id:Date.now()+1,...notif,time:'Just now'});
+  sbSaveNotification(notif);
+  save();
+  alert('✅ Leave request submitted! Waiting for admin approval.');
+  navEmp('emp-leave');
 }
 
 function empPayslip(){
@@ -1598,11 +1633,19 @@ async function importCSV(){
 
     let r;
     if(empUUID){
-      // Update existing
+      // Update existing by UUID
       r=await sb('employees','PATCH',payload,`?id=eq.${empUUID}`);
     } else {
-      // Insert new
+      // Try insert - if fails due to emp_id conflict, find and update that record
       r=await sb('employees','POST',payload);
+      if(!r){
+        // emp_id conflict - find the conflicting record and update it
+        const conflict=await sb('employees','GET',null,`?emp_id=eq.${encodeURIComponent(empId)}&select=id`);
+        if(conflict&&conflict.length>0){
+          r=await sb('employees','PATCH',payload,`?id=eq.${conflict[0].id}`);
+          if(r&&r[0]) empUUID=r[0].id;
+        }
+      }
     }
 
     if(r){
