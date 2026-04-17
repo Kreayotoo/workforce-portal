@@ -1429,34 +1429,54 @@ function previewCSV(){
   prev.innerHTML=`<span style="color:#0f766e;font-weight:600">${dataLines.length} employee${dataLines.length!==1?'s':''} found in CSV</span>`;
 }
 
-function importCSV(){
+async function importCSV(){
   // Use file upload text if available, otherwise use pasted text
   const raw=window._csvRawText||($('csv-input')||{}).value||'';
-  window._csvRawText=null; // clear after use
+  window._csvRawText=null;
   const lines=raw.trim().split('\n').filter(l=>l.trim());
   const err=$('csv-err');
   if(!lines.length){if(err)err.innerHTML=`<div class="alert alert-e">No data found</div>`;return;}
   let dataLines=lines;
   if(lines[0].toLowerCase().includes('name')&&lines[0].toLowerCase().includes('email')) dataLines=lines.slice(1);
+  if(!dataLines.length){if(err)err.innerHTML=`<div class="alert alert-e">No employee data found after header</div>`;return;}
+
+  // Show progress
+  const btn=document.querySelector('#bulk-import-wrap .btn-primary');
+  if(btn){btn.disabled=true;btn.textContent='Importing…';}
+  showSyncBanner(`Importing ${dataLines.length} employees to database…`);
+
   let added=0,skipped=0;
-  if(!D.empPasswords)D.empPasswords={};
-  dataLines.forEach(line=>{
+  const promises=[];
+
+  for(const line of dataLines){
     const cols=parseCSVLine(line);
-    if(cols.length<2)return;
+    if(cols.length<2){skipped++;continue;}
     const [name,email,phone,dob,dept,role,salary]=cols;
-    if(!name||!email){skipped++;return;}
-    const dup=D.employees.find(e=>e.email.toLowerCase()===email.toLowerCase());
-    if(dup){skipped++;return;}
+    if(!name||!email){skipped++;continue;}
+    const cleanEmail=email.trim().toLowerCase();
+    const dup=D.employees.find(e=>e.email.toLowerCase()===cleanEmail);
+    if(dup){skipped++;continue;}
     const id='EMP-'+String(D.employees.length+101+added).padStart(3,'0');
-    D.employees.push({id,name:name.trim(),email:email.trim().toLowerCase(),phone:phone||'',dob:dob||'',dept:dept||'Engineering',role:role||'Employee',status:'Active',salary:parseInt(salary)||0,joined:todayStr()});
-    D.empPasswords[id]='emp@123';
+    const emp={id,name:name.trim(),email:cleanEmail,phone:(phone||'').trim(),dob:(dob||'').trim(),dept:(dept||'Engineering').trim(),role:(role||'Employee').trim(),status:'Active',salary:parseInt(salary)||0,joined:todayStr(),passwordHash:'emp@123',empType:'office'};
+    D.employees.push(emp);
+    // Save to Supabase
+    promises.push(sbSaveEmployee(emp));
     added++;
-  });
+  }
+
+  // Wait for all Supabase saves
+  await Promise.all(promises);
+
+  // Save notification to Supabase
+  const notif={msg:`Bulk import: ${added} employees added, ${skipped} skipped`,type:'success',read:false};
+  D.notifications.unshift({id:Date.now(),...notif,time:'Just now'});
+  sbSaveNotification(notif);
+
   save();
+  hideSyncBanner();
   closeModal('bulk-import-wrap');
-  D.notifications.unshift({id:Date.now(),type:'success',msg:`Bulk import: ${added} employees added, ${skipped} skipped (duplicates/invalid)`,time:'Just now',read:false});
-  save();nav('employees');
-  setTimeout(()=>alert(`✅ Import complete!\n${added} employees added\n${skipped} skipped (duplicate email or missing data)\n\nDefault password for all: emp@123`),100);
+  nav('employees');
+  setTimeout(()=>alert(`✅ Import complete!\n\n${added} employees added to database\n${skipped} skipped (duplicates or missing data)\n\nDefault password for all: emp@123`),100);
 }
 
 let editingEmpId=null;
