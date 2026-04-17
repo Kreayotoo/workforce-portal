@@ -367,44 +367,107 @@ async function sbSaveEmployee(emp){
   if(emp._uuid){
     r=await sb('employees','PATCH',payload,`?id=eq.${emp._uuid}`);
   } else {
-    r=await sb('employees','POST',payload);
-    if(r&&r[0])emp._uuid=r[0].id;
+    // Use upsert to handle duplicates - merge if emp_id already exists
+    try{
+      const res=await fetch(`${SB_URL}/rest/v1/employees`,{
+        method:'POST',
+        headers:{...SB_HDR,'Prefer':'return=representation,resolution=merge-duplicates'},
+        body:JSON.stringify(payload)
+      });
+      if(!res.ok){const e=await res.text();console.error('❌ Failed to save employee:',emp.name,e);return null;}
+      const t=await res.text();r=t?JSON.parse(t):true;
+      if(r&&r[0])emp._uuid=r[0].id;
+    }catch(e){console.error('❌ Save error:',e.message);return null;}
   }
   if(!r) console.error('❌ Failed to save employee:',emp.name);
   else console.log('✅ Saved to Supabase:',emp.name);
   return r;
 }
 async function sbDeleteEmployee(emp){ if(emp._uuid)await sb('employees','DELETE',null,`?id=eq.${emp._uuid}`); }
+
+// Generic upsert helper - handles duplicates gracefully
+async function sbUpsert(table, payload, matchCol, matchVal){
+  try{
+    if(matchVal){
+      // Try update first
+      const r=await sb(table,'PATCH',payload,`?${matchCol}=eq.${encodeURIComponent(matchVal)}`);
+      if(r!==null) return r;
+    }
+    // Fall back to insert with merge-duplicates
+    const res=await fetch(`${SB_URL}/rest/v1/${table}`,{
+      method:'POST',
+      headers:{...SB_HDR,'Prefer':'return=representation,resolution=merge-duplicates'},
+      body:JSON.stringify(payload)
+    });
+    if(!res.ok){console.error(`❌ SB upsert ${table}:`,await res.text());return null;}
+    const t=await res.text();return t?JSON.parse(t):true;
+  }catch(e){console.error(`❌ SB upsert ${table} error:`,e.message);return null;}
+}
+
 async function sbSaveAttendance(rec){
   const eUuid=empUuid(rec.empId);
   const payload={employee_id:eUuid,employee_name:rec.empName,date:rec.date,status:rec.status,in_time:rec.in||null,out_time:rec.out||null};
-  if(rec._uuid){return await sb('attendance','PATCH',payload,`?id=eq.${rec._uuid}`);}
-  else{const r=await sb('attendance','POST',payload);if(r&&r[0])rec._uuid=r[0].id;return r;}
+  if(rec._uuid){
+    const r=await sb('attendance','PATCH',payload,`?id=eq.${rec._uuid}`);
+    return r;
+  } else {
+    // Upsert on employee_id + date combo
+    const res=await fetch(`${SB_URL}/rest/v1/attendance`,{
+      method:'POST',
+      headers:{...SB_HDR,'Prefer':'return=representation,resolution=merge-duplicates'},
+      body:JSON.stringify(payload)
+    });
+    if(!res.ok){console.error('❌ SB attendance:',await res.text());return null;}
+    const t=await res.text();const r=t?JSON.parse(t):true;
+    if(r&&r[0])rec._uuid=r[0].id;
+    return r;
+  }
 }
 async function sbSaveLeave(lv){
   const emp=D.employees.find(e=>e.name===lv.emp);
   const payload={employee_id:emp?emp._uuid:null,employee_name:lv.emp,leave_type:lv.type,from_date:lv.from,to_date:lv.to,days:lv.days,reason:lv.reason||'',status:lv.status||'Pending'};
-  const r=await sb('leaves','POST',payload);if(r&&r[0])lv._uuid=r[0].id;return r;
+  if(lv._uuid){return await sb('leaves','PATCH',payload,`?id=eq.${lv._uuid}`);}
+  const res=await fetch(`${SB_URL}/rest/v1/leaves`,{method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(payload)});
+  if(!res.ok){console.error('❌ SB leave:',await res.text());return null;}
+  const t=await res.text();const r=t?JSON.parse(t):true;
+  if(r&&r[0])lv._uuid=r[0].id;return r;
 }
 async function sbUpdateLeaveStatus(lv){ if(lv._uuid)await sb('leaves','PATCH',{status:lv.status},`?id=eq.${lv._uuid}`); }
 async function sbSaveExpense(exp){
   const emp=D.employees.find(e=>e.name===exp.emp);
   const payload={employee_id:emp?emp._uuid:null,employee_name:exp.emp,category:exp.cat,amount:exp.amount,expense_date:exp.date,description:exp.desc||'',status:exp.status||'Pending'};
-  const r=await sb('expenses','POST',payload);if(r&&r[0])exp._uuid=r[0].id;return r;
+  if(exp._uuid){return await sb('expenses','PATCH',payload,`?id=eq.${exp._uuid}`);}
+  const res=await fetch(`${SB_URL}/rest/v1/expenses`,{method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(payload)});
+  if(!res.ok){console.error('❌ SB expense:',await res.text());return null;}
+  const t=await res.text();const r=t?JSON.parse(t):true;
+  if(r&&r[0])exp._uuid=r[0].id;return r;
 }
 async function sbUpdateExpStatus(exp){ if(exp._uuid)await sb('expenses','PATCH',{status:exp.status},`?id=eq.${exp._uuid}`); }
 async function sbSavePerformance(p){
   const emp=D.employees.find(e=>e.name===p.emp);
-  return await sb('performance','POST',{employee_id:emp?emp._uuid:null,employee_name:p.emp,quarter:p.quarter,rating:p.rating,goals_set:p.goals,goals_achieved:p.achieved,review_notes:p.notes||''});
+  const payload={employee_id:emp?emp._uuid:null,employee_name:p.emp,quarter:p.quarter,rating:p.rating,goals_set:p.goals,goals_achieved:p.achieved,review_notes:p.notes||''};
+  const res=await fetch(`${SB_URL}/rest/v1/performance`,{method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(payload)});
+  if(!res.ok){console.error('❌ SB performance:',await res.text());return null;}
+  const t=await res.text();return t?JSON.parse(t):true;
 }
-async function sbSaveNotification(n){ return await sb('notifications','POST',{message:n.msg,type:n.type,is_read:false}); }
+async function sbSaveNotification(n){
+  return await sb('notifications','POST',{message:n.msg,type:n.type||'info',is_read:false});
+}
 async function sbMarkNotifRead(n){ if(n._uuid)await sb('notifications','PATCH',{is_read:true},`?id=eq.${n._uuid}`); }
 async function sbSaveSettings(){
   const s=D.settings;
-  if(s._uuid)await sb('settings','PATCH',{company_name:s.company,company_email:s.email,timezone:s.tz,currency:s.currency,work_hours:s.hours,office_lat:s.officeLat,office_lng:s.officeLng,office_radius:s.officeRadius},`?id=eq.${s._uuid}`);
+  const payload={company_name:s.company,company_email:s.email,timezone:s.tz,currency:s.currency,work_hours:s.hours,office_lat:s.officeLat,office_lng:s.officeLng,office_radius:s.officeRadius};
+  if(s._uuid){
+    await sb('settings','PATCH',payload,`?id=eq.${s._uuid}`);
+  } else {
+    const r=await sb('settings','POST',payload);
+    if(r&&r[0])D.settings._uuid=r[0].id;
+  }
 }
 async function sbLoginLog(log){
-  await sb('login_logs','POST',{user_name:log.user,user_email:log.email,latitude:log.lat,longitude:log.lng,accuracy:log.accuracy,address:log.address,in_office:log.inOffice,method:log.method||'password'});
+  try{
+    await sb('login_logs','POST',{user_name:log.user,user_email:log.email,latitude:log.lat||null,longitude:log.lng||null,accuracy:log.accuracy||null,address:log.address||null,in_office:log.inOffice||null,method:log.method||'password'});
+  }catch(e){/* non-critical, ignore */}
 }
 
 // ─── ROUTER ────────────────────────────────────────────────────────
