@@ -285,7 +285,7 @@ async function syncFromSupabase(){
   showSyncBanner('Syncing with database…');
   try{
     const [emps,att,lvs,exp,perf,notifs,sets]=await Promise.all([
-      sb('employees','GET',null,'?order=created_at'),
+      sb('employees','GET',null,'?select=*'),
       sb('attendance','GET',null,'?order=date.desc&limit=500'),
       sb('leaves','GET',null,'?order=created_at.desc'),
       sb('expenses','GET',null,'?order=created_at.desc'),
