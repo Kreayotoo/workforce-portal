@@ -975,8 +975,8 @@ function renderLogin(){
         <div id="pass-login-section" class="hidden">
           <div id="geo-box-wrap">${geoBoxHTML()}</div>
           <div id="login-err"></div>
-          <div class="fld"><label>Email</label><input type="email" id="l-email" placeholder="admin@kreayotoo.com" autocomplete="off"></div>
-          <div class="fld"><label>Password</label><input type="password" id="l-pass" placeholder="••••••••" autocomplete="off"></div>
+          <div class="fld"><label>Email</label><input type="email" id="l-email" placeholder="Enter your email" autocomplete="username"></div>
+          <div class="fld"><label>Password</label><input type="password" id="l-pass" placeholder="Enter your password" autocomplete="current-password"></div>
           <button class="btn btn-primary" style="width:100%;padding:10px" onclick="doLogin()">Sign in as Super Admin</button>
         </div>
         <div class="login-toggle" style="margin-top:10px">Trouble? <span onclick="setLoginMethod('pass')">Use password instead</span> · <span onclick="showSignup()">Change password</span></div>
