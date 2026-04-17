@@ -497,13 +497,13 @@ function renderApp(){
     </div>
     <div class="body-row">
       <div class="sidebar">
-        ${[['⊞','dashboard','Dashboard'],['👥','employees','Employees'],['📅','attendance','Attendance'],['🏖','leave','Leave'],['💰','payroll','Payroll'],['🧾','expenses','Expenses'],['⭐','performance','Performance'],['🗺','locations','Login Locations'],['🔔','notifications','Notifications'],['⚙','settings','Settings']].map(([ic,pg,tt])=>`
+        ${[['⊞','dashboard','Dashboard'],['👥','employees','Employees'],['📅','attendance','Attendance'],['🏖','leave','Leave'],['💰','payroll','Payroll'],['🧾','expenses','Expenses'],['⭐','performance','Performance'],['📆','holidays','Holiday Calendar'],['🏢','orgchart','Org Chart'],['🪪','idcards','ID Cards'],['🗺','locations','Login Locations'],['🔔','notifications','Notifications'],['⚙','settings','Settings']].map(([ic,pg,tt])=>`
         <div class="si ${currentPage===pg?'act':''}" title="${tt}" onclick="nav('${pg}')">${ic}${pg==='notifications'&&uc>0?'<div class="si-dot"></div>':''}</div>`).join('')}
       </div>
       <div class="main" id="main-content"></div>
     </div>
   </div>`;
-  const pages = {dashboard:pgDashboard,employees:pgEmployees,attendance:pgAttendance,leave:pgLeave,payroll:pgPayroll,expenses:pgExpenses,performance:pgPerformance,notifications:pgNotifications,settings:pgSettings,locations:pgLocations};
+  const pages = {dashboard:pgDashboard,employees:pgEmployees,attendance:pgAttendance,leave:pgLeave,payroll:pgPayroll,expenses:pgExpenses,performance:pgPerformance,notifications:pgNotifications,settings:pgSettings,locations:pgLocations,holidays:pgHolidays,orgchart:pgOrgChart,idcards:pgIDCards};
   if(pages[currentPage]) $('main-content').innerHTML = pages[currentPage]();
   bindPage();
 }
@@ -1112,7 +1112,7 @@ function renderEmployeeApp(){
     </div>
     <div class="body-row">
       <div class="sidebar" style="background:#065f46">
-        ${[['⊞','emp-dashboard','Dashboard'],['📅','emp-attendance','Mark Attendance'],['🏖','emp-leave','My Leaves'],['💰','emp-payslip','My Payslip'],['📊','emp-performance','My Performance'],['👤','emp-profile','My Profile']].map(([ic,pg,tt])=>`
+        ${[['⊞','emp-dashboard','Dashboard'],['📅','emp-attendance','Mark Attendance'],['🏖','emp-leave','My Leaves'],['💰','emp-payslip','My Payslip'],['📊','emp-performance','My Performance'],['📆','emp-holidays','Holiday Calendar'],['🪪','emp-idcard','My ID Card'],['🏢','emp-orgchart','Org Chart'],['👤','emp-profile','My Profile']].map(([ic,pg,tt])=>`
         <div class="si ${empPage===pg?'act':''}" title="${tt}" onclick="navEmp('${pg}')" style="${empPage===pg?'background:rgba(255,255,255,.2);color:#fff':''}">${ic}</div>`).join('')}
       </div>
       <div class="main" id="emp-main"></div>
@@ -1121,7 +1121,10 @@ function renderEmployeeApp(){
   const pages={
     'emp-dashboard':empDashboard,'emp-attendance':empAttendance,
     'emp-leave':empLeave,'emp-payslip':empPayslip,
-    'emp-performance':empPerformance,'emp-profile':empProfile
+    'emp-performance':empPerformance,'emp-profile':empProfile,
+    'emp-holidays':()=>pgHolidays(true),
+    'emp-idcard':empIDCard,
+    'emp-orgchart':()=>pgOrgChart(true)
   };
   if(pages[empPage]) $('emp-main').innerHTML = pages[empPage]();
 }
@@ -1348,7 +1351,7 @@ function pgDashboard(){
   const active=D.employees.filter(e=>e.status==='Active').length;
   const pLeaves=D.leaves.filter(l=>l.status==='Pending').length;
   const pExp=D.expenses.filter(e=>e.status==='Pending').length;
-  const mods=[['👥','Directory','employees'],['📅','Attendance','attendance'],['🏖','Leave','leave'],['💰','Payroll','payroll'],['🧾','Expenses','expenses'],['⭐','Performance','performance'],['🗺','Locations','locations'],['🔔','Notifications','notifications'],['⚙','Settings','settings']];
+  const mods=[['👥','Directory','employees'],['📅','Attendance','attendance'],['🏖','Leave','leave'],['💰','Payroll','payroll'],['🧾','Expenses','expenses'],['⭐','Performance','performance'],['📆','Holidays','holidays'],['🏢','Org Chart','orgchart'],['🪪','ID Cards','idcards'],['🗺','Locations','locations'],['🔔','Notifications','notifications'],['⚙','Settings','settings']];
   return `
   <div class="page-hd">
     <div><div class="pg-title">Hi, ${D.user.name.split(' ')[0]}! 👋</div><div class="pg-sub">${dateLabel()}</div></div>
@@ -1360,7 +1363,7 @@ function pgDashboard(){
     <div class="stat"><div class="stat-lbl">Pending leaves</div><div class="stat-val">${pLeaves}</div><div class="stat-sub">Awaiting approval</div></div>
     <div class="stat"><div class="stat-lbl">Open tasks</div><div class="stat-val">${pLeaves+pExp}</div><div class="stat-sub">Leaves + expenses</div></div>
   </div>
-  <div class="modules-grid" style="grid-template-columns:repeat(9,minmax(0,1fr))">${mods.map(([ic,lb,pg])=>`<div class="mod-card" onclick="nav('${pg}')"><div class="mod-ic">${ic}</div><div class="mod-lb">${lb}</div>${pg==='notifications'&&unreadCount()>0?'<div class="mod-dot"></div>':''}</div>`).join('')}</div>
+  <div class="modules-grid" style="grid-template-columns:repeat(12,minmax(0,1fr))">${mods.map(([ic,lb,pg])=>`<div class="mod-card" onclick="nav('${pg}')"><div class="mod-ic">${ic}</div><div class="mod-lb">${lb}</div>${pg==='notifications'&&unreadCount()>0?'<div class="mod-dot"></div>':''}</div>`).join('')}</div>
   <div class="two-col">
     <div class="card">
       <div class="card-hd"><h3>Recent employees</h3><button class="btn-link" onclick="nav('employees')">View all →</button></div>
@@ -2289,9 +2292,164 @@ function saveProfile(){
   save();nav('settings');
 }
 
-// ─── UTILS ───────────────────────────────────────────────────────
-function closeModal(id){const el=$(id);if(el)el.innerHTML='';}
-function bindPage(){}
+// ─── HOLIDAY CALENDAR ────────────────────────────────────────────
+function pgHolidays(empView=false){
+  if(!D.holidays) D.holidays=[
+    {id:1,name:'New Year',date:'2026-01-01',type:'National'},
+    {id:2,name:'Republic Day',date:'2026-01-26',type:'National'},
+    {id:3,name:'Holi',date:'2026-03-25',type:'Festival'},
+    {id:4,name:'Good Friday',date:'2026-04-03',type:'National'},
+    {id:5,name:'Labour Day',date:'2026-05-01',type:'National'},
+    {id:6,name:'Independence Day',date:'2026-08-15',type:'National'},
+    {id:7,name:'Gandhi Jayanti',date:'2026-10-02',type:'National'},
+    {id:8,name:'Dussehra',date:'2026-10-11',type:'Festival'},
+    {id:9,name:'Diwali',date:'2026-10-30',type:'Festival'},
+    {id:10,name:'Christmas',date:'2026-12-25',type:'National'},
+  ];
+  const today=todayStr();
+  const upcoming=D.holidays.filter(h=>h.date>=today).sort((a,b)=>a.date.localeCompare(b.date));
+  const past=D.holidays.filter(h=>h.date<today).sort((a,b)=>b.date.localeCompare(a.date));
+  const typeColor={National:'bb',Festival:'ba',Optional:'bx',Company:'bg'};
+  return `
+  <div class="page-hd">
+    <div><div class="pg-title">Holiday Calendar 2026</div><div class="pg-sub">${D.holidays.length} holidays · ${upcoming.length} upcoming</div></div>
+    ${!empView?`<button class="btn btn-primary" onclick="addHolidayModal()">+ Add holiday</button>`:''}
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+    <div class="card">
+      <div class="card-hd"><h3>🗓 Upcoming holidays</h3><span class="muted">${upcoming.length} remaining</span></div>
+      ${upcoming.length===0?'<div style="text-align:center;color:var(--muted);padding:1rem">No upcoming holidays</div>':
+      upcoming.map(h=>{
+        const d=new Date(h.date);
+        const daysLeft=Math.round((d-new Date(today))/86400000);
+        return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #f3f4f6">
+          <div style="background:#f1f5f9;border-radius:8px;padding:6px 10px;text-align:center;min-width:48px">
+            <div style="font-size:16px;font-weight:800;color:var(--navy)">${d.getDate()}</div>
+            <div style="font-size:10px;color:var(--muted)">${d.toLocaleString('en-IN',{month:'short'})}</div>
+          </div>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:13px">${h.name}</div>
+            <div style="font-size:11px;color:var(--muted)">${d.toLocaleString('en-IN',{weekday:'long'})} · ${daysLeft===0?'Today':daysLeft===1?'Tomorrow':`In ${daysLeft} days`}</div>
+          </div>
+          <span class="badge ${typeColor[h.type]||'bx'}">${h.type}</span>
+          ${!empView?`<button class="btn-icon btn-del" onclick="deleteHoliday(${h.id})">🗑</button>`:''}
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="card">
+      <div class="card-hd"><h3>✅ Past holidays</h3><span class="muted">${past.length} done</span></div>
+      ${past.slice(0,8).map(h=>{
+        const d=new Date(h.date);
+        return `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f3f4f6;opacity:.6">
+          <div style="background:#f1f5f9;border-radius:8px;padding:6px 10px;text-align:center;min-width:48px">
+            <div style="font-size:16px;font-weight:800;color:var(--muted)">${d.getDate()}</div>
+            <div style="font-size:10px;color:var(--muted)">${d.toLocaleString('en-IN',{month:'short'})}</div>
+          </div>
+          <div style="flex:1"><div style="font-weight:500;font-size:13px">${h.name}</div></div>
+          <span class="badge ${typeColor[h.type]||'bx'}">${h.type}</span>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>
+  <div id="holiday-modal-wrap"></div>`;
+}
+function addHolidayModal(){
+  const wrap=$('holiday-modal-wrap');if(!wrap)return;
+  wrap.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('holiday-modal-wrap')">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-hd"><h3>Add holiday</h3><button class="xbtn" onclick="closeModal('holiday-modal-wrap')">×</button></div>
+    <div class="fld"><label>Holiday name</label><input type="text" id="hol-name" placeholder="e.g. Diwali"></div>
+    <div class="fld"><label>Date</label><input type="date" id="hol-date" value="${todayStr()}"></div>
+    <div class="fld"><label>Type</label><select id="hol-type"><option>National</option><option>Festival</option><option>Optional</option><option>Company</option></select></div>
+    <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('holiday-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="saveHoliday()">Add holiday</button></div>
+  </div></div>`;
+}
+function saveHoliday(){
+  if(!D.holidays)D.holidays=[];
+  const name=($('hol-name')||{}).value?.trim();
+  const date=($('hol-date')||{}).value;
+  const type=($('hol-type')||{}).value;
+  if(!name||!date)return;
+  D.holidays.push({id:Date.now(),name,date,type});
+  save();closeModal('holiday-modal-wrap');nav('holidays');
+}
+function deleteHoliday(id){
+  if(!confirm('Delete this holiday?'))return;
+  D.holidays=D.holidays.filter(h=>h.id!==id);
+  save();nav('holidays');
+}
+
+// ─── ORGANIZATION CHART ───────────────────────────────────────────
+function pgOrgChart(empView=false){
+  const deptGroups={};
+  DEPTS.forEach(d=>{deptGroups[d]=D.employees.filter(e=>e.dept===d&&e.status==='Active');});
+  const deptColors={'Engineering':'#3b82f6','HR':'#10b981','Sales':'#f59e0b','Finance':'#8b5cf6','Operations':'#ef4444','Marketing':'#ec4899','Legal':'#06b6d4'};
+  return `
+  <div class="page-hd"><div><div class="pg-title">Organization Chart</div><div class="pg-sub">${D.employees.filter(e=>e.status==='Active').length} active employees across ${DEPTS.length} departments</div></div></div>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:1.5rem;padding:1rem">
+    <div style="background:var(--navy);color:#fff;border-radius:12px;padding:14px 32px;text-align:center;box-shadow:0 4px 12px rgba(26,26,78,.3)">
+      <div style="font-weight:800;font-size:15px">${D.settings.company||'Kreayotoo Solutions'}</div>
+      <div style="font-size:11px;opacity:.7;margin-top:2px">Head Office</div>
+    </div>
+    <div style="width:2px;height:24px;background:var(--border)"></div>
+    <div style="display:grid;grid-template-columns:repeat(${Math.min(Object.keys(deptGroups).filter(d=>deptGroups[d].length>0).length,4)},minmax(180px,1fr));gap:1rem;width:100%">
+      ${DEPTS.filter(d=>deptGroups[d].length>0).map(dept=>`
+      <div style="border:2px solid ${deptColors[dept]||'#94a3b8'};border-radius:12px;overflow:hidden">
+        <div style="background:${deptColors[dept]||'#94a3b8'};color:#fff;padding:8px 12px;font-weight:700;font-size:12px;display:flex;justify-content:space-between">
+          <span>${dept}</span><span>${deptGroups[dept].length} staff</span>
+        </div>
+        ${deptGroups[dept].map(e=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid #f3f4f6">
+          ${av(e.name,28)}
+          <div>
+            <div style="font-size:12px;font-weight:600">${e.name}</div>
+            <div style="font-size:10px;color:var(--muted)">${e.role}</div>
+          </div>
+        </div>`).join('')}
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+// ─── ID CARDS ────────────────────────────────────────────────────
+function pgIDCards(){
+  return `
+  <div class="page-hd"><div><div class="pg-title">Employee ID Cards</div><div class="pg-sub">Generate and print ID cards for all employees</div></div>
+  <button class="btn btn-primary" onclick="printAllCards()">🖨 Print all</button></div>
+  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem" id="id-cards-grid">
+    ${D.employees.filter(e=>e.status==='Active').map(e=>idCardHTML(e)).join('')}
+  </div>`;
+}
+function idCardHTML(e,mini=false){
+  const color=e.empType==='field'?'#f59e0b':e.empType==='remote'?'#10b981':'#1a1a4e';
+  return `<div style="background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)${mini?';max-width:260px':''}">
+    <div style="background:${color};color:#fff;padding:12px;text-align:center">
+      <div style="font-size:9px;letter-spacing:2px;opacity:.8;margin-bottom:4px">${D.settings.company||'KREAYOTOO SOLUTIONS'}</div>
+      <div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;margin:0 auto 6px;font-size:20px;font-weight:800">${initials(e.name)}</div>
+    </div>
+    <div style="padding:12px;text-align:center">
+      <div style="font-weight:800;font-size:14px;margin-bottom:2px">${e.name}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px">${e.role}</div>
+      <div style="background:#f1f5f9;border-radius:6px;padding:4px 8px;display:inline-block;font-size:11px;font-weight:700;color:${color};letter-spacing:1px">${e.id}</div>
+      <div style="margin-top:8px;font-size:10px;color:var(--muted)">${e.dept} · ${e.email}</div>
+      <div style="margin-top:4px;font-size:10px;color:var(--muted)">Joined: ${e.joined||'—'}</div>
+    </div>
+  </div>`;
+}
+function empIDCard(){
+  const e=currentEmployee;
+  return `
+  <div class="page-hd"><div class="pg-title">My ID Card</div></div>
+  <div style="display:flex;justify-content:center;padding:2rem">
+    <div style="max-width:280px;width:100%">
+      ${idCardHTML(e)}
+      <button class="btn btn-primary" style="width:100%;margin-top:1rem" onclick="window.print()">🖨 Print ID Card</button>
+    </div>
+  </div>`;
+}
+function printAllCards(){
+  window.print();
+}
 
 // Show loading screen while syncing from Supabase, then render
 async function init(){
