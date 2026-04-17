@@ -288,26 +288,36 @@ function unreadCount(){ return D.notifications.filter(n=>!n.read).length; }
 async function syncFromSupabase(){
   showSyncBanner('Syncing with database…');
   try{
-    const [emps,att,lvs,exp,perf,notifs,sets]=await Promise.all([
-      sb('employees','GET',null,'?select=*'),
-      sb('attendance','GET',null,'?order=date.desc&limit=500'),
-      sb('leaves','GET',null,'?order=created_at.desc'),
-      sb('expenses','GET',null,'?order=created_at.desc'),
-      sb('performance','GET',null,'?order=created_at.desc'),
-      sb('notifications','GET',null,'?order=created_at.desc&limit=50'),
-      sb('settings','GET',null,'?limit=1'),
-    ]);
-    // Always replace local data with Supabase data — never keep stale cache
-    D.employees = (emps||[]).map(e=>({id:e.emp_id||e.id,_uuid:e.id,name:e.name,email:e.email,phone:e.phone||'',dob:e.dob||'',dept:e.department||'',role:e.role||'',status:e.status||'Active',salary:e.salary||0,joined:e.date_of_joining||'',selfRegistered:e.self_registered||false,passwordHash:e.password_hash||'emp@123',empType:e.emp_type||'office'}));
-    D.attendance = (att||[]).map(a=>({_uuid:a.id,empId:a.employee_id,empName:a.employee_name,date:a.date,status:a.status,in:a.in_time,out:a.out_time}));
-    D.leaves = (lvs||[]).map(l=>({_uuid:l.id,id:l.id,emp:l.employee_name,type:l.leave_type,from:l.from_date,to:l.to_date,days:l.days,reason:l.reason,status:l.status}));
-    D.expenses = (exp||[]).map(e=>({_uuid:e.id,id:e.id,emp:e.employee_name,cat:e.category,amount:e.amount,date:e.expense_date,desc:e.description,status:e.status}));
-    D.performance = (perf||[]).map(p=>({_uuid:p.id,id:p.id,emp:p.employee_name,quarter:p.quarter,rating:p.rating,goals:p.goals_set,achieved:p.goals_achieved,notes:p.review_notes}));
-    if(notifs&&notifs.length) D.notifications=notifs.map(n=>({_uuid:n.id,id:n.id,type:n.type,msg:n.message,time:new Date(n.created_at).toLocaleString('en-IN'),read:n.is_read}));
-    if(sets&&sets.length){const s=sets[0];D.settings={...D.settings,company:s.company_name,email:s.company_email,tz:s.timezone,currency:s.currency,hours:s.work_hours,officeLat:s.office_lat,officeLng:s.office_lng,officeRadius:s.office_radius,_uuid:s.id};}
-    SB_READY=true;saveData(D);hideSyncBanner();
-    console.log(`✅ Synced: ${D.employees.length} employees, ${D.leaves.length} leaves, ${D.attendance.length} attendance records`);
-  }catch(e){console.error('Sync failed',e);hideSyncBanner();}
+    // Fetch each table independently so one failure doesn't break everything
+    const emps = await sb('employees','GET',null,'?select=*').catch(()=>null);
+    const att = await sb('attendance','GET',null,'?select=*&limit=500').catch(()=>null);
+    const lvs = await sb('leaves','GET',null,'?select=*').catch(()=>null);
+    const exp = await sb('expenses','GET',null,'?select=*').catch(()=>null);
+    const perf = await sb('performance','GET',null,'?select=*').catch(()=>null);
+    const notifs = await sb('notifications','GET',null,'?select=*&limit=50').catch(()=>null);
+    const sets = await sb('settings','GET',null,'?select=*&limit=1').catch(()=>null);
+
+    if(emps!==null) D.employees=emps.map(e=>({
+      id:e.emp_id||e.id,_uuid:e.id,name:e.name,email:e.email,
+      phone:e.phone||'',dob:e.dob||'',dept:e.department||'',
+      role:e.role||'',status:e.status||'Active',salary:e.salary||0,
+      joined:e.date_of_joining||'',selfRegistered:e.self_registered||false,
+      passwordHash:e.password_hash||'emp@123',empType:e.emp_type||'office'
+    }));
+    if(att!==null) D.attendance=att.map(a=>({_uuid:a.id,empId:a.employee_id,empName:a.employee_name,date:a.date,status:a.status,in:a.in_time,out:a.out_time}));
+    if(lvs!==null) D.leaves=lvs.map(l=>({_uuid:l.id,id:l.id,emp:l.employee_name,type:l.leave_type,from:l.from_date,to:l.to_date,days:l.days,reason:l.reason,status:l.status}));
+    if(exp!==null) D.expenses=exp.map(e=>({_uuid:e.id,id:e.id,emp:e.employee_name,cat:e.category,amount:e.amount,date:e.expense_date,desc:e.description,status:e.status}));
+    if(perf!==null) D.performance=perf.map(p=>({_uuid:p.id,id:p.id,emp:p.employee_name,quarter:p.quarter,rating:p.rating,goals:p.goals_set,achieved:p.goals_achieved,notes:p.review_notes}));
+    if(notifs!==null&&notifs.length) D.notifications=notifs.map(n=>({_uuid:n.id,id:n.id,type:n.type,msg:n.message,time:new Date(n.created_at).toLocaleString('en-IN'),read:n.is_read}));
+    if(sets!==null&&sets.length){const s=sets[0];D.settings={...D.settings,company:s.company_name||D.settings.company,email:s.company_email||D.settings.email,tz:s.timezone||D.settings.tz,currency:s.currency||D.settings.currency,hours:s.work_hours||D.settings.hours,officeLat:s.office_lat||D.settings.officeLat,officeLng:s.office_lng||D.settings.officeLng,officeRadius:s.office_radius||D.settings.officeRadius,_uuid:s.id};}
+    SB_READY=true;
+    saveData(D);
+    hideSyncBanner();
+    console.log(`✅ Synced: ${D.employees.length} employees, ${(D.leaves||[]).length} leaves, ${(D.attendance||[]).length} attendance`);
+  }catch(e){
+    console.error('❌ Sync error:',e);
+    hideSyncBanner();
+  }
 }
 
 function showSyncBanner(msg){
@@ -335,7 +345,20 @@ async function sbSaveEmployee(emp){
   };
   // Only add optional fields if they have values
   if(emp.phone) payload.phone=emp.phone;
-  if(emp.dob) payload.dob=emp.dob;
+  if(emp.dob){
+    // Convert any date format to YYYY-MM-DD for Supabase
+    let dob=emp.dob.trim();
+    // Handle DD MM YYYY or DD/MM/YYYY or DD-MM-YYYY
+    const parts=dob.split(/[\s\/\-\.]/);
+    if(parts.length===3){
+      if(parts[0].length<=2&&parseInt(parts[0])<=31){
+        // DD MM YYYY → YYYY-MM-DD
+        dob=`${parts[2].padStart(4,'20')}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+      }
+    }
+    // Validate it's a proper date
+    if(/^\d{4}-\d{2}-\d{2}$/.test(dob)) payload.dob=dob;
+  }
   if(emp.selfRegistered!==undefined) payload.self_registered=emp.selfRegistered||false;
   if(emp.passwordHash) payload.password_hash=emp.passwordHash;
   if(emp.empType) payload.emp_type=emp.empType;
@@ -1481,7 +1504,17 @@ async function importCSV(){
   for(const line of dataLines){
     const cols=parseCSVLine(line);
     if(cols.length<2){skipped++;continue;}
-    const [name,email,phone,dob,dept,role,salary]=cols;
+    const [name,email,phone,rawDob,dept,role,salary]=cols;
+    // Normalize DOB to YYYY-MM-DD
+    let dob='';
+    if(rawDob&&rawDob.trim()){
+      const dp=rawDob.trim().split(/[\s\/\-\.]/);
+      if(dp.length===3&&dp[0].length<=2&&parseInt(dp[0])<=31){
+        dob=`${dp[2].padStart(4,'20')}-${dp[1].padStart(2,'0')}-${dp[0].padStart(2,'0')}`;
+      } else {
+        dob=rawDob.trim();
+      }
+    }
     if(!name||!email){skipped++;continue;}
     const cleanEmail=email.trim().toLowerCase();
     const dup=D.employees.find(e=>e.email.toLowerCase()===cleanEmail);
