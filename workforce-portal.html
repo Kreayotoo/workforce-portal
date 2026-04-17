@@ -296,9 +296,21 @@ let D = loadData() || initData();
 let currentRole='admin', currentEmployee=null, SB_READY=false;
 // currentCompany = null means Kreayotoo super admin, otherwise = company object
 let currentCompany = null;
+// Always reset currentCompany on page load — it's not persisted
+if(D.loggedIn && D._currentCompanyId){
+  // Will be restored after sync if needed
+}
+D._currentCompanyId = undefined;
 
-function save(){ saveData(D); }
+function save(){
+  if(currentCompany) D._currentCompanyId=currentCompany.company_id;
+  else D._currentCompanyId=null;
+  saveData(D);
+}
 function unreadCount(){ return D.notifications.filter(n=>!n.read).length; }
+
+function closeModal(id){const el=$(id);if(el)el.innerHTML='';}
+function bindPage(){}
 
 // ─── SYNC FROM SUPABASE ───────────────────────────────────────────
 async function syncFromSupabase(){
@@ -2651,11 +2663,12 @@ async function deleteCompany(cid){
   await syncFromSupabase();nav('companies');
 }
 
-function closeModal(id){const el=$(id);if(el)el.innerHTML='';}
-function bindPage(){}
-
 // Show loading screen while syncing from Supabase, then render
 async function init(){
+  // Restore currentCompany from saved state
+  if(D._currentCompanyId && D.companies && D.companies.length){
+    currentCompany = D.companies.find(c=>c.company_id===D._currentCompanyId)||null;
+  }
   if(D.loggedIn){
     // Show a loading screen immediately
     $('root').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#f0f2f5;gap:16px">
