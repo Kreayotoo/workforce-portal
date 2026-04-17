@@ -247,10 +247,14 @@ const SB_HDR = {'Content-Type':'application/json','apikey':SB_KEY,'Authorization
 async function sb(table,method='GET',body=null,query=''){
   try{
     const r=await fetch(`${SB_URL}/rest/v1/${table}${query}`,{method,headers:SB_HDR,body:body?JSON.stringify(body):null});
-    if(!r.ok){console.error('SB',table,method,await r.text());return null;}
+    if(!r.ok){
+      const errText=await r.text();
+      console.error(`❌ SB ${method} ${table}:`,r.status, errText);
+      return null;
+    }
     if(method==='DELETE')return true;
     const t=await r.text();return t?JSON.parse(t):true;
-  }catch(e){console.error('SB err',e);return null;}
+  }catch(e){console.error('❌ SB fetch error:',e.message);return null;}
 }
 
 // ─── DATA LAYER ───────────────────────────────────────────────────
@@ -317,9 +321,35 @@ function hideSyncBanner(){const el=$('sync-banner');if(el)el.style.display='none
 function empUuid(empId){ const e=D.employees.find(x=>x.id===empId||x._uuid===empId); return e?e._uuid:empId; }
 
 async function sbSaveEmployee(emp){
-  const payload={emp_id:emp.id,name:emp.name,email:emp.email,phone:emp.phone||null,dob:emp.dob||null,department:emp.dept||'Engineering',role:emp.role||'Employee',status:emp.status||'Active',salary:emp.salary||0,date_of_joining:emp.joined||todayStr(),self_registered:emp.selfRegistered||false,password_hash:emp.passwordHash||'emp@123'};
-  if(emp._uuid){return await sb('employees','PATCH',payload,`?id=eq.${emp._uuid}`);}
-  else{const r=await sb('employees','POST',payload);if(r&&r[0])emp._uuid=r[0].id;return r;}
+  // Only send columns that exist in the schema
+  // Extra columns (dob, password_hash etc) added via ALTER TABLE in Supabase
+  const payload={
+    emp_id:emp.id,
+    name:emp.name,
+    email:emp.email,
+    department:emp.dept||'Engineering',
+    role:emp.role||'Employee',
+    status:emp.status||'Active',
+    salary:emp.salary||0,
+    date_of_joining:emp.joined||todayStr()
+  };
+  // Only add optional fields if they have values
+  if(emp.phone) payload.phone=emp.phone;
+  if(emp.dob) payload.dob=emp.dob;
+  if(emp.selfRegistered!==undefined) payload.self_registered=emp.selfRegistered||false;
+  if(emp.passwordHash) payload.password_hash=emp.passwordHash;
+  if(emp.empType) payload.emp_type=emp.empType;
+
+  let r;
+  if(emp._uuid){
+    r=await sb('employees','PATCH',payload,`?id=eq.${emp._uuid}`);
+  } else {
+    r=await sb('employees','POST',payload);
+    if(r&&r[0])emp._uuid=r[0].id;
+  }
+  if(!r) console.error('❌ Failed to save employee:',emp.name);
+  else console.log('✅ Saved to Supabase:',emp.name);
+  return r;
 }
 async function sbDeleteEmployee(emp){ if(emp._uuid)await sb('employees','DELETE',null,`?id=eq.${emp._uuid}`); }
 async function sbSaveAttendance(rec){
