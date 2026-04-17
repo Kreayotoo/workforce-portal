@@ -1334,12 +1334,31 @@ function openBulkImport(){
       CSV format: <strong>name, email, phone, dob, department, role, salary</strong><br>
       One employee per line. First row can be a header (will be skipped).
     </div>
-    <div style="margin-bottom:.75rem">
-      <button class="btn btn-sec" style="font-size:12px" onclick="downloadSampleCSV()">⬇ Download sample CSV</button>
+    <div style="display:flex;gap:8px;margin-bottom:1rem">
+      <button class="btn btn-sec" style="font-size:12px;flex:1" onclick="downloadSampleCSV()">⬇ Download sample CSV</button>
     </div>
-    <div class="fld"><label>Paste CSV data here</label>
-      <textarea id="csv-input" rows="8" placeholder="name,email,phone,dob,department,role,salary&#10;Kiran Kumar,kiran@co.com,9876543210,1990-05-15,Engineering,Developer,50000&#10;Priya Sharma,priya@co.com,9876543211,1992-03-20,HR,HR Manager,45000"></textarea>
+
+    <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:1rem">
+      <button id="tab-upload" onclick="switchImportTab('upload')" style="flex:1;padding:9px;border:none;background:var(--navy);color:#fff;font-weight:700;font-size:13px;cursor:pointer">📁 Upload file</button>
+      <button id="tab-paste" onclick="switchImportTab('paste')" style="flex:1;padding:9px;border:none;background:#f8fafc;color:var(--muted);font-weight:600;font-size:13px;cursor:pointer">📋 Paste text</button>
     </div>
+
+    <div id="import-upload-panel">
+      <div id="csv-dropzone" onclick="$('csv-file-input').click()" style="border:2px dashed var(--border);border-radius:10px;padding:2rem;text-align:center;cursor:pointer;background:#f8fafc;transition:.15s" ondragover="event.preventDefault();this.style.borderColor='#3b82f6'" ondragleave="this.style.borderColor=''" ondrop="handleCSVDrop(event)">
+        <div style="font-size:32px;margin-bottom:.5rem">📂</div>
+        <div style="font-weight:600;font-size:14px;margin-bottom:.25rem">Click to select CSV file</div>
+        <div style="font-size:12px;color:var(--muted)">or drag and drop your .csv file here</div>
+        <input type="file" id="csv-file-input" accept=".csv,.txt" style="display:none" onchange="handleCSVFile(this)">
+      </div>
+      <div id="csv-file-preview" style="margin-top:10px;font-size:12px;color:var(--muted)"></div>
+    </div>
+
+    <div id="import-paste-panel" class="hidden">
+      <div class="fld"><label>Paste CSV data here</label>
+        <textarea id="csv-input" rows="8" placeholder="name,email,phone,dob,department,role,salary&#10;Kiran Kumar,kiran@kreayotoo.com,9876543210,1990-05-15,Engineering,Developer,50000"></textarea>
+      </div>
+    </div>
+
     <div id="csv-preview" style="font-size:12px;color:var(--muted);margin-bottom:.5rem"></div>
     <div id="csv-err"></div>
     <div class="modal-ftr">
@@ -1348,6 +1367,44 @@ function openBulkImport(){
     </div>
   </div></div>`;
   if($('csv-input')) $('csv-input').addEventListener('input', previewCSV);
+}
+
+function switchImportTab(tab){
+  $('import-upload-panel').classList.toggle('hidden', tab!=='upload');
+  $('import-paste-panel').classList.toggle('hidden', tab!=='paste');
+  $('tab-upload').style.cssText=`flex:1;padding:9px;border:none;background:${tab==='upload'?'var(--navy)':'#f8fafc'};color:${tab==='upload'?'#fff':'var(--muted)'};font-weight:700;font-size:13px;cursor:pointer`;
+  $('tab-paste').style.cssText=`flex:1;padding:9px;border:none;background:${tab==='paste'?'var(--navy)':'#f8fafc'};color:${tab==='paste'?'#fff':'var(--muted)'};font-weight:600;font-size:13px;cursor:pointer`;
+}
+
+function handleCSVDrop(e){
+  e.preventDefault();
+  $('csv-dropzone').style.borderColor='';
+  const file=e.dataTransfer.files[0];
+  if(file) readCSVFile(file);
+}
+
+function handleCSVFile(input){
+  const file=input.files[0];
+  if(file) readCSVFile(file);
+}
+
+function readCSVFile(file){
+  if(!file.name.match(/\.(csv|txt)$/i)){
+    if($('csv-file-preview'))$('csv-file-preview').innerHTML=`<span style="color:#991b1b">Please select a .csv file</span>`;
+    return;
+  }
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const text=e.target.result;
+    const lines=text.trim().split('\n').filter(l=>l.trim());
+    let dataLines=lines;
+    if(lines[0].toLowerCase().includes('name')&&lines[0].toLowerCase().includes('email')) dataLines=lines.slice(1);
+    if($('csv-file-preview'))$('csv-file-preview').innerHTML=`<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px">✅ <strong>${file.name}</strong> loaded — <strong>${dataLines.length} employees</strong> found. Click "Import employees" to proceed.</div>`;
+    if($('csv-dropzone'))$('csv-dropzone').innerHTML=`<div style="font-size:24px;margin-bottom:.5rem">✅</div><div style="font-weight:600;font-size:14px;color:#166534">${file.name}</div><div style="font-size:12px;color:#166534">${dataLines.length} employees ready to import</div>`;
+    // Store parsed text for importCSV to use
+    window._csvRawText=text;
+  };
+  reader.readAsText(file);
 }
 
 function downloadSampleCSV(){
@@ -1373,7 +1430,9 @@ function previewCSV(){
 }
 
 function importCSV(){
-  const raw=($('csv-input')||{}).value||'';
+  // Use file upload text if available, otherwise use pasted text
+  const raw=window._csvRawText||($('csv-input')||{}).value||'';
+  window._csvRawText=null; // clear after use
   const lines=raw.trim().split('\n').filter(l=>l.trim());
   const err=$('csv-err');
   if(!lines.length){if(err)err.innerHTML=`<div class="alert alert-e">No data found</div>`;return;}
