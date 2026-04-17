@@ -1075,7 +1075,10 @@ function loginAsEmployee(emp){
   const log={id:Date.now(),user:emp.name,email:emp.email,time:new Date().toLocaleString('en-IN'),lat:geoState.lat,lng:geoState.lng,accuracy:geoState.accuracy,address:geoState.address||geoState.city||'Unknown',geoStatus:geoState.status,inOffice:nearest?nearest.inZone:null,nearestOffice:nearest?nearest.name:null,method:'password'};
   if(!D.loginLogs)D.loginLogs=[];D.loginLogs.unshift(log);
   sbLoginLog(log);
-  currentRole='employee';currentEmployee=emp;D.loggedIn=true;save();renderApp();
+  currentRole='employee';currentEmployee=emp;D.loggedIn=true;
+  empPage='emp-dashboard';
+  save();
+  renderEmployeeApp();
 }
 function showSignup(){
   const np=prompt('Enter new password (min 6 chars):');
@@ -1232,8 +1235,18 @@ async function submitRegistration(){
   const emp={id,name:regData.name,email:regData.email,phone:regData.phone,dob:regData.dob,dept,role,status:'Active',salary:0,joined:todayStr(),selfRegistered:true,passwordHash:regData.password,empType:'office',companyId:currentCompany?currentCompany.company_id:'KSPL'};
 
   const res=await sbSaveEmployee(emp);
-  if(res&&res[0]) emp._uuid=res[0].id;
-  else if(res&&Array.isArray(res)&&res.length>0) emp._uuid=res[0].id;
+
+  // Extract UUID from any response shape
+  if(res){
+    if(Array.isArray(res)&&res[0]&&res[0].id) emp._uuid=res[0].id;
+    else if(res.id) emp._uuid=res.id;
+  }
+
+  // Even if UUID extraction failed, try fetching from Supabase to confirm
+  if(!emp._uuid){
+    const saved=await sb('employees','GET',null,`?email=eq.${encodeURIComponent(emp.email)}&select=id`);
+    if(saved&&saved.length>0) emp._uuid=saved[0].id;
+  }
 
   if(!emp._uuid){
     hideSyncBanner();
@@ -1241,18 +1254,29 @@ async function submitRegistration(){
     return;
   }
 
-  D.employees.push(emp);
+  // Update local cache
+  const existingIdx=D.employees.findIndex(e=>e.email===emp.email);
+  if(existingIdx>=0) D.employees[existingIdx]=emp;
+  else D.employees.push(emp);
+
   const notif={msg:`New employee ${regData.name} self-registered (${dept})`,type:'info',read:false};
   D.notifications.unshift({id:Date.now(),...notif,time:'Just now'});
   sbSaveNotification(notif);
-  save();
-  hideSyncBanner();
-  currentRole='employee';currentEmployee=emp;D.loggedIn=true;
+
+  // Set session
+  currentRole='employee';
+  currentEmployee=emp;
+  D.loggedIn=true;
+  empPage='emp-dashboard';
+
   const nearest=geoState.status==='ok'?getNearestOffice(geoState.lat,geoState.lng):null;
   const log={id:Date.now(),user:emp.name,email:emp.email,time:new Date().toLocaleString('en-IN'),lat:geoState.lat,lng:geoState.lng,accuracy:geoState.accuracy,address:geoState.address||geoState.city||'Unknown',geoStatus:geoState.status,inOffice:nearest?nearest.inZone:null,nearestOffice:nearest?nearest.name:null,method:'register'};
-  if(!D.loginLogs)D.loginLogs=[];D.loginLogs.unshift(log);
+  if(!D.loginLogs)D.loginLogs=[];
+  D.loginLogs.unshift(log);
   sbLoginLog(log);
-  save();renderApp();
+  save();
+  hideSyncBanner();
+  renderEmployeeApp();
 }
 function logout(){D.loggedIn=false;currentRole='admin';currentEmployee=null;currentCompany=null;geoState={status:'idle'};frStopCamera();save();renderApp();}
 
