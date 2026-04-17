@@ -327,6 +327,8 @@ async function syncFromSupabase(){
     const notifs = await sb('notifications','GET',null,`?select=*&limit=50${cFilter}`).catch(()=>null);
     const sets = await sb('settings','GET',null,'?select=*&limit=1').catch(()=>null);
     const companies = await sb('companies','GET',null,'?select=*').catch(()=>null);
+    const hols = await sb('holidays','GET',null,`?select=*${cFilter}&order=date.asc`).catch(()=>null);
+    const locs = await sb('office_locations','GET',null,`?select=*${cFilter}`).catch(()=>null);
 
     if(emps!==null) D.employees=emps.map(e=>({
       id:e.emp_id||e.id,_uuid:e.id,name:e.name,email:e.email,
@@ -343,6 +345,8 @@ async function syncFromSupabase(){
     if(notifs!==null&&notifs.length) D.notifications=notifs.map(n=>({_uuid:n.id,id:n.id,type:n.type,msg:n.message,time:new Date(n.created_at).toLocaleString('en-IN'),read:n.is_read}));
     if(sets!==null&&sets.length){const s=sets[0];D.settings={...D.settings,company:s.company_name||D.settings.company,email:s.company_email||D.settings.email,tz:s.timezone||D.settings.tz,currency:s.currency||D.settings.currency,hours:s.work_hours||D.settings.hours,officeLat:s.office_lat||D.settings.officeLat,officeLng:s.office_lng||D.settings.officeLng,officeRadius:s.office_radius||D.settings.officeRadius,_uuid:s.id};}
     if(companies!==null) D.companies=companies;
+    if(hols!==null&&hols.length) D.holidays=hols.map(h=>({_uuid:h.id,id:h.id,name:h.name,date:h.date,type:h.type||'National'}));
+    if(locs!==null&&locs.length) D.officeLocations=locs.map(l=>({_uuid:l.id,id:l.location_id,name:l.name,lat:parseFloat(l.lat),lng:parseFloat(l.lng),radius:l.radius||500,color:l.color||'#3b82f6'}));
     SB_READY=true;
     saveData(D);
     hideSyncBanner();
@@ -374,12 +378,8 @@ async function sbSaveEmployee(emp){
   };
   if(emp.phone) payload.phone=emp.phone;
   if(emp.dob){
-    let dob=emp.dob.trim();
-    const parts=dob.split(/[\s\/\-\.]/);
-    if(parts.length===3&&parts[0].length<=2&&parseInt(parts[0])<=31){
-      dob=`${parts[2].padStart(4,'20')}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
-    }
-    if(/^\d{4}-\d{2}-\d{2}$/.test(dob)) payload.dob=dob;
+    const dob=parseAnyDate(emp.dob);
+    if(dob) payload.dob=dob;
   }
   if(emp.selfRegistered!==undefined) payload.self_registered=!!emp.selfRegistered;
   if(emp.passwordHash) payload.password_hash=emp.passwordHash;
@@ -525,7 +525,73 @@ function navEmpBack(){
   renderEmployeeApp();
 }
 
-// ─── RENDER ENGINE ─────────────────────────────────────────────────
+async function sbSaveHoliday(h){
+  const cid=currentCompany?currentCompany.company_id:'KSPL';
+  const payload={name:h.name,date:h.date,type:h.type||'National',company_id:cid};
+  if(h._uuid){return await sb('holidays','PATCH',payload,`?id=eq.${h._uuid}`);}
+  const r=await sb('holidays','POST',payload);
+  if(r&&r[0])h._uuid=r[0].id;
+  return r;
+}
+async function sbDeleteHoliday(h){if(h._uuid)await sb('holidays','DELETE',null,`?id=eq.${h._uuid}`);}
+
+async function sbSaveLocation(loc){
+  const cid=currentCompany?currentCompany.company_id:'KSPL';
+  const payload={location_id:loc.id,name:loc.name,lat:loc.lat,lng:loc.lng,radius:loc.radius||500,color:loc.color||'#3b82f6',company_id:cid};
+  if(loc._uuid){return await sb('office_locations','PATCH',payload,`?id=eq.${loc._uuid}`);}
+  const r=await sb('office_locations','POST',payload);
+  if(r&&r[0])loc._uuid=r[0].id;
+  return r;
+}
+async function sbDeleteLocation(loc){if(loc._uuid)await sb('office_locations','DELETE',null,`?id=eq.${loc._uuid}`);}
+
+// ─── UNIVERSAL DATE PARSER ────────────────────────────────────────
+// Handles: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, DD-MM-YYYY, DD MM YYYY,
+//          MM-DD-YYYY, DD.MM.YYYY, "Jan 15 2000", "15 Jan 2000", "January 15 2000" etc.
+function parseAnyDate(raw){
+  if(!raw||!raw.toString().trim()) return '';
+  const s=raw.toString().trim();
+
+  // Already YYYY-MM-DD
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+  // Named month formats: "Jan 15 2000", "15 Jan 2000", "January 15, 2000"
+  const months={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  const namedMatch=s.match(/(\d{1,2})[^\w]?([a-zA-Z]+)[^\w]?(\d{4})|([a-zA-Z]+)[^\w]?(\d{1,2})[^\w]?(\d{4})/);
+  if(namedMatch){
+    let d,m,y;
+    if(namedMatch[1]){d=namedMatch[1];const mn=namedMatch[2].toLowerCase().slice(0,3);m=months[mn];y=namedMatch[3];}
+    else{const mn=namedMatch[4].toLowerCase().slice(0,3);m=months[mn];d=namedMatch[5];y=namedMatch[6];}
+    if(m&&d&&y) return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+  }
+
+  // Split by common separators
+  const parts=s.split(/[\s\/\-\.]+/).filter(Boolean);
+  if(parts.length!==3) return '';
+
+  const [a,b,c]=parts.map(Number);
+
+  // YYYY-MM-DD or YYYY/MM/DD (year first)
+  if(parts[0].length===4&&a>1900&&b>=1&&b<=12&&c>=1&&c<=31){
+    return `${parts[0]}-${parts[1].padStart(2,'0')}-${parts[2].padStart(2,'0')}`;
+  }
+
+  // If c is a year (4 digits or >31)
+  if(parts[2].length===4||c>31){
+    const year=parts[2].padStart(4,'20');
+    // DD/MM/YYYY — if a<=31 and b<=12
+    if(a<=31&&b>=1&&b<=12){
+      // Disambiguate MM/DD vs DD/MM: if a>12, must be DD
+      if(a>12) return `${year}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+      // if b>12, must be DD in position 2 (MM/DD/YYYY)
+      if(b>12) return `${year}-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
+      // Default to DD/MM/YYYY (Indian standard)
+      return `${year}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}`;
+    }
+  }
+
+  return '';
+}
 function renderApp(){
   if(!D.loggedIn){ $('root').innerHTML = renderLogin(); bindLogin(); return; }
   if(currentRole==='employee') { renderEmployeeApp(); return; }
@@ -1714,12 +1780,7 @@ async function importCSV(){
     const [name,email,phone,rawDob,dept,role,salary]=cols;
     if(!name||!email) continue;
     let dob='';
-    if(rawDob&&rawDob.trim()){
-      const dp=rawDob.trim().split(/[\s\/\-\.]/);
-      if(dp.length===3&&dp[0].length<=2&&parseInt(dp[0])<=31){
-        dob=`${dp[2].padStart(4,'20')}-${dp[1].padStart(2,'0')}-${dp[0].padStart(2,'0')}`;
-      } else { dob=rawDob.trim(); }
-    }
+    if(rawDob&&rawDob.trim()) dob=parseAnyDate(rawDob.trim());
     toImport.push({name:name.trim(),email:email.trim().toLowerCase(),phone:(phone||'').trim(),dob,dept:(dept||'Engineering').trim(),role:(role||'Employee').trim(),salary:parseInt(salary)||0});
   }
 
@@ -2361,7 +2422,7 @@ function useCurrentLoc(id){
     if(loc){loc.lat=parseFloat(pos.coords.latitude.toFixed(6));loc.lng=parseFloat(pos.coords.longitude.toFixed(6));save();nav('settings');alert(`✅ ${loc.name} location updated to your current position!`);}
   },()=>alert('Could not get GPS location'),{enableHighAccuracy:true});
 }
-function saveLocModal(editId){
+async function saveLocModal(editId){
   const name=($('loc-name')||{}).value?.trim();
   const lat=parseFloat(($('loc-lat')||{}).value);
   const lng=parseFloat(($('loc-lng')||{}).value);
@@ -2371,15 +2432,18 @@ function saveLocModal(editId){
   if(!D.officeLocations)D.officeLocations=[];
   if(editId){
     const loc=D.officeLocations.find(l=>l.id===editId);
-    if(loc){Object.assign(loc,{name,lat,lng,radius,color});}
+    if(loc){Object.assign(loc,{name,lat,lng,radius,color});await sbSaveLocation(loc);}
   } else {
-    D.officeLocations.push({id:'LOC-'+Date.now(),name,lat,lng,radius,color});
+    const loc={id:'LOC-'+Date.now(),name,lat,lng,radius,color};
+    D.officeLocations.push(loc);
+    await sbSaveLocation(loc);
   }
   save();closeModal('loc-modal-wrap');nav('settings');
 }
-function deleteLoc(id){
+async function deleteLoc(id){
   const loc=D.officeLocations.find(l=>l.id===id);
   if(!loc||!confirm(`Delete "${loc.name}"?`))return;
+  await sbDeleteLocation(loc);
   D.officeLocations=D.officeLocations.filter(l=>l.id!==id);
   save();nav('settings');
 }
@@ -2475,18 +2539,22 @@ function addHolidayModal(){
     <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('holiday-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="saveHoliday()">Add holiday</button></div>
   </div></div>`;
 }
-function saveHoliday(){
+async function saveHoliday(){
   if(!D.holidays)D.holidays=[];
   const name=($('hol-name')||{}).value?.trim();
   const date=($('hol-date')||{}).value;
   const type=($('hol-type')||{}).value;
   if(!name||!date)return;
-  D.holidays.push({id:Date.now(),name,date,type});
+  const h={id:Date.now(),name,date,type};
+  D.holidays.push(h);
+  await sbSaveHoliday(h);
   save();closeModal('holiday-modal-wrap');nav('holidays');
 }
-function deleteHoliday(id){
+async function deleteHoliday(id){
   if(!confirm('Delete this holiday?'))return;
-  D.holidays=D.holidays.filter(h=>h.id!==id);
+  const h=D.holidays.find(x=>x.id===id||x._uuid===id||x.id==id);
+  if(h) await sbDeleteHoliday(h);
+  D.holidays=D.holidays.filter(x=>x.id!==id&&x._uuid!==id&&x.id!=id);
   save();nav('holidays');
 }
 
