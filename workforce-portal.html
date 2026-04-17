@@ -287,12 +287,15 @@ function initData(){
     notifications:[{id:1,type:'success',msg:'Welcome to Kreayotoo Solutions Portal!',time:'Just now',read:false}],
     settings:{company:'Kreayotoo Solutions',email:'claudekreayotoo@gmail.com',tz:'Asia/Kolkata',currency:'INR',hours:9,officeRadius:500,officeLat:17.3850,officeLng:78.4867},
     officeLocations:[{id:'LOC-1',name:'Head Office — Hyderabad',lat:17.3850,lng:78.4867,radius:500,color:'#3b82f6'}],
-    loginLogs:[],loggedIn:false
+    loginLogs:[],loggedIn:false,
+    companies:[]
   };
 }
 
 let D = loadData() || initData();
 let currentRole='admin', currentEmployee=null, SB_READY=false;
+// currentCompany = null means Kreayotoo super admin, otherwise = company object
+let currentCompany = null;
 
 function save(){ saveData(D); }
 function unreadCount(){ return D.notifications.filter(n=>!n.read).length; }
@@ -301,21 +304,25 @@ function unreadCount(){ return D.notifications.filter(n=>!n.read).length; }
 async function syncFromSupabase(){
   showSyncBanner('Syncing with database…');
   try{
-    // Fetch each table independently so one failure doesn't break everything
-    const emps = await sb('employees','GET',null,'?select=*').catch(()=>null);
-    const att = await sb('attendance','GET',null,'?select=*&limit=500').catch(()=>null);
-    const lvs = await sb('leaves','GET',null,'?select=*').catch(()=>null);
-    const exp = await sb('expenses','GET',null,'?select=*').catch(()=>null);
-    const perf = await sb('performance','GET',null,'?select=*').catch(()=>null);
-    const notifs = await sb('notifications','GET',null,'?select=*&limit=50').catch(()=>null);
+    // Filter by company if not super admin
+    const cFilter = currentCompany ? `&company_id=eq.${currentCompany.company_id}` : '';
+
+    const emps = await sb('employees','GET',null,`?select=*${cFilter}`).catch(()=>null);
+    const att = await sb('attendance','GET',null,`?select=*&limit=500${cFilter}`).catch(()=>null);
+    const lvs = await sb('leaves','GET',null,`?select=*${cFilter}`).catch(()=>null);
+    const exp = await sb('expenses','GET',null,`?select=*${cFilter}`).catch(()=>null);
+    const perf = await sb('performance','GET',null,`?select=*${cFilter}`).catch(()=>null);
+    const notifs = await sb('notifications','GET',null,`?select=*&limit=50${cFilter}`).catch(()=>null);
     const sets = await sb('settings','GET',null,'?select=*&limit=1').catch(()=>null);
+    const companies = await sb('companies','GET',null,'?select=*').catch(()=>null);
 
     if(emps!==null) D.employees=emps.map(e=>({
       id:e.emp_id||e.id,_uuid:e.id,name:e.name,email:e.email,
       phone:e.phone||'',dob:e.dob||'',dept:e.department||'',
       role:e.role||'',status:e.status||'Active',salary:e.salary||0,
       joined:e.date_of_joining||'',selfRegistered:e.self_registered||false,
-      passwordHash:e.password_hash||'emp@123',empType:e.emp_type||'office'
+      passwordHash:e.password_hash||'emp@123',empType:e.emp_type||'office',
+      companyId:e.company_id||'KSPL'
     }));
     if(att!==null) D.attendance=att.map(a=>({_uuid:a.id,empId:a.employee_id,empName:a.employee_name,date:a.date,status:a.status,in:a.in_time,out:a.out_time}));
     if(lvs!==null) D.leaves=lvs.map(l=>({_uuid:l.id,id:l.id,emp:l.employee_name,type:l.leave_type,from:l.from_date,to:l.to_date,days:l.days,reason:l.reason,status:l.status}));
@@ -323,6 +330,7 @@ async function syncFromSupabase(){
     if(perf!==null) D.performance=perf.map(p=>({_uuid:p.id,id:p.id,emp:p.employee_name,quarter:p.quarter,rating:p.rating,goals:p.goals_set,achieved:p.goals_achieved,notes:p.review_notes}));
     if(notifs!==null&&notifs.length) D.notifications=notifs.map(n=>({_uuid:n.id,id:n.id,type:n.type,msg:n.message,time:new Date(n.created_at).toLocaleString('en-IN'),read:n.is_read}));
     if(sets!==null&&sets.length){const s=sets[0];D.settings={...D.settings,company:s.company_name||D.settings.company,email:s.company_email||D.settings.email,tz:s.timezone||D.settings.tz,currency:s.currency||D.settings.currency,hours:s.work_hours||D.settings.hours,officeLat:s.office_lat||D.settings.officeLat,officeLng:s.office_lng||D.settings.officeLng,officeRadius:s.office_radius||D.settings.officeRadius,_uuid:s.id};}
+    if(companies!==null) D.companies=companies;
     SB_READY=true;
     saveData(D);
     hideSyncBanner();
@@ -344,11 +352,13 @@ function hideSyncBanner(){const el=$('sync-banner');if(el)el.style.display='none
 function empUuid(empId){ const e=D.employees.find(x=>x.id===empId||x._uuid===empId); return e?e._uuid:empId; }
 
 async function sbSaveEmployee(emp){
+  const cid = currentCompany ? currentCompany.company_id : (emp.companyId||'KSPL');
   const payload={
     emp_id:emp.id, name:emp.name, email:emp.email,
     department:emp.dept||'Engineering', role:emp.role||'Employee',
     status:emp.status||'Active', salary:emp.salary||0,
-    date_of_joining:emp.joined||todayStr()
+    date_of_joining:emp.joined||todayStr(),
+    company_id:cid
   };
   if(emp.phone) payload.phone=emp.phone;
   if(emp.dob){
@@ -364,21 +374,17 @@ async function sbSaveEmployee(emp){
   if(emp.empType) payload.emp_type=emp.empType;
 
   try{
-    // If we have a UUID, just update
     if(emp._uuid){
       const r=await sb('employees','PATCH',payload,`?id=eq.${emp._uuid}`);
       if(r!==null){console.log('✅ Updated:',emp.name);return r;}
     }
-    // Check if employee with this emp_id already exists
     const existing=await sb('employees','GET',null,`?emp_id=eq.${encodeURIComponent(emp.id)}&select=id`);
     if(existing&&existing.length>0){
-      // Update existing record
       emp._uuid=existing[0].id;
       const r=await sb('employees','PATCH',payload,`?id=eq.${emp._uuid}`);
       console.log('✅ Updated existing:',emp.name);
       return r;
     }
-    // Also check by email
     const byEmail=await sb('employees','GET',null,`?email=eq.${encodeURIComponent(emp.email)}&select=id`);
     if(byEmail&&byEmail.length>0){
       emp._uuid=byEmail[0].id;
@@ -386,7 +392,6 @@ async function sbSaveEmployee(emp){
       console.log('✅ Updated by email:',emp.name);
       return r;
     }
-    // Insert new record
     const r=await sb('employees','POST',payload);
     if(r&&r[0]){emp._uuid=r[0].id;console.log('✅ Inserted:',emp.name);}
     return r;
@@ -417,27 +422,16 @@ async function sbUpsert(table, payload, matchCol, matchVal){
 }
 
 async function sbSaveAttendance(rec){
+  const cid=currentCompany?currentCompany.company_id:'KSPL';
   const eUuid=empUuid(rec.empId);
-  const payload={employee_id:eUuid,employee_name:rec.empName,date:rec.date,status:rec.status,in_time:rec.in||null,out_time:rec.out||null};
-  if(rec._uuid){
-    const r=await sb('attendance','PATCH',payload,`?id=eq.${rec._uuid}`);
-    return r;
-  } else {
-    // Upsert on employee_id + date combo
-    const res=await fetch(`${SB_URL}/rest/v1/attendance`,{
-      method:'POST',
-      headers:{...SB_HDR,'Prefer':'return=representation,resolution=merge-duplicates'},
-      body:JSON.stringify(payload)
-    });
-    if(!res.ok){console.error('❌ SB attendance:',await res.text());return null;}
-    const t=await res.text();const r=t?JSON.parse(t):true;
-    if(r&&r[0])rec._uuid=r[0].id;
-    return r;
-  }
+  const payload={employee_id:eUuid,employee_name:rec.empName,date:rec.date,status:rec.status,in_time:rec.in||null,out_time:rec.out||null,company_id:cid};
+  if(rec._uuid){return await sb('attendance','PATCH',payload,`?id=eq.${rec._uuid}`);}
+  else{const res=await fetch(`${SB_URL}/rest/v1/attendance`,{method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(payload)});if(!res.ok){console.error('❌ SB attendance:',await res.text());return null;}const t=await res.text();const r=t?JSON.parse(t):true;if(r&&r[0])rec._uuid=r[0].id;return r;}
 }
 async function sbSaveLeave(lv){
+  const cid=currentCompany?currentCompany.company_id:'KSPL';
   const emp=D.employees.find(e=>e.name===lv.emp);
-  const payload={employee_id:emp?emp._uuid:null,employee_name:lv.emp,leave_type:lv.type,from_date:lv.from,to_date:lv.to,days:lv.days,reason:lv.reason||'',status:lv.status||'Pending'};
+  const payload={employee_id:emp?emp._uuid:null,employee_name:lv.emp,leave_type:lv.type,from_date:lv.from,to_date:lv.to,days:lv.days,reason:lv.reason||'',status:lv.status||'Pending',company_id:cid};
   if(lv._uuid){return await sb('leaves','PATCH',payload,`?id=eq.${lv._uuid}`);}
   const res=await fetch(`${SB_URL}/rest/v1/leaves`,{method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(payload)});
   if(!res.ok){console.error('❌ SB leave:',await res.text());return null;}
@@ -535,6 +529,7 @@ function renderApp(){
       </div>`:''}
       <div style="flex:1"></div>
       <button onclick="syncFromSupabase().then(()=>{nav(currentPage);})" title="Sync latest data from database" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600">🔄 Refresh</button>
+      ${currentCompany?`<div style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">🏢 ${currentCompany.name}</div>`:`<div style="background:rgba(96,165,250,.2);border:1px solid rgba(96,165,250,.4);color:#93c5fd;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">👑 Super Admin</div>`}
       <div style="position:relative;cursor:pointer;font-size:16px;color:#fff" onclick="nav('notifications')">
         🔔${uc>0?`<div class="si-dot" style="top:-2px;right:-2px"></div>`:''}
       </div>
@@ -544,7 +539,8 @@ function renderApp(){
     </div>
     <div class="body-row">
       <div class="sidebar">
-        ${[['⊞','dashboard','Dashboard'],['👥','employees','Employees'],['📅','attendance','Attendance'],['🏖','leave','Leave'],['💰','payroll','Payroll'],['🧾','expenses','Expenses'],['⭐','performance','Performance'],['📆','holidays','Holidays'],['🏢','orgchart','Org Chart'],['🪪','idcards','ID Cards'],['🗺','locations','Locations'],['🔔','notifications','Notifications'],['⚙','settings','Settings']].map(([ic,pg,tt])=>`
+        ${[['⊞','dashboard','Dashboard'],['👥','employees','Employees'],['📅','attendance','Attendance'],['🏖','leave','Leave'],['💰','payroll','Payroll'],['🧾','expenses','Expenses'],['⭐','performance','Performance'],['📆','holidays','Holidays'],['🏢','orgchart','Org Chart'],['🪪','idcards','ID Cards'],['🗺','locations','Locations'],['🔔','notifications','Notifications'],['⚙','settings','Settings'],...(!currentCompany?[['🏭','companies','Companies']]:[])]
+        .map(([ic,pg,tt])=>`
         <div class="si ${currentPage===pg?'act':''}" title="${tt}" onclick="nav('${pg}')">
           <div class="si-icon">${ic}</div>
           <span class="si-label">${tt}</span>
@@ -554,7 +550,7 @@ function renderApp(){
       <div class="main" id="main-content"></div>
     </div>
   </div>`;
-  const pages = {dashboard:pgDashboard,employees:pgEmployees,attendance:pgAttendance,leave:pgLeave,payroll:pgPayroll,expenses:pgExpenses,performance:pgPerformance,notifications:pgNotifications,settings:pgSettings,locations:pgLocations,holidays:pgHolidays,orgchart:pgOrgChart,idcards:pgIDCards};
+  const pages = {dashboard:pgDashboard,employees:pgEmployees,attendance:pgAttendance,leave:pgLeave,payroll:pgPayroll,expenses:pgExpenses,performance:pgPerformance,notifications:pgNotifications,settings:pgSettings,locations:pgLocations,holidays:pgHolidays,orgchart:pgOrgChart,idcards:pgIDCards,companies:pgCompanies};
   if(pages[currentPage]) $('main-content').innerHTML = pages[currentPage]();
   bindPage();
 }
@@ -855,13 +851,15 @@ function renderLogin(){
     </div>
   </div>
   <div class="login-right" style="flex:1;background:#f8fafc;overflow-y:auto;display:flex;align-items:center;justify-content:center;padding:2rem;min-height:100vh">
-    <div class="login-card" style="max-width:380px;width:100%;background:#fff;border-radius:14px;padding:2rem;border:1px solid #e2e5ea">
+    <div class="login-card" style="max-width:400px;width:100%;background:#fff;border-radius:14px;padding:2rem;border:1px solid #e2e5ea">
       <h2 style="font-size:22px;font-weight:700;margin-bottom:.25rem;color:#111">Welcome back</h2>
       <p class="login-sub" style="margin-bottom:1.5rem">Select your role to sign in</p>
       <div style="display:flex;gap:0;margin-bottom:1.25rem;border:1px solid var(--border);border-radius:8px;overflow:hidden">
-        <button id="tab-admin" onclick="switchLoginTab('admin')" style="flex:1;padding:10px;border:none;background:var(--navy);color:#fff;font-weight:700;font-size:13px;cursor:pointer">👑 Admin</button>
-        <button id="tab-emp" onclick="switchLoginTab('emp')" style="flex:1;padding:10px;border:none;background:var(--white);color:var(--muted);font-weight:600;font-size:13px;cursor:pointer">👤 Employee</button>
+        <button id="tab-admin" onclick="switchLoginTab('admin')" style="flex:1;padding:9px;border:none;background:var(--navy);color:#fff;font-weight:700;font-size:12px;cursor:pointer">👑 Super Admin</button>
+        <button id="tab-company" onclick="switchLoginTab('company')" style="flex:1;padding:9px;border:none;background:var(--white);color:var(--muted);font-weight:600;font-size:12px;cursor:pointer">🏢 Company</button>
+        <button id="tab-emp" onclick="switchLoginTab('emp')" style="flex:1;padding:9px;border:none;background:var(--white);color:var(--muted);font-weight:600;font-size:12px;cursor:pointer">👤 Employee</button>
       </div>
+
       <div id="admin-login-tab">
         <div class="login-methods">
           <button class="method-btn active" id="meth-face" onclick="setLoginMethod('face')">
@@ -879,10 +877,21 @@ function renderLogin(){
           <div id="login-err"></div>
           <div class="fld"><label>Email</label><input type="email" id="l-email" value="claudekreayotoo@gmail.com"></div>
           <div class="fld"><label>Password</label><input type="password" id="l-pass" value="Kreayotoo@123"></div>
-          <button class="btn btn-primary" style="width:100%;padding:10px" onclick="doLogin()">Sign in as Admin</button>
+          <button class="btn btn-primary" style="width:100%;padding:10px" onclick="doLogin()">Sign in as Super Admin</button>
         </div>
         <div class="login-toggle" style="margin-top:10px">Trouble? <span onclick="setLoginMethod('pass')">Use password instead</span> · <span onclick="showSignup()">Change password</span></div>
       </div>
+
+      <div id="company-login-tab" class="hidden">
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;font-size:12px;color:#1e40af;margin-bottom:1rem">
+          🏢 Company admins — log in with credentials provided by Kreayotoo Solutions
+        </div>
+        <div id="company-login-err"></div>
+        <div class="fld"><label>Company admin email</label><input type="email" id="co-email" placeholder="admin@yourcompany.com" onkeydown="if(event.key==='Enter')doCompanyLogin()"></div>
+        <div class="fld"><label>Password</label><input type="password" id="co-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doCompanyLogin()"></div>
+        <button class="btn btn-primary" style="width:100%;padding:10px;background:#7c3aed" onclick="doCompanyLogin()">Sign in as Company Admin</button>
+      </div>
+
       <div id="emp-login-tab" class="hidden">
         <div id="geo-box-wrap-emp">${geoBoxHTML()}</div>
         <div id="emp-login-err"></div>
@@ -899,12 +908,37 @@ function renderLogin(){
   </div>`;
 }
 function switchLoginTab(tab){
-  $('admin-login-tab').classList.toggle('hidden',tab!=='admin');
-  $('emp-login-tab').classList.toggle('hidden',tab!=='emp');
-  $('tab-admin').style.cssText=`flex:1;padding:10px;border:none;background:${tab==='admin'?'var(--navy)':'var(--white)'};color:${tab==='admin'?'#fff':'var(--muted)'};font-weight:700;font-size:13px;cursor:pointer`;
-  $('tab-emp').style.cssText=`flex:1;padding:10px;border:none;background:${tab==='emp'?'#0f766e':'var(--white)'};color:${tab==='emp'?'#fff':'var(--muted)'};font-weight:600;font-size:13px;cursor:pointer`;
+  ['admin','company','emp'].forEach(t=>{
+    const el=$(t==='emp'?'emp-login-tab':t==='company'?'company-login-tab':'admin-login-tab');
+    if(el) el.classList.toggle('hidden',t!==tab);
+  });
+  const colors={admin:'var(--navy)',company:'#7c3aed',emp:'#0f766e'};
+  ['admin','company','emp'].forEach(t=>{
+    const btn=$(`tab-${t}`);
+    if(btn) btn.style.cssText=`flex:1;padding:9px;border:none;background:${t===tab?colors[t]:'var(--white)'};color:${t===tab?'#fff':'var(--muted)'};font-weight:${t===tab?700:600};font-size:12px;cursor:pointer`;
+  });
   if(tab==='emp'){frStopCamera();captureGeo();}
-  else{frStopCamera();setTimeout(startFaceScan,100);captureGeo();}
+  else if(tab==='admin'){frStopCamera();setTimeout(startFaceScan,100);captureGeo();}
+  else{frStopCamera();}
+}
+async function doCompanyLogin(){
+  const em=($('co-email')||{}).value?.trim();
+  const pw=($('co-pass')||{}).value;
+  const err=$('company-login-err');
+  if(!em||!pw){if(err)err.innerHTML=`<div class="alert alert-e">Enter email and password</div>`;return;}
+  if(err)err.innerHTML=`<div class="alert alert-e" style="color:#1e40af;background:#eff6ff;border-color:#bfdbfe">Checking credentials…</div>`;
+  const companies=await sb('companies','GET',null,`?admin_email=eq.${encodeURIComponent(em)}&select=*`);
+  if(!companies||!companies.length){if(err)err.innerHTML=`<div class="alert alert-e">No company found with this email</div>`;return;}
+  const company=companies[0];
+  if(company.admin_password!==pw){if(err)err.innerHTML=`<div class="alert alert-e">Wrong password</div>`;return;}
+  if(company.status!=='Active'){if(err)err.innerHTML=`<div class="alert alert-e">This company account is inactive. Contact Kreayotoo.</div>`;return;}
+  currentCompany=company;
+  currentRole='admin';
+  D.loggedIn=true;
+  D.settings={...D.settings,company:company.name};
+  save();
+  await syncFromSupabase();
+  renderApp();
 }
 function setLoginMethod(method){
   ['face','pass'].forEach(m=>{
@@ -927,6 +961,7 @@ function doLogin(){
     if(!D.loginLogs)D.loginLogs=[];
     D.loginLogs.unshift(log);if(D.loginLogs.length>100)D.loginLogs=D.loginLogs.slice(0,100);
     sbLoginLog(log);
+    currentCompany=null; // Super admin — no company filter
     currentRole='admin';D.loggedIn=true;save();
     syncFromSupabase().then(()=>renderApp());
   } else {$('login-err').innerHTML=`<div class="alert alert-e">Wrong email or password</div>`;}
@@ -1116,7 +1151,7 @@ async function submitRegistration(){
 
   const nextNum=D.employees.length+101;
   const id=empid||('EMP-'+String(nextNum).padStart(3,'0'));
-  const emp={id,name:regData.name,email:regData.email,phone:regData.phone,dob:regData.dob,dept,role,status:'Active',salary:0,joined:todayStr(),selfRegistered:true,passwordHash:regData.password,empType:'office'};
+  const emp={id,name:regData.name,email:regData.email,phone:regData.phone,dob:regData.dob,dept,role,status:'Active',salary:0,joined:todayStr(),selfRegistered:true,passwordHash:regData.password,empType:'office',companyId:currentCompany?currentCompany.company_id:'KSPL'};
 
   const res=await sbSaveEmployee(emp);
   if(res&&res[0]) emp._uuid=res[0].id;
@@ -1141,7 +1176,7 @@ async function submitRegistration(){
   sbLoginLog(log);
   save();renderApp();
 }
-function logout(){D.loggedIn=false;currentRole='admin';currentEmployee=null;geoState={status:'idle'};frStopCamera();save();renderApp();}
+function logout(){D.loggedIn=false;currentRole='admin';currentEmployee=null;currentCompany=null;geoState={status:'idle'};frStopCamera();save();renderApp();}
 
 // ─── EMPLOYEE PORTAL ─────────────────────────────────────────────
 let empPage = 'emp-dashboard';
@@ -1408,10 +1443,11 @@ function pgDashboard(){
   const active=D.employees.filter(e=>e.status==='Active').length;
   const pLeaves=D.leaves.filter(l=>l.status==='Pending').length;
   const pExp=D.expenses.filter(e=>e.status==='Pending').length;
-  const mods=[['👥','Directory','employees'],['📅','Attendance','attendance'],['🏖','Leave','leave'],['💰','Payroll','payroll'],['🧾','Expenses','expenses'],['⭐','Performance','performance'],['📆','Holidays','holidays'],['🏢','Org Chart','orgchart'],['🪪','ID Cards','idcards'],['🗺','Locations','locations'],['🔔','Notifications','notifications'],['⚙','Settings','settings']];
+  const mods=[['👥','Directory','employees'],['📅','Attendance','attendance'],['🏖','Leave','leave'],['💰','Payroll','payroll'],['🧾','Expenses','expenses'],['⭐','Performance','performance'],['📆','Holidays','holidays'],['🏢','Org Chart','orgchart'],['🪪','ID Cards','idcards'],['🗺','Locations','locations'],['🔔','Notifications','notifications'],['⚙','Settings','settings'],...(!currentCompany?[['🏭','Companies','companies']]:[])];
+
   return `
   <div class="page-hd">
-    <div><div class="pg-title">Hi, ${D.user.name.split(' ')[0]}! 👋</div><div class="pg-sub">${dateLabel()}</div></div>
+    <div><div class="pg-title">Hi, ${currentCompany?currentCompany.name.split(' ')[0]:D.user.name.split(' ')[0]}! 👋</div><div class="pg-sub">${dateLabel()}${currentCompany?` · ${currentCompany.name}`:' · Super Admin'}</div></div>
     <button class="btn btn-primary" onclick="openEmpModal()">+ Add employee</button>
   </div>
 
@@ -1691,7 +1727,8 @@ async function importCSV(){
       emp_id:empId, name:row.name, email:row.email,
       department:row.dept, role:row.role, status:'Active',
       salary:row.salary, date_of_joining:todayStr(),
-      password_hash:'emp@123', emp_type:'office'
+      password_hash:'emp@123', emp_type:'office',
+      company_id: currentCompany ? currentCompany.company_id : 'KSPL'
     };
     if(row.phone) payload.phone=row.phone;
     if(row.dob&&/^\d{4}-\d{2}-\d{2}$/.test(row.dob)) payload.dob=row.dob;
@@ -2512,6 +2549,110 @@ function empIDCard(){
 function printAllCards(){
   window.print();
 }
+
+// ─── COMPANIES MANAGEMENT (Super Admin only) ─────────────────────
+function pgCompanies(){
+  const companies=D.companies||[];
+  return `
+  <div class="page-hd">
+    <div><div class="pg-title">🏭 Manage Companies</div><div class="pg-sub">${companies.length} companies on the platform</div></div>
+    <button class="btn btn-primary" onclick="openCompanyModal()">+ Add company</button>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem">
+    ${companies.map(c=>`
+    <div style="background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+      <div style="background:${c.company_id==='KSPL'?'var(--navy)':'#7c3aed'};color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:800;font-size:14px">${c.name}</div>
+          <div style="font-size:11px;opacity:.7;margin-top:2px">ID: ${c.company_id}</div>
+        </div>
+        <span style="background:rgba(255,255,255,.2);padding:3px 10px;border-radius:20px;font-size:11px">${c.status||'Active'}</span>
+      </div>
+      <div style="padding:12px 16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:2px">Admin login</div>
+        <div style="font-size:13px;font-weight:600">${c.admin_email}</div>
+        <div style="font-size:12px;font-family:monospace;background:#f1f5f9;padding:3px 8px;border-radius:6px;margin:6px 0 12px;display:inline-block">${c.admin_password}</div>
+        <div style="display:flex;gap:6px">
+          ${c.company_id!=='KSPL'?`
+          <button class="btn btn-sec" style="flex:1;font-size:12px" onclick="openCompanyModal('${c.company_id}')">✏ Edit</button>
+          <button class="btn btn-sec" style="font-size:12px;color:${c.status==='Active'?'#92400e':'#166534'}" onclick="toggleCompanyStatus('${c.company_id}','${c.status||'Active'}')">${c.status==='Active'?'⏸ Suspend':'▶ Activate'}</button>
+          <button class="btn-icon btn-del" onclick="deleteCompany('${c.company_id}')">🗑</button>
+          `:`<span style="font-size:11px;color:var(--muted)">✅ Platform owner</span>`}
+        </div>
+      </div>
+    </div>`).join('')}
+    ${companies.length===0?`<div class="card" style="text-align:center;color:var(--muted);padding:2rem;grid-column:1/-1">No companies yet. Add your first client company!</div>`:''}
+  </div>
+  <div id="company-modal-wrap"></div>`;
+}
+
+function openCompanyModal(editId=null){
+  const existing=editId?(D.companies||[]).find(c=>c.company_id===editId):null;
+  const wrap=$('company-modal-wrap');if(!wrap)return;
+  wrap.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('company-modal-wrap')">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-hd"><h3>${editId?'Edit company':'Add new company'}</h3><button class="xbtn" onclick="closeModal('company-modal-wrap')">×</button></div>
+    <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 12px;font-size:12px;color:#0369a1;margin-bottom:1rem">
+      ${editId?'Update company credentials below.':'Fill in the company details. They will use these credentials to log in under the 🏢 Company tab.'}
+    </div>
+    <div class="fld"><label>Company name *</label><input type="text" id="co-name" value="${existing?.name||''}" placeholder="e.g. Acme Technologies"></div>
+    <div class="fld"><label>Company ID *</label><input type="text" id="co-id" value="${existing?.company_id||''}" placeholder="e.g. ACME" ${editId?'readonly style="background:#f1f5f9"':''}><div style="font-size:11px;color:var(--muted);margin-top:3px">Short unique code, no spaces (e.g. ACME, TCS)</div></div>
+    <div class="fld"><label>Admin email *</label><input type="email" id="co-admin-email" value="${existing?.admin_email||''}" placeholder="admin@company.com"></div>
+    <div class="fld"><label>Admin password *</label><input type="text" id="co-admin-pw" value="${existing?.admin_password||''}" placeholder="Set a strong password"></div>
+    <div class="fld"><label>Status</label>
+      <select id="co-status">
+        <option ${(existing?.status||'Active')==='Active'?'selected':''}>Active</option>
+        <option ${existing?.status==='Inactive'?'selected':''}>Inactive</option>
+      </select>
+    </div>
+    <div id="co-modal-err"></div>
+    <div class="modal-ftr">
+      <button class="btn btn-sec" onclick="closeModal('company-modal-wrap')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCompany('${editId||''}')">${editId?'Update company':'Add company'}</button>
+    </div>
+  </div></div>`;
+}
+
+async function saveCompany(editId){
+  const name=($('co-name')||{}).value?.trim();
+  const cid=($('co-id')||{}).value?.trim().toUpperCase().replace(/\s/g,'');
+  const email=($('co-admin-email')||{}).value?.trim();
+  const pw=($('co-admin-pw')||{}).value?.trim();
+  const status=($('co-status')||{}).value||'Active';
+  const err=$('co-modal-err');
+  if(!name||!email||!pw){if(err)err.innerHTML=`<div class="alert alert-e">Please fill all required fields</div>`;return;}
+  if(!editId&&!cid){if(err)err.innerHTML=`<div class="alert alert-e">Company ID is required</div>`;return;}
+  showSyncBanner('Saving company…');
+  let result;
+  if(editId){
+    result=await sb('companies','PATCH',{name,admin_email:email,admin_password:pw,status},`?company_id=eq.${editId}`);
+  } else {
+    result=await sb('companies','POST',{company_id:cid,name,admin_email:email,admin_password:pw,status});
+  }
+  hideSyncBanner();
+  if(!result){if(err)err.innerHTML=`<div class="alert alert-e">Failed to save. Email or Company ID may already exist.</div>`;return;}
+  await syncFromSupabase();
+  closeModal('company-modal-wrap');
+  nav('companies');
+  alert(`✅ Company "${name}" ${editId?'updated':'added'}!\n\nLogin details:\nURL: kspl.vercel.app\nTab: 🏢 Company\nEmail: ${email}\nPassword: ${pw}`);
+}
+
+async function toggleCompanyStatus(cid,currentStatus){
+  const newStatus=currentStatus==='Active'?'Inactive':'Active';
+  if(!confirm(`${newStatus==='Inactive'?'Suspend':'Activate'} this company?`))return;
+  await sb('companies','PATCH',{status:newStatus},`?company_id=eq.${cid}`);
+  await syncFromSupabase();nav('companies');
+}
+
+async function deleteCompany(cid){
+  const co=(D.companies||[]).find(c=>c.company_id===cid);
+  if(!confirm(`Delete "${co?.name}"? Their employees stay in the database but they cannot log in.`))return;
+  await sb('companies','DELETE',null,`?company_id=eq.${cid}`);
+  await syncFromSupabase();nav('companies');
+}
+
+function closeModal(id){const el=$(id);if(el)el.innerHTML='';}
+function bindPage(){}
 
 // Show loading screen while syncing from Supabase, then render
 async function init(){
