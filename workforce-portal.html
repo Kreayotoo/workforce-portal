@@ -2100,13 +2100,30 @@ function saveProfile(){
 function closeModal(id){const el=$(id);if(el)el.innerHTML='';}
 function bindPage(){}
 
-// Always sync from Supabase on page load if logged in
-if(D.loggedIn){
-  syncFromSupabase().then(()=>renderApp());
-} else {
-  renderApp();
+// Show loading screen while syncing from Supabase, then render
+async function init(){
+  if(D.loggedIn){
+    // Show a loading screen immediately
+    $('root').innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#f0f2f5;gap:16px">
+      <div style="background:#1a1a4e;color:#fff;border-radius:14px;padding:1.5rem 2rem;text-align:center">
+        <div style="font-size:18px;font-weight:800;letter-spacing:1px;margin-bottom:8px">KREAYOTOO Solutions</div>
+        <div style="font-size:13px;opacity:.7;margin-bottom:16px">Loading your portal…</div>
+        <div style="width:200px;height:4px;background:rgba(255,255,255,.2);border-radius:2px;overflow:hidden">
+          <div style="height:4px;background:#4ecdc4;border-radius:2px;animation:loading 1.5s infinite" id="load-bar"></div>
+        </div>
+      </div>
+    </div>
+    <style>@keyframes loading{0%{width:0%}50%{width:70%}100%{width:100%}}</style>`;
+    // Sync fresh data from Supabase
+    await syncFromSupabase();
+    // Now render with fresh data
+    renderApp();
+  } else {
+    renderApp();
+  }
 }
+
+init();
 </script>
 </body>
 </html>
-
