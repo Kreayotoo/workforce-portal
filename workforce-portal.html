@@ -1416,18 +1416,30 @@ function pgDashboard(){
     <div><div class="pg-title">Hi, ${D.user.name.split(' ')[0]}! 👋</div><div class="pg-sub">${dateLabel()}</div></div>
     <button class="btn btn-primary" onclick="openEmpModal()">+ Add employee</button>
   </div>
-  <div class="stat-grid">
-    <div class="stat"><div class="stat-lbl">Total employees</div><div class="stat-val">${D.employees.length}</div><div class="stat-sub">${DEPTS.length} departments</div></div>
-    <div class="stat"><div class="stat-lbl">Active</div><div class="stat-val">${active}</div><div class="stat-sub">${D.employees.length?Math.round(active/D.employees.length*100):0}% workforce</div></div>
-    <div class="stat"><div class="stat-lbl">Pending leaves</div><div class="stat-val">${pLeaves}</div><div class="stat-sub">Awaiting approval</div></div>
-    <div class="stat"><div class="stat-lbl">Open tasks</div><div class="stat-val">${pLeaves+pExp}</div><div class="stat-sub">Leaves + expenses</div></div>
+
+  <div class="modules-grid" style="grid-template-columns:repeat(auto-fill,minmax(90px,1fr));margin-bottom:.75rem">
+    ${mods.map(([ic,lb,pg])=>`<div class="mod-card" onclick="nav('${pg}')"><div class="mod-ic">${ic}</div><div class="mod-lb">${lb}</div>${pg==='notifications'&&unreadCount()>0?'<div class="mod-dot"></div>':''}</div>`).join('')}
   </div>
-  <div class="modules-grid" style="grid-template-columns:repeat(auto-fill,minmax(80px,1fr))">${mods.map(([ic,lb,pg])=>`<div class="mod-card" onclick="nav('${pg}')"><div class="mod-ic">${ic}</div><div class="mod-lb">${lb}</div>${pg==='notifications'&&unreadCount()>0?'<div class="mod-dot"></div>':''}</div>`).join('')}</div>
+
+  <div class="stat-grid" style="margin-bottom:.75rem">
+    <div class="stat" style="padding:.6rem .875rem"><div class="stat-lbl">Total employees</div><div class="stat-val" style="font-size:20px">${D.employees.length}</div><div class="stat-sub">${DEPTS.length} departments</div></div>
+    <div class="stat" style="padding:.6rem .875rem"><div class="stat-lbl">Active</div><div class="stat-val" style="font-size:20px">${active}</div><div class="stat-sub">${D.employees.length?Math.round(active/D.employees.length*100):0}% workforce</div></div>
+    <div class="stat" style="padding:.6rem .875rem"><div class="stat-lbl">Pending leaves</div><div class="stat-val" style="font-size:20px">${pLeaves}</div><div class="stat-sub">Awaiting approval</div></div>
+    <div class="stat" style="padding:.6rem .875rem"><div class="stat-lbl">Open tasks</div><div class="stat-val" style="font-size:20px">${pLeaves+pExp}</div><div class="stat-sub">Leaves + expenses</div></div>
+  </div>
+
   <div class="two-col">
     <div class="card">
       <div class="card-hd"><h3>Recent employees</h3><button class="btn-link" onclick="nav('employees')">View all →</button></div>
       <table><thead><tr><th style="width:32%">Name</th><th style="width:24%">Dept</th><th style="width:28%">Role</th><th style="width:16%">Status</th></tr></thead>
       <tbody>${D.employees.slice(0,6).map(e=>`<tr><td><div style="display:flex;align-items:center;gap:8px">${av(e.name)}${e.name}</div></td><td>${e.dept}</td><td>${e.role}</td><td>${badge(e.status)}</td></tr>`).join('')}</tbody></table>
+    </div>
+    <div class="card">
+      <div class="card-hd"><h3>Notifications</h3><span class="muted">${unreadCount()} unread</span></div>
+      ${D.notifications.slice(0,5).map(n=>`<div class="notif-row"><div class="ni ni-${n.type}">${n.type==='warning'?'⚠':n.type==='success'?'✓':'ℹ'}</div><div><div style="font-size:12px;font-weight:${n.read?400:600}">${n.msg}</div><div style="font-size:11px;color:var(--muted)">${n.time}</div></div></div>`).join('')}
+    </div>
+  </div>
+  <div id="emp-modal-wrap"></div>`;
     </div>
     <div class="card">
       <div class="card-hd"><h3>Notifications</h3><span class="muted">${unreadCount()} unread</span></div>
