@@ -236,6 +236,7 @@ tr:hover td{background:#fafafa}
 
 <div id="root"></div>
 <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const fmt = n => new Intl.NumberFormat('en-IN').format(Math.round(n||0));
@@ -252,7 +253,41 @@ const badge = s => {
   return `<span class="badge ${map[s]||'bx'}">${s}</span>`;
 };
 
-// ─── SUPABASE CONFIG ──────────────────────────────────────────────
+// ─── EMAILJS OTP ENGINE ───────────────────────────────────────────
+const EJS_SERVICE  = 'service_owvkilp';
+const EJS_TEMPLATE = 'template_q5rvvmd';
+const EJS_KEY      = 'wBI1zfEMugYGwO9bJ';
+let _otpStore = {}; // { email: { otp, expiry, verified } }
+
+function generateOTP(){ return String(Math.floor(100000 + Math.random()*900000)); }
+
+async function sendOTP(email, name){
+  const otp = generateOTP();
+  _otpStore[email] = { otp, expiry: Date.now() + 10*60*1000, verified: false };
+  try{
+    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
+      to_email: email,
+      to_name: name || email.split('@')[0],
+      otp
+    }, EJS_KEY);
+    return { success: true };
+  }catch(e){
+    console.error('❌ OTP send error:', e);
+    return { success: false, error: e.text || e.message };
+  }
+}
+
+function verifyOTP(email, enteredOtp){
+  const rec = _otpStore[email];
+  if(!rec) return { valid: false, msg: 'No OTP sent to this email. Please request again.' };
+  if(Date.now() > rec.expiry){ delete _otpStore[email]; return { valid: false, msg: 'OTP expired. Please request a new one.' }; }
+  if(rec.otp !== enteredOtp.trim()) return { valid: false, msg: 'Incorrect OTP. Please try again.' };
+  rec.verified = true;
+  return { valid: true };
+}
+
+function isOTPVerified(email){ return _otpStore[email]?.verified === true; }
+function clearOTP(email){ delete _otpStore[email]; }
 const SB_URL = 'https://ecigerazcsildhklbxri.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVjaWdlcmF6Y3NpbGRoa2xieHJpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYyNzEwNjAsImV4cCI6MjA5MTg0NzA2MH0.cun4QLVdJ1U4VmvHDJ1tS5AzrAywVwKtpaGiykapkUM';
 const SB_HDR = {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Prefer':'return=representation'};
@@ -995,13 +1030,34 @@ function renderLogin(){
       <div id="emp-login-tab" class="hidden">
         <div id="geo-box-wrap-emp">${geoBoxHTML()}</div>
         <div id="emp-login-err"></div>
-        <div class="fld"><label>Your work email</label><input type="email" id="emp-email" placeholder="yourname@company.com" onkeydown="if(event.key==='Enter')doEmpLogin()"></div>
-        <div class="fld"><label>Password</label><input type="password" id="emp-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doEmpLogin()"></div>
-        <button class="btn btn-primary" style="width:100%;padding:10px;background:#0f766e" onclick="doEmpLogin()">Sign in as Employee</button>
-        <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--muted)">
-          New here? <span style="color:#0f766e;cursor:pointer;font-weight:700" onclick="showRegister()">Create your account →</span>
+        <div id="emp-login-form">
+          <div class="fld"><label>Your work email</label><input type="email" id="emp-email" placeholder="yourname@company.com" autocomplete="username"></div>
+          <div class="fld"><label>Password</label><input type="password" id="emp-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doEmpLogin()"></div>
+          <button class="btn btn-primary" style="width:100%;padding:10px;background:#0f766e" onclick="doEmpLogin()">Sign in as Employee</button>
+          <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--muted)">
+            New here? <span style="color:#0f766e;cursor:pointer;font-weight:700" onclick="showRegister()">Create your account →</span>
+          </div>
+          <div style="margin-top:8px;text-align:center;font-size:11px;color:var(--muted)">Already registered? Default password is <strong>emp@123</strong></div>
         </div>
-        <div style="margin-top:8px;text-align:center;font-size:11px;color:var(--muted)">Already registered? Default password is <strong>emp@123</strong></div>
+        <div id="emp-otp-form" class="hidden">
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:1rem;font-size:12px;color:#1e40af">
+            📧 OTP sent to <strong id="emp-otp-email-show"></strong>
+          </div>
+          <div class="fld"><label>Enter OTP *</label>
+            <input type="text" id="emp-otp-input" placeholder="Enter 6-digit code" maxlength="6"
+              style="letter-spacing:8px;font-size:20px;font-weight:700;text-align:center"
+              onkeydown="if(event.key==='Enter')empVerifyOTP()">
+          </div>
+          <div id="emp-otp-timer" style="font-size:12px;color:var(--muted);margin-bottom:8px;text-align:center"></div>
+          <div id="emp-otp-err"></div>
+          <div style="display:flex;gap:8px;margin-top:.5rem">
+            <button class="btn btn-sec" style="flex:1" onclick="empOTPBack()">← Back</button>
+            <button class="btn btn-primary" style="flex:2;background:#0f766e" onclick="empVerifyOTP()">Verify & Sign in</button>
+          </div>
+          <div style="text-align:center;margin-top:10px;font-size:12px;color:var(--muted)">
+            Didn't receive? <span style="color:#0f766e;cursor:pointer;font-weight:600" onclick="empResendOTP()">Resend OTP</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1066,31 +1122,78 @@ function doLogin(){
     syncFromSupabase().then(()=>renderApp());
   } else {$('login-err').innerHTML=`<div class="alert alert-e">Wrong email or password</div>`;}
 }
-function doEmpLogin(){
+let _empLoginData = null; // stores verified emp object before OTP
+
+async function doEmpLogin(){
   const em=($('emp-email')||{}).value?.trim(),pw=($('emp-pass')||{}).value;
   if(!em||!pw){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Enter your email and password</div>`;return;}
   if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e" style="color:#0f766e;background:#f0fdf4;border-color:#bbf7d0">Checking credentials…</div>`;
-  // Check Supabase directly for password
-  sb('employees','GET',null,`?email=eq.${encodeURIComponent(em.toLowerCase())}&limit=1`).then(rows=>{
-    if(!rows||!rows.length){
-      // fallback to local
-      const emp=D.employees.find(e=>e.email.toLowerCase()===em.toLowerCase());
-      if(!emp){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">No employee found with that email. <span style="cursor:pointer;text-decoration:underline" onclick="showRegister()">Register here</span></div>`;return;}
-      const storedPw=emp.passwordHash||'emp@123';
-      if(pw!==storedPw){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Wrong password</div>`;return;}
-      loginAsEmployee(emp);
-    } else {
-      const row=rows[0];
-      const storedPw=row.password_hash||'emp@123';
-      if(pw!==storedPw){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Wrong password</div>`;return;}
-      const emp={id:row.emp_id||row.id,_uuid:row.id,name:row.name,email:row.email,phone:row.phone||'',dob:row.dob||'',dept:row.department||'',role:row.role||'',status:row.status||'Active',salary:row.salary||0,joined:row.date_of_joining||'',selfRegistered:row.self_registered||false,passwordHash:row.password_hash||'emp@123'};
-      // update local cache
-      const idx=D.employees.findIndex(e=>e.email.toLowerCase()===em.toLowerCase());
-      if(idx>=0)D.employees[idx]=emp; else D.employees.push(emp);
-      save();
-      loginAsEmployee(emp);
-    }
-  });
+
+  // Check Supabase for password
+  const rows=await sb('employees','GET',null,`?email=eq.${encodeURIComponent(em.toLowerCase())}&limit=1`);
+  let empObj=null;
+  if(!rows||!rows.length){
+    const local=D.employees.find(e=>e.email.toLowerCase()===em.toLowerCase());
+    if(!local){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">No employee found. <span style="cursor:pointer;text-decoration:underline" onclick="showRegister()">Register here</span></div>`;return;}
+    if(pw!==(local.passwordHash||'emp@123')){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Wrong password</div>`;return;}
+    empObj=local;
+  } else {
+    const row=rows[0];
+    if(pw!==(row.password_hash||'emp@123')){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Wrong password</div>`;return;}
+    empObj={id:row.emp_id||row.id,_uuid:row.id,name:row.name,email:row.email,phone:row.phone||'',dob:row.dob||'',dept:row.department||'',role:row.role||'',status:row.status||'Active',salary:row.salary||0,joined:row.date_of_joining||'',selfRegistered:row.self_registered||false,passwordHash:row.password_hash||'emp@123'};
+    const idx=D.employees.findIndex(e=>e.email.toLowerCase()===em.toLowerCase());
+    if(idx>=0)D.employees[idx]=empObj; else D.employees.push(empObj);
+    save();
+  }
+
+  // Password correct — now send OTP
+  _empLoginData=empObj;
+  if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e" style="color:#0f766e;background:#f0fdf4;border-color:#bbf7d0">Sending OTP to ${empObj.email}…</div>`;
+  const result=await sendOTP(empObj.email, empObj.name);
+  if(!result.success){
+    if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Failed to send OTP. Please try again.</div>`;
+    return;
+  }
+  // Show OTP form
+  if($('emp-login-form'))$('emp-login-form').classList.add('hidden');
+  if($('emp-otp-form'))$('emp-otp-form').classList.remove('hidden');
+  if($('emp-otp-email-show'))$('emp-otp-email-show').textContent=empObj.email;
+  if($('emp-login-err'))$('emp-login-err').innerHTML='';
+  startOTPTimer('emp-otp-timer');
+}
+
+function empOTPBack(){
+  if($('emp-otp-form'))$('emp-otp-form').classList.add('hidden');
+  if($('emp-login-form'))$('emp-login-form').classList.remove('hidden');
+  if(_otpTimerInterval){clearInterval(_otpTimerInterval);_otpTimerInterval=null;}
+  _empLoginData=null;
+}
+
+async function empResendOTP(){
+  if(!_empLoginData)return;
+  const err=$('emp-otp-err');
+  if(err)err.innerHTML=`<div class="alert alert-e" style="background:#eff6ff;border-color:#bfdbfe;color:#1e40af">Sending new OTP…</div>`;
+  const result=await sendOTP(_empLoginData.email,_empLoginData.name);
+  if(result.success){
+    if(err)err.innerHTML=`<div class="alert alert-s">✅ New OTP sent!</div>`;
+    if($('emp-otp-input'))$('emp-otp-input').value='';
+    startOTPTimer('emp-otp-timer');
+  } else {
+    if(err)err.innerHTML=`<div class="alert alert-e">Failed to resend. Try again.</div>`;
+  }
+}
+
+function empVerifyOTP(){
+  if(!_empLoginData)return;
+  const otp=($('emp-otp-input')||{}).value?.trim();
+  const err=$('emp-otp-err');
+  if(!otp||otp.length!==6){if(err)err.innerHTML=`<div class="alert alert-e">Enter the 6-digit OTP</div>`;return;}
+  const result=verifyOTP(_empLoginData.email,otp);
+  if(!result.valid){if(err)err.innerHTML=`<div class="alert alert-e">${result.msg}</div>`;return;}
+  if(_otpTimerInterval){clearInterval(_otpTimerInterval);_otpTimerInterval=null;}
+  clearOTP(_empLoginData.email);
+  loginAsEmployee(_empLoginData);
+  _empLoginData=null;
 }
 function loginAsEmployee(emp){
   const nearest=geoState.status==='ok'?getNearestOffice(geoState.lat,geoState.lng):null;
@@ -1149,6 +1252,27 @@ function renderRegister(){
         <button class="btn btn-primary" style="width:100%;padding:10px;background:#0f766e;margin-top:.5rem" onclick="regStep1Next()">Continue →</button>
       </div>
 
+      <div id="reg-step-otp" class="hidden">
+        <div style="font-size:13px;font-weight:700;margin-bottom:1rem;color:var(--text)">Verify your email</div>
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:1rem;font-size:12px;color:#1e40af">
+          📧 A 6-digit OTP has been sent to <strong id="reg-otp-email-display"></strong>
+        </div>
+        <div class="fld"><label>Enter OTP *</label>
+          <input type="text" id="reg-otp-input" placeholder="Enter 6-digit code" maxlength="6" 
+            style="letter-spacing:8px;font-size:20px;font-weight:700;text-align:center"
+            oninput="clearRegErr()" onkeydown="if(event.key==='Enter')regVerifyOTP()">
+        </div>
+        <div id="reg-otp-timer" style="font-size:12px;color:var(--muted);margin-bottom:8px;text-align:center"></div>
+        <div id="reg-err-otp"></div>
+        <div style="display:flex;gap:8px;margin-top:.5rem">
+          <button class="btn btn-sec" style="flex:1" onclick="regOTPBack()">← Back</button>
+          <button class="btn btn-primary" style="flex:2;background:#0f766e" onclick="regVerifyOTP()">Verify OTP →</button>
+        </div>
+        <div style="text-align:center;margin-top:10px;font-size:12px;color:var(--muted)">
+          Didn't receive? <span style="color:#0f766e;cursor:pointer;font-weight:600" onclick="regResendOTP()">Resend OTP</span>
+        </div>
+      </div>
+
       <div id="reg-step-2" class="hidden">
         <div style="font-size:13px;font-weight:700;margin-bottom:1rem;color:var(--text)">Step 2 — Set your password</div>
         <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;margin-bottom:1rem;font-size:12px;color:#166534">
@@ -1187,12 +1311,13 @@ function renderRegister(){
 }
 
 let regData={};
+let _otpTimerInterval=null;
 
 function clearRegErr(){
-  ['reg-err-1','reg-err-2','reg-err-3'].forEach(id=>{const el=$(id);if(el)el.innerHTML='';});
+  ['reg-err-1','reg-err-2','reg-err-3','reg-err-otp'].forEach(id=>{const el=$(id);if(el)el.innerHTML='';});
 }
 
-function regStep1Next(){
+async function regStep1Next(){
   const name=($('reg-name')||{}).value?.trim();
   const dob=($('reg-dob')||{}).value;
   const phone=($('reg-phone')||{}).value?.trim();
@@ -1204,9 +1329,65 @@ function regStep1Next(){
   const dup=D.employees.find(e=>e.email.toLowerCase()===email);
   if(dup){if(err)err.innerHTML=`<div class="alert alert-e">This email is already registered. <span style="cursor:pointer;text-decoration:underline" onclick="renderApp()">Sign in instead</span></div>`;return;}
   regData={name,dob,phone,email};
-  if($('reg-name-preview'))$('reg-name-preview').textContent=name;
+  // Send OTP
+  const btn=document.querySelector('#reg-step-1 .btn-primary');
+  if(btn){btn.disabled=true;btn.textContent='Sending OTP…';}
+  const result=await sendOTP(email,name);
+  if(btn){btn.disabled=false;btn.textContent='Continue →';}
+  if(!result.success){if(err)err.innerHTML=`<div class="alert alert-e">Failed to send OTP. Check email and try again.</div>`;return;}
+  // Show OTP step
   $('reg-step-1').classList.add('hidden');
+  $('reg-step-otp').classList.remove('hidden');
+  if($('reg-otp-email-display'))$('reg-otp-email-display').textContent=email;
+  startOTPTimer('reg-otp-timer');
+}
+
+function startOTPTimer(timerId){
+  if(_otpTimerInterval) clearInterval(_otpTimerInterval);
+  let secs=600;
+  const el=$(timerId);
+  function tick(){
+    if(!el){clearInterval(_otpTimerInterval);return;}
+    const m=Math.floor(secs/60),s=secs%60;
+    el.textContent=`OTP expires in ${m}:${String(s).padStart(2,'0')}`;
+    if(secs<=0){clearInterval(_otpTimerInterval);el.textContent='OTP expired. Please resend.';}
+    secs--;
+  }
+  tick();
+  _otpTimerInterval=setInterval(tick,1000);
+}
+
+function regOTPBack(){
+  $('reg-step-otp').classList.add('hidden');
+  $('reg-step-1').classList.remove('hidden');
+  if(_otpTimerInterval){clearInterval(_otpTimerInterval);_otpTimerInterval=null;}
+}
+
+async function regResendOTP(){
+  const err=$('reg-err-otp');
+  if(!regData.email)return;
+  if(err)err.innerHTML=`<div class="alert alert-e" style="background:#eff6ff;border-color:#bfdbfe;color:#1e40af">Sending new OTP…</div>`;
+  const result=await sendOTP(regData.email,regData.name);
+  if(result.success){
+    if(err)err.innerHTML=`<div class="alert alert-s">✅ New OTP sent to ${regData.email}</div>`;
+    if($('reg-otp-input'))$('reg-otp-input').value='';
+    startOTPTimer('reg-otp-timer');
+  } else {
+    if(err)err.innerHTML=`<div class="alert alert-e">Failed to resend OTP. Try again.</div>`;
+  }
+}
+
+function regVerifyOTP(){
+  const otp=($('reg-otp-input')||{}).value?.trim();
+  const err=$('reg-err-otp');
+  if(!otp||otp.length!==6){if(err)err.innerHTML=`<div class="alert alert-e">Enter the 6-digit OTP</div>`;return;}
+  const result=verifyOTP(regData.email,otp);
+  if(!result.valid){if(err)err.innerHTML=`<div class="alert alert-e">${result.msg}</div>`;return;}
+  // OTP verified — go to step 2
+  if(_otpTimerInterval){clearInterval(_otpTimerInterval);_otpTimerInterval=null;}
+  $('reg-step-otp').classList.add('hidden');
   $('reg-step-2').classList.remove('hidden');
+  if($('reg-name-preview'))$('reg-name-preview').textContent=regData.name;
   $('sdot-1').className='step-dot done';
   $('sdot-2').className='step-dot done';
   $('sdot-3').className='step-dot active';
@@ -1214,9 +1395,8 @@ function regStep1Next(){
 
 function regBack(){
   $('reg-step-2').classList.add('hidden');
-  $('reg-step-1').classList.remove('hidden');
-  $('sdot-2').className='step-dot active';
-  $('sdot-3').className='step-dot';
+  $('reg-step-otp').classList.remove('hidden');
+  startOTPTimer('reg-otp-timer');
 }
 
 function regStep2Next(){
