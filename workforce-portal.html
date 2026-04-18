@@ -2929,7 +2929,7 @@ function showEmpPopup(empId){
     </div>`:''}
     <div style="padding:0 16px 16px;display:flex;gap:8px">
       <button class="btn btn-sec" style="flex:1" onclick="document.getElementById('emp-popup-overlay').remove()">Close</button>
-      <button class="btn btn-primary" style="flex:1;background:var(--navy)" onclick="document.getElementById('emp-popup-overlay').remove();nav('employees')">View full profile</button>
+      <button class="btn btn-primary" style="flex:1;background:var(--navy)" onclick="document.getElementById('emp-popup-overlay').remove();setTimeout(()=>nav('employees'),50)">View in directory →</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
