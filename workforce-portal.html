@@ -2260,23 +2260,28 @@ async function saveAtt(){
   const date=window._attDate||todayStr();
   showSyncBanner('Saving attendance…');
   const promises=[];
+  // First fetch existing records for this date from Supabase to get UUIDs
+  const existingRecs=await sb('attendance','GET',null,`?date=eq.${date}&select=id,employee_name`).catch(()=>null);
+
   document.querySelectorAll('.att-st').forEach(s=>{
     const id=s.dataset.id,emp=D.employees.find(e=>e.id===id);
     if(!emp)return;
-    // Skip saving "Not marked" — only save actual statuses
-    if(s.value==='Not marked') return;
+    if(s.value==='Not marked') return; // Don't save Not marked
     const inT=document.querySelector(`.att-in[data-id="${id}"]`).value;
     const outT=document.querySelector(`.att-out[data-id="${id}"]`).value;
-    // Find existing record by UUID, emp_id, or name — all for same date
-    const existing=D.attendance.find(a=>a.date===date&&(
-      a.empId===id || a.empId===emp._uuid || a.empName===emp.name
-    ));
-    // Remove existing local records for this employee on this date
-    D.attendance=D.attendance.filter(a=>!(a.date===date&&(
-      a.empId===id || a.empId===emp._uuid || a.empName===emp.name
-    )));
+
+    // Find existing record — check Supabase result first, then local cache
+    const sbRec=existingRecs?existingRecs.find(r=>r.employee_name===emp.name):null;
+    const localRec=D.attendance.find(a=>a.date===date&&(a.empName===emp.name||a.empId===emp._uuid));
+
+    // Remove old local records for this employee+date
+    D.attendance=D.attendance.filter(a=>!(a.date===date&&(a.empName===emp.name||a.empId===emp._uuid)));
+
     const rec={empId:emp._uuid||id,empName:emp.name,date,status:s.value,in:inT,out:outT};
-    if(existing&&existing._uuid) rec._uuid=existing._uuid;
+    // Use UUID from Supabase or local cache for update
+    if(sbRec&&sbRec.id) rec._uuid=sbRec.id;
+    else if(localRec&&localRec._uuid) rec._uuid=localRec._uuid;
+
     D.attendance.unshift(rec);
     promises.push(sbSaveAttendance(rec));
   });
