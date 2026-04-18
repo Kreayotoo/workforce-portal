@@ -7,15 +7,15 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--navy:#1a1a4e;--navy2:#2d2d8f;--navy3:#12123a;--bg:#f0f2f5;--white:#fff;--border:#e2e5ea;--text:#111;--muted:#6b7280;--green-bg:#dcfce7;--green-txt:#166534;--red-bg:#fee2e2;--red-txt:#991b1b;--amber-bg:#fef3c7;--amber-txt:#92400e;--blue-bg:#eff6ff;--blue-txt:#1e40af;--purple-bg:#f5f3ff;--purple-txt:#4c1d95}
-body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);font-size:15px}
 .hidden{display:none!important}
 input,select,textarea,button{font-family:inherit;font-size:13px}
 input[type=text],input[type=email],input[type=date],input[type=number],input[type=time],input[type=password],select,textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:7px;background:var(--white);color:var(--text);outline:none}
 input:focus,select:focus,textarea:focus{border-color:var(--navy2);box-shadow:0 0 0 3px rgba(45,45,143,.1)}
 textarea{resize:vertical}
 table{width:100%;border-collapse:collapse;table-layout:fixed}
-th{font-size:11px;color:var(--muted);text-align:left;padding:6px 10px;border-bottom:1px solid var(--border);font-weight:600;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-td{padding:8px 10px;border-bottom:1px solid #f3f4f6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+th{font-size:12px;color:var(--muted);text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);font-weight:700;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+td{padding:10px 10px;border-bottom:1px solid #f3f4f6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:14px}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:#fafafa}
 .badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
@@ -42,7 +42,7 @@ tr:hover td{background:#fafafa}
 .btn-g{background:var(--green-bg);color:var(--green-txt);border:1px solid #bbf7d0;padding:3px 9px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600}
 .btn-r{background:var(--red-bg);color:var(--red-txt);border:1px solid #fecaca;padding:3px 9px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600}
 .fld{margin-bottom:.875rem}
-.fld label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px;font-weight:600}
+.fld label{display:block;font-size:13px;color:var(--muted);margin-bottom:4px;font-weight:600}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .page-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
 .pg-title{font-size:18px;font-weight:700}
@@ -2929,7 +2929,7 @@ function showEmpPopup(empId){
     </div>`:''}
     <div style="padding:0 16px 16px;display:flex;gap:8px">
       <button class="btn btn-sec" style="flex:1" onclick="document.getElementById('emp-popup-overlay').remove()">Close</button>
-      <button class="btn btn-primary" style="flex:1;background:var(--navy)" onclick="document.getElementById('emp-popup-overlay').remove();nav('directory')">View full profile</button>
+      <button class="btn btn-primary" style="flex:1;background:var(--navy)" onclick="document.getElementById('emp-popup-overlay').remove();nav('employees')">View full profile</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
@@ -3007,21 +3007,19 @@ function pgAttendance(){
       <td style="padding:6px 8px">
         ${empSessions.length>0?`
         <div style="display:flex;flex-direction:column;gap:4px">
-          ${empSessions.map((s,i)=>{
-            const cin=new Date(s.checkIn);
-            const cout=s.checkOut?new Date(s.checkOut):null;
-            return `<div style="display:flex;align-items:center;gap:6px;background:${s.checkOut?'#f0fdf4':'#fffbeb'};border-radius:6px;padding:4px 6px;border:1px solid ${s.checkOut?'#bbf7d0':'#fde68a'}">
-              ${s.photo?`<img src="${s.photo}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${s.checkOut?'#86efac':'#fde68a'}">`:`<div style="width:28px;height:28px;border-radius:50%;background:${s.checkOut?'#dcfce7':'#fef3c7'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${s.checkOut?'#166534':'#92400e'};flex-shrink:0">${i+1}</div>`}
+          ${(()=>{const s=empSessions[0];const cin=new Date(s.checkIn);const cout=s.checkOut?new Date(s.checkOut):null;
+            return `<div style="display:flex;align-items:center;gap:6px;background:${s.checkOut?'#f0fdf4':'#fffbeb'};border-radius:6px;padding:5px 7px;border:1px solid ${s.checkOut?'#bbf7d0':'#fde68a'}">
+              ${s.photo?`<img src="${s.photo}" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${s.checkOut?'#86efac':'#fde68a'}">`:`<div style="width:34px;height:34px;border-radius:50%;background:${s.checkOut?'#dcfce7':'#fef3c7'};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:${s.checkOut?'#166534':'#92400e'};flex-shrink:0">${s.checkOut?'✅':'🟢'}</div>`}
               <div style="min-width:0;flex:1">
-                <div style="font-size:11px;font-weight:600;color:${s.checkOut?'#166534':'#0f766e'}">
+                <div style="font-size:12px;font-weight:700;color:${s.checkOut?'#166534':'#0f766e'}">
                   ${cin.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}${cout?` → ${cout.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`:'<span style="color:#0f766e"> → Active</span>'}
                 </div>
-                ${s.location?`<div style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📍 ${s.location}</div>`:''}
+                ${s.location?`<div style="font-size:11px;color:var(--muted)">📍 ${s.location}</div>`:''}
               </div>
             </div>`;
-          }).join('')}
-          <div style="font-size:10px;color:var(--muted);text-align:right">${empSessions.length} session${empSessions.length!==1?'s':''} · ${Math.floor(totalMins/60)}h ${Math.floor(totalMins%60)}m</div>
-        </div>`:`<span style="font-size:11px;color:var(--muted)">No sessions</span>`}
+          })()}
+          ${empSessions.length>1?`<div style="font-size:11px;color:#0f766e;cursor:pointer;text-align:right;font-weight:600;padding-top:2px" onclick="showEmpPopup('${e.id}')">+${empSessions.length-1} more → view all</div>`:`<div style="font-size:10px;color:var(--muted);text-align:right">${Math.floor(totalMins/60)}h ${Math.floor(totalMins%60)}m</div>`}
+        </div>`:`<span style="font-size:12px;color:var(--muted)">No sessions</span>`}
       </td>
     </tr>`;}
     ).join('')}</tbody></table>
