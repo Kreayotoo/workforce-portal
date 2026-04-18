@@ -567,6 +567,8 @@ function navBack(){
 
 let empPageHistory = ['emp-dashboard'];
 function navEmp(page){
+  // Stop face camera when leaving attendance page
+  if(empPage==='emp-attendance' && page!=='emp-attendance') frStopCamera();
   if(empPage !== page) empPageHistory.push(page);
   if(empPageHistory.length > 20) empPageHistory = empPageHistory.slice(-20);
   empPage = page;
@@ -1052,34 +1054,52 @@ function renderLogin(){
       <div id="emp-login-tab" class="hidden">
         <div id="geo-box-wrap-emp">${geoBoxHTML()}</div>
         <div id="emp-login-err"></div>
-        <div id="emp-login-form">
-          <div class="fld"><label>Your work email</label><input type="email" id="emp-email" placeholder="yourname@company.com" autocomplete="username"></div>
-          <div class="fld"><label>Password</label><input type="password" id="emp-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doEmpLogin()"></div>
-          <button class="btn btn-primary" style="width:100%;padding:10px;background:#0f766e" onclick="doEmpLogin()">Sign in as Employee</button>
-          <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--muted)">
-            New here? <span style="color:#0f766e;cursor:pointer;font-weight:700" onclick="showRegister()">Create your account →</span>
-          </div>
-          <div style="margin-top:8px;text-align:center;font-size:11px;color:var(--muted)">Already registered? Default password is <strong>emp@123</strong></div>
+
+        <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:1rem">
+          <button id="emp-meth-face" onclick="setEmpLoginMethod('face')" style="flex:1;padding:9px;border:none;background:#0f766e;color:#fff;font-weight:700;font-size:12px;cursor:pointer">🎭 Face login</button>
+          <button id="emp-meth-pass" onclick="setEmpLoginMethod('pass')" style="flex:1;padding:9px;border:none;background:var(--white);color:var(--muted);font-weight:600;font-size:12px;cursor:pointer">🔑 Password</button>
         </div>
-        <div id="emp-otp-form" class="hidden">
-          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:1rem;font-size:12px;color:#1e40af">
-            📧 OTP sent to <strong id="emp-otp-email-show"></strong>
+
+        <div id="emp-face-login-panel">
+          <div style="position:relative;width:100%;max-width:320px;margin:0 auto 8px">
+            <video id="emp-face-video" autoplay muted playsinline style="width:100%;border-radius:8px;background:#000"></video>
+            <canvas id="emp-face-canvas" style="position:absolute;top:0;left:0;width:100%;border-radius:8px"></canvas>
           </div>
-          <div class="fld"><label>Enter OTP *</label>
-            <input type="text" id="emp-otp-input" placeholder="Enter 6-digit code" maxlength="6"
-              style="letter-spacing:8px;font-size:20px;font-weight:700;text-align:center"
-              onkeydown="if(event.key==='Enter')empVerifyOTP()">
+          <div id="emp-face-status" style="font-size:13px;font-weight:600;text-align:center;margin-bottom:8px;color:var(--muted)">Loading camera…</div>
+          <div style="text-align:center;font-size:11px;color:var(--muted)">Face not recognized? <span style="cursor:pointer;color:#0f766e;font-weight:600" onclick="setEmpLoginMethod('pass')">Use password instead</span></div>
+        </div>
+
+        <div id="emp-pass-login-panel" class="hidden">
+          <div id="emp-login-form">
+            <div class="fld"><label>Your work email</label><input type="email" id="emp-email" placeholder="yourname@company.com" autocomplete="username"></div>
+            <div class="fld"><label>Password</label><input type="password" id="emp-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doEmpLogin()"></div>
+            <button class="btn btn-primary" style="width:100%;padding:10px;background:#0f766e" onclick="doEmpLogin()">Sign in as Employee</button>
           </div>
-          <div id="emp-otp-timer" style="font-size:12px;color:var(--muted);margin-bottom:8px;text-align:center"></div>
-          <div id="emp-otp-err"></div>
-          <div style="display:flex;gap:8px;margin-top:.5rem">
-            <button class="btn btn-sec" style="flex:1" onclick="empOTPBack()">← Back</button>
-            <button class="btn btn-primary" style="flex:2;background:#0f766e" onclick="empVerifyOTP()">Verify & Sign in</button>
-          </div>
-          <div style="text-align:center;margin-top:10px;font-size:12px;color:var(--muted)">
-            Didn't receive? <span style="color:#0f766e;cursor:pointer;font-weight:600" onclick="empResendOTP()">Resend OTP</span>
+          <div id="emp-otp-form" class="hidden">
+            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:1rem;font-size:12px;color:#1e40af">
+              📧 OTP sent to <strong id="emp-otp-email-show"></strong>
+            </div>
+            <div class="fld"><label>Enter OTP *</label>
+              <input type="text" id="emp-otp-input" placeholder="Enter 6-digit code" maxlength="6"
+                style="letter-spacing:8px;font-size:20px;font-weight:700;text-align:center"
+                onkeydown="if(event.key==='Enter')empVerifyOTP()">
+            </div>
+            <div id="emp-otp-timer" style="font-size:12px;color:var(--muted);margin-bottom:8px;text-align:center"></div>
+            <div id="emp-otp-err"></div>
+            <div style="display:flex;gap:8px;margin-top:.5rem">
+              <button class="btn btn-sec" style="flex:1" onclick="empOTPBack()">← Back</button>
+              <button class="btn btn-primary" style="flex:2;background:#0f766e" onclick="empVerifyOTP()">Verify & Sign in</button>
+            </div>
+            <div style="text-align:center;margin-top:10px;font-size:12px;color:var(--muted)">
+              Didn't receive? <span style="color:#0f766e;cursor:pointer;font-weight:600" onclick="empResendOTP()">Resend OTP</span>
+            </div>
           </div>
         </div>
+
+        <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--muted)">
+          New here? <span style="color:#0f766e;cursor:pointer;font-weight:700" onclick="showRegister()">Create your account →</span>
+        </div>
+        <div style="margin-top:8px;text-align:center;font-size:11px;color:var(--muted)">Default password is <strong>emp@123</strong></div>
       </div>
     </div>
   </div>
@@ -1095,7 +1115,7 @@ function switchLoginTab(tab){
     const btn=$(`tab-${t}`);
     if(btn) btn.style.cssText=`flex:1;padding:9px;border:none;background:${t===tab?colors[t]:'var(--white)'};color:${t===tab?'#fff':'var(--muted)'};font-weight:${t===tab?700:600};font-size:12px;cursor:pointer`;
   });
-  if(tab==='emp'){frStopCamera();captureGeo();}
+  if(tab==='emp'){frStopCamera();captureGeo();setTimeout(()=>startEmpFaceLogin(),200);}
   else if(tab==='admin'){frStopCamera();setTimeout(startFaceScan,100);captureGeo();}
   else{frStopCamera();}
 }
@@ -1144,7 +1164,44 @@ function doLogin(){
     syncFromSupabase().then(()=>renderApp());
   } else {$('login-err').innerHTML=`<div class="alert alert-e">Wrong email or password</div>`;}
 }
-let _empLoginData = null; // stores verified emp object before OTP
+function setEmpLoginMethod(method){
+  $('emp-face-login-panel').classList.toggle('hidden', method!=='face');
+  $('emp-pass-login-panel').classList.toggle('hidden', method!=='pass');
+  $('emp-meth-face').style.cssText=`flex:1;padding:9px;border:none;background:${method==='face'?'#0f766e':'var(--white)'};color:${method==='face'?'#fff':'var(--muted)'};font-weight:${method==='face'?700:600};font-size:12px;cursor:pointer`;
+  $('emp-meth-pass').style.cssText=`flex:1;padding:9px;border:none;background:${method==='pass'?'#0f766e':'var(--white)'};color:${method==='pass'?'#fff':'var(--muted)'};font-weight:${method==='pass'?700:600};font-size:12px;cursor:pointer`;
+  if(method==='face') startEmpFaceLogin();
+  else frStopCamera();
+}
+
+function startEmpFaceLogin(){
+  frLoadModels();
+  frStartCamera('emp-face-video','emp-face-canvas', result=>{
+    const s=$('emp-face-status');
+    if(!s)return;
+    if(result.type==='cam-error'){s.textContent=result.msg;s.style.color='#ef4444';return;}
+    if(result.type==='no-face'){s.textContent='No face detected — look at the camera';s.style.color='var(--muted)';return;}
+    if(result.type==='detected'){
+      const match=frMatchDescriptor(result.descriptor);
+      if(match){
+        frStopCamera();
+        s.textContent=`✅ Face matched: ${match.name}`;s.style.color='#166534';
+        // Find employee and log them in
+        const emp=D.employees.find(e=>e.name.toLowerCase()===match.name.toLowerCase());
+        if(emp){
+          setTimeout(()=>{
+            loginAsEmployee(emp);
+          },800);
+        } else {
+          s.textContent='Face recognized but employee not found. Use password.';s.style.color='#ef4444';
+        }
+      } else if(frGetEnrolled().length===0){
+        s.textContent='No faces enrolled yet — use password to sign in';s.style.color='var(--muted)';
+      } else {
+        s.textContent='🔍 Face not recognized — try again';s.style.color='#92400e';
+      }
+    }
+  });
+}
 
 async function doEmpLogin(){
   const em=($('emp-email')||{}).value?.trim(),pw=($('emp-pass')||{}).value;
@@ -1569,6 +1626,15 @@ function renderEmployeeApp(){
     'emp-orgchart':()=>pgOrgChart(true)
   };
   if(pages[empPage]) $('emp-main').innerHTML = pages[empPage]();
+  // Auto-start face scan on attendance page
+  if(empPage==='emp-attendance'){
+    const emp=currentEmployee;
+    const isEnrolled=frGetEnrolled().some(e=>e.name.toLowerCase()===emp.name.toLowerCase());
+    setTimeout(()=>{
+      if(isEnrolled) startAttFaceScan();
+      else startAttFaceEnroll();
+    },300);
+  }
 }
 
 function empDashboard(){
@@ -1621,30 +1687,154 @@ function empAttendance(){
   const emp=currentEmployee;
   const today=todayStr();
   const existing=D.attendance.find(a=>a.empName===emp.name&&a.date===today||a.empId===emp._uuid&&a.date===today);
+  const isEnrolled=frGetEnrolled().some(e=>e.name.toLowerCase()===emp.name.toLowerCase());
   return `
   <div class="page-hd"><div class="pg-title">Mark attendance</div></div>
-  <div class="card" style="max-width:480px">
+  <div class="card" style="max-width:500px">
     <div class="card-hd"><h3>Today — ${today}</h3></div>
-    ${existing?`<div class="alert alert-s" style="margin-bottom:1rem">✅ Attendance already marked for today: <strong>${existing.status}</strong></div>`:''}
-    <div id="geo-box-emp" style="margin-bottom:1rem">${geoBoxHTML()}</div>
-    <div class="frow">
-      <div class="fld"><label>In time</label><input type="time" id="emp-in" value="${existing?.in||'09:00'}"></div>
-      <div class="fld"><label>Out time</label><input type="time" id="emp-out" value="${existing?.out||'18:00'}"></div>
+    ${existing?`<div class="alert alert-s" style="margin-bottom:1rem">✅ Attendance already marked: <strong>${existing.status}</strong> — you can update below</div>`:''}
+
+    <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:1rem">
+      <button id="att-tab-face" onclick="switchAttTab('face')" style="flex:1;padding:9px;border:none;background:#0f766e;color:#fff;font-weight:700;font-size:13px;cursor:pointer">🎭 Face scan</button>
+      <button id="att-tab-manual" onclick="switchAttTab('manual')" style="flex:1;padding:9px;border:none;background:var(--white);color:var(--muted);font-weight:600;font-size:13px;cursor:pointer">✋ Manual</button>
     </div>
-    <div class="fld"><label>Status</label>
-      <select id="emp-att-status">
-        <option ${existing?.status==='Present'?'selected':''}>Present</option>
-        <option ${existing?.status==='Half Day'?'selected':''}>Half Day</option>
-        <option ${existing?.status==='Absent'?'selected':''}>Absent</option>
-      </select>
+
+    <div id="att-face-panel">
+      ${!isEnrolled?`
+      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px;margin-bottom:1rem;font-size:13px;color:#92400e">
+        ⚠️ Your face is not enrolled yet. Enroll below to use face attendance.
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:1rem">
+        <div style="font-weight:600;font-size:13px;margin-bottom:8px">📸 Enroll your face</div>
+        <div style="position:relative;width:100%;max-width:320px;margin:0 auto">
+          <video id="att-enroll-video" autoplay muted playsinline style="width:100%;border-radius:8px;background:#000"></video>
+          <canvas id="att-enroll-canvas" style="position:absolute;top:0;left:0;width:100%;border-radius:8px"></canvas>
+        </div>
+        <div id="att-enroll-status" style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px">Position your face in the camera</div>
+        <button class="btn btn-primary" style="width:100%;margin-top:8px;background:#0f766e" onclick="attEnrollFace()">📸 Capture & Enroll Face</button>
+      </div>`:`
+      <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:1rem">
+        <div style="font-weight:600;font-size:13px;margin-bottom:8px">🎭 Scan your face to mark attendance</div>
+        <div style="position:relative;width:100%;max-width:320px;margin:0 auto">
+          <video id="att-scan-video" autoplay muted playsinline style="width:100%;border-radius:8px;background:#000"></video>
+          <canvas id="att-scan-canvas" style="position:absolute;top:0;left:0;width:100%;border-radius:8px"></canvas>
+        </div>
+        <div id="att-scan-status" style="font-size:13px;font-weight:600;text-align:center;margin-top:8px;color:var(--muted)">Loading camera…</div>
+        <div style="margin-top:8px;text-align:center;font-size:11px;color:var(--muted)">
+          <span style="cursor:pointer;text-decoration:underline;color:#ef4444" onclick="deleteEnrolledFace('${emp.name}')">Remove enrolled face</span>
+        </div>
+      </div>`}
+      <div id="att-geo-box">${geoBoxHTML()}</div>
     </div>
-    <button class="btn btn-primary" style="width:100%;background:#0f766e" onclick="submitEmpAtt()">${existing?'Update attendance':'Mark attendance'}</button>
+
+    <div id="att-manual-panel" class="hidden">
+      <div id="att-geo-box-manual">${geoBoxHTML()}</div>
+      <div class="frow">
+        <div class="fld"><label>In time</label><input type="time" id="emp-in" value="${existing?.in||new Date().toTimeString().slice(0,5)}"></div>
+        <div class="fld"><label>Out time</label><input type="time" id="emp-out" value="${existing?.out||'18:00'}"></div>
+      </div>
+      <div class="fld"><label>Status</label>
+        <select id="emp-att-status">
+          <option ${existing?.status==='Present'?'selected':''}>Present</option>
+          <option ${existing?.status==='Half Day'?'selected':''}>Half Day</option>
+          <option ${existing?.status==='Absent'?'selected':''}>Absent</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" style="width:100%;background:#0f766e" onclick="submitEmpAtt()">${existing?'Update attendance':'Mark attendance'}</button>
+    </div>
   </div>
+
   <div class="card" style="margin-top:1rem;padding:0">
     <div class="card-hd" style="padding:1rem 1rem 0"><h3>My attendance history</h3></div>
     <table style="margin-top:8px"><thead><tr><th style="width:30%;padding-left:12px">Date</th><th style="width:20%">In</th><th style="width:20%">Out</th><th style="width:30%">Status</th></tr></thead>
     <tbody>${D.attendance.filter(a=>a.empName===emp.name||a.empId===emp._uuid||a.empId===emp.id).slice(0,20).map(a=>`<tr><td style="padding-left:12px">${a.date}</td><td>${a.in||'--'}</td><td>${a.out||'--'}</td><td>${badge(a.status)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;padding:1rem;color:var(--muted)">No records yet</td></tr>'}</tbody></table>
   </div>`;
+}
+
+function switchAttTab(tab){
+  $('att-face-panel').classList.toggle('hidden', tab!=='face');
+  $('att-manual-panel').classList.toggle('hidden', tab!=='manual');
+  $('att-tab-face').style.cssText=`flex:1;padding:9px;border:none;background:${tab==='face'?'#0f766e':'var(--white)'};color:${tab==='face'?'#fff':'var(--muted)'};font-weight:${tab==='face'?700:600};font-size:13px;cursor:pointer`;
+  $('att-tab-manual').style.cssText=`flex:1;padding:9px;border:none;background:${tab==='manual'?'#0f766e':'var(--white)'};color:${tab==='manual'?'#fff':'var(--muted)'};font-weight:${tab==='manual'?700:600};font-size:13px;cursor:pointer`;
+  if(tab==='face'){
+    const emp=currentEmployee;
+    const isEnrolled=frGetEnrolled().some(e=>e.name.toLowerCase()===emp.name.toLowerCase());
+    if(isEnrolled) startAttFaceScan();
+    else startAttFaceEnroll();
+  } else {
+    frStopCamera();
+  }
+}
+
+function startAttFaceEnroll(){
+  frStartCamera('att-enroll-video','att-enroll-canvas',result=>{
+    const s=$('att-enroll-status');
+    if(!s)return;
+    if(result.type==='cam-error'){s.textContent=result.msg;s.style.color='#ef4444';}
+    else if(result.type==='no-face'){s.textContent='No face detected — look at camera';s.style.color='var(--muted)';}
+    else if(result.type==='detected'){s.textContent='✅ Face detected! Click Capture to enroll';s.style.color='#166534';}
+  });
+}
+
+async function attEnrollFace(){
+  const emp=currentEmployee;
+  const s=$('att-enroll-status');
+  if(s){s.textContent='Capturing…';s.style.color='#0f766e';}
+  const desc=await frCaptureSingle('att-enroll-video');
+  if(!desc){if(s){s.textContent='No face detected. Try again.';s.style.color='#ef4444';}return;}
+  const list=frGetEnrolled().filter(e=>e.name.toLowerCase()!==emp.name.toLowerCase());
+  list.push({name:emp.name,descriptor:desc});
+  frSaveEnrolled(list);
+  frStopCamera();
+  if(s){s.textContent='✅ Face enrolled successfully!';s.style.color='#166534';}
+  setTimeout(()=>navEmp('emp-attendance'),1000);
+}
+
+function startAttFaceScan(){
+  const emp=currentEmployee;
+  frStartCamera('att-scan-video','att-scan-canvas',result=>{
+    const s=$('att-scan-status');
+    if(!s)return;
+    if(result.type==='cam-error'){s.textContent=result.msg;s.style.color='#ef4444';}
+    else if(result.type==='no-face'){s.textContent='No face detected — look at camera';s.style.color='var(--muted)';}
+    else if(result.type==='detected'){
+      const match=frMatchDescriptor(result.descriptor);
+      if(match&&match.name.toLowerCase()===emp.name.toLowerCase()){
+        frStopCamera();
+        s.textContent='✅ Face matched! Marking attendance…';s.style.color='#166534';
+        // Auto mark present with current time
+        const now=new Date();
+        const timeStr=now.toTimeString().slice(0,5);
+        setTimeout(()=>submitFaceAtt(timeStr),800);
+      } else if(match){
+        s.textContent='❌ Face matched a different person';s.style.color='#ef4444';
+      } else {
+        s.textContent='🔍 Face detected, verifying…';s.style.color='#0f766e';
+      }
+    }
+  });
+}
+
+async function submitFaceAtt(inTime){
+  const emp=currentEmployee,today=todayStr();
+  const existing=await sb('attendance','GET',null,`?employee_name=eq.${encodeURIComponent(emp.name)}&date=eq.${today}&select=id`);
+  D.attendance=D.attendance.filter(a=>!(a.empName===emp.name&&a.date===today));
+  const rec={empId:emp._uuid||emp.id,empName:emp.name,date:today,status:'Present',in:inTime,out:'18:00'};
+  if(existing&&existing.length>0) rec._uuid=existing[0].id;
+  D.attendance.unshift(rec);
+  await sbSaveAttendance(rec);
+  const notif={msg:`${emp.name} marked Present via face scan`,type:'success',read:false};
+  D.notifications.unshift({id:Date.now(),...notif,time:'Just now'});
+  sbSaveNotification(notif);
+  save();
+  showToast('✅ Attendance marked Present via face!','success');
+  navEmp('emp-attendance');
+}
+
+function deleteEnrolledFace(name){
+  if(!confirm('Remove your enrolled face? You will need to re-enroll to use face attendance.'))return;
+  frSaveEnrolled(frGetEnrolled().filter(e=>e.name.toLowerCase()!==name.toLowerCase()));
+  navEmp('emp-attendance');
 }
 
 async function submitEmpAtt(){
