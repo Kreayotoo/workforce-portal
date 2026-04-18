@@ -2052,7 +2052,7 @@ function pgLeave(){
     <div class="card-hd" style="padding:1rem 1rem 0"><h3>All leave requests</h3></div>
     <table style="margin-top:8px"><thead><tr><th style="width:18%;padding-left:12px">Employee</th><th style="width:11%">Type</th><th style="width:12%">From</th><th style="width:12%">To</th><th style="width:6%">Days</th><th style="width:21%">Reason</th><th style="width:20%">Action</th></tr></thead>
     <tbody>${D.leaves.map(l=>`<tr><td style="padding-left:12px">${l.emp}</td><td>${badge(l.type)}</td><td>${l.from}</td><td>${l.to}</td><td>${l.days}</td><td>${l.reason}</td>
-    <td>${l.status==='Pending'?`<div style="display:flex;gap:4px"><button class="btn-g" onclick="updateLeave(${l.id},'Approved')">Approve</button><button class="btn-r" onclick="updateLeave(${l.id},'Rejected')">Reject</button></div>`:badge(l.status)}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)">No requests</td></tr>'}</tbody></table>
+    <td>${l.status==='Pending'?`<div style="display:flex;gap:4px"><button class="btn-g" onclick="updateLeave('${l._uuid||l.id}','Approved')">Approve</button><button class="btn-r" onclick="updateLeave('${l._uuid||l.id}','Rejected')">Reject</button></div>`:badge(l.status)}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)">No requests</td></tr>'}</tbody></table>
   </div>
   <div id="leave-modal-wrap"></div>`;
 }
@@ -2123,7 +2123,7 @@ function pgExpenses(){
     <div class="card-hd" style="padding:1rem 1rem 0"><h3>All expense claims</h3></div>
     <table style="margin-top:8px"><thead><tr><th style="width:18%;padding-left:12px">Employee</th><th style="width:13%">Category</th><th style="width:11%">Amount</th><th style="width:13%">Date</th><th style="width:25%">Description</th><th style="width:20%">Status</th></tr></thead>
     <tbody>${D.expenses.map(e=>`<tr><td style="padding-left:12px">${e.emp}</td><td>${badge(e.cat)}</td><td>₹${fmt(e.amount)}</td><td>${e.date}</td><td>${e.desc}</td>
-    <td>${e.status==='Pending'?`<div style="display:flex;gap:4px"><button class="btn-g" onclick="updateExp(${e.id},'Approved')">Approve</button><button class="btn-r" onclick="updateExp(${e.id},'Rejected')">Reject</button></div>`:badge(e.status)}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">No claims yet</td></tr>'}</tbody></table>
+    <td>${e.status==='Pending'?`<div style="display:flex;gap:4px"><button class="btn-g" onclick="updateExp('${e._uuid||e.id}','Approved')">Approve</button><button class="btn-r" onclick="updateExp('${e._uuid||e.id}','Rejected')">Reject</button></div>`:badge(e.status)}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">No claims yet</td></tr>'}</tbody></table>
   </div>
   <div id="exp-modal-wrap"></div>`;
 }
