@@ -834,16 +834,46 @@ async function frCaptureSingle(videoId){
   return det?det.descriptor:null;
 }
 
+// ─── FACE STORAGE (per-employee in Supabase) ─────────────────────
 function frGetEnrolled(){
-  // Returns array of {name, descriptor (Float32Array)}
+  // Returns all locally cached face descriptors
   const raw=JSON.parse(localStorage.getItem('wf_faces')||'[]');
-  return raw.map(r=>({name:r.name, descriptor:new Float32Array(r.descriptor)}));
+  return raw.map(r=>({name:r.name,email:r.email||'',descriptor:new Float32Array(r.descriptor)}));
 }
-
 function frSaveEnrolled(list){
-  localStorage.setItem('wf_faces', JSON.stringify(list.map(r=>({name:r.name,descriptor:Array.from(r.descriptor)}))));
+  localStorage.setItem('wf_faces', JSON.stringify(list.map(r=>({name:r.name,email:r.email||'',descriptor:Array.from(r.descriptor)}))));
 }
 
+// Save face for a specific employee to Supabase
+async function frSaveFaceToSupabase(emp, descriptor){
+  const descArray=Array.from(descriptor);
+  const payload={password_hash:emp.passwordHash||'emp@123', face_descriptor:JSON.stringify(descArray)};
+  await sb('employees','PATCH',payload,`?id=eq.${emp._uuid}`);
+  // Also update local cache
+  const list=frGetEnrolled().filter(e=>e.email!==emp.email);
+  list.push({name:emp.name,email:emp.email,descriptor});
+  frSaveEnrolled(list);
+}
+
+// Load face for a specific employee from Supabase
+async function frLoadFaceFromSupabase(email){
+  const rows=await sb('employees','GET',null,`?email=eq.${encodeURIComponent(email)}&select=name,face_descriptor`);
+  if(!rows||!rows.length||!rows[0].face_descriptor) return null;
+  try{
+    const arr=JSON.parse(rows[0].face_descriptor);
+    return {name:rows[0].name, descriptor:new Float32Array(arr)};
+  }catch(e){return null;}
+}
+
+// Match descriptor only against a specific employee's stored face
+function frMatchSingleEmployee(descriptor, storedDescriptor){
+  if(!storedDescriptor) return false;
+  const dist=faceapi.euclideanDistance(descriptor, storedDescriptor);
+  console.log('Face distance:', dist);
+  return dist < 0.5; // Strict threshold
+}
+
+// Old match against all (keep for admin face login)
 function frMatchDescriptor(descriptor){
   const enrolled=frGetEnrolled();
   if(!enrolled.length) return null;
@@ -852,7 +882,7 @@ function frMatchDescriptor(descriptor){
     const dist=faceapi.euclideanDistance(descriptor, e.descriptor);
     if(dist<bestDist){bestDist=dist;best=e;}
   });
-  return bestDist<0.55?{name:best.name,distance:bestDist}:null;
+  return bestDist<0.5?{name:best.name,distance:bestDist}:null;
 }
 
 // Login page face mode state
@@ -1061,12 +1091,19 @@ function renderLogin(){
         </div>
 
         <div id="emp-face-login-panel">
-          <div style="position:relative;width:100%;max-width:320px;margin:0 auto 8px">
-            <video id="emp-face-video" autoplay muted playsinline style="width:100%;border-radius:8px;background:#000"></video>
-            <canvas id="emp-face-canvas" style="position:absolute;top:0;left:0;width:100%;border-radius:8px"></canvas>
+          <div class="fld"><label>Your work email</label>
+            <input type="email" id="emp-face-email" placeholder="yourname@company.com" autocomplete="username">
           </div>
-          <div id="emp-face-status" style="font-size:13px;font-weight:600;text-align:center;margin-bottom:8px;color:var(--muted)">Loading camera…</div>
-          <div style="text-align:center;font-size:11px;color:var(--muted)">Face not recognized? <span style="cursor:pointer;color:#0f766e;font-weight:600" onclick="setEmpLoginMethod('pass')">Use password instead</span></div>
+          <div id="emp-face-email-err"></div>
+          <button class="btn btn-primary" style="width:100%;background:#0f766e;margin-bottom:1rem" onclick="startEmpFaceLoginForEmail()">Start Face Scan →</button>
+          <div id="emp-face-scan-wrap" class="hidden">
+            <div style="position:relative;width:100%;max-width:320px;margin:0 auto 8px">
+              <video id="emp-face-video" autoplay muted playsinline style="width:100%;border-radius:8px;background:#000"></video>
+              <canvas id="emp-face-canvas" style="position:absolute;top:0;left:0;width:100%;border-radius:8px"></canvas>
+            </div>
+            <div id="emp-face-status" style="font-size:13px;font-weight:600;text-align:center;margin-bottom:8px;color:var(--muted)">Loading camera…</div>
+          </div>
+          <div style="text-align:center;font-size:11px;color:var(--muted)">Not working? <span style="cursor:pointer;color:#0f766e;font-weight:600" onclick="setEmpLoginMethod('pass')">Use password instead</span></div>
         </div>
 
         <div id="emp-pass-login-panel" class="hidden">
@@ -1169,11 +1206,31 @@ function setEmpLoginMethod(method){
   $('emp-pass-login-panel').classList.toggle('hidden', method!=='pass');
   $('emp-meth-face').style.cssText=`flex:1;padding:9px;border:none;background:${method==='face'?'#0f766e':'var(--white)'};color:${method==='face'?'#fff':'var(--muted)'};font-weight:${method==='face'?700:600};font-size:12px;cursor:pointer`;
   $('emp-meth-pass').style.cssText=`flex:1;padding:9px;border:none;background:${method==='pass'?'#0f766e':'var(--white)'};color:${method==='pass'?'#fff':'var(--muted)'};font-weight:${method==='pass'?700:600};font-size:12px;cursor:pointer`;
-  if(method==='face') startEmpFaceLogin();
-  else frStopCamera();
+  if(method!=='face') frStopCamera();
 }
 
-function startEmpFaceLogin(){
+async function startEmpFaceLoginForEmail(){
+  const email=($('emp-face-email')||{}).value?.trim().toLowerCase();
+  const err=$('emp-face-email-err');
+  if(!email){if(err)err.innerHTML=`<div class="alert alert-e">Enter your email first</div>`;return;}
+
+  if(err)err.innerHTML=`<div class="alert alert-e" style="color:#0f766e;background:#f0fdf4;border-color:#bbf7d0">Loading your face data…</div>`;
+
+  // Load this employee's face from Supabase
+  const faceData=await frLoadFaceFromSupabase(email);
+  if(!faceData){
+    if(err)err.innerHTML=`<div class="alert alert-e">No face enrolled for this email. <span style="cursor:pointer;text-decoration:underline" onclick="setEmpLoginMethod('pass')">Use password to login first, then enroll your face.</span></div>`;
+    return;
+  }
+
+  if(err)err.innerHTML='';
+  // Show camera
+  const wrap=$('emp-face-scan-wrap');
+  if(wrap) wrap.classList.remove('hidden');
+  startEmpFaceLogin(email, faceData);
+}
+
+function startEmpFaceLogin(email, faceData){
   frLoadModels();
   frStartCamera('emp-face-video','emp-face-canvas', result=>{
     const s=$('emp-face-status');
@@ -1181,23 +1238,28 @@ function startEmpFaceLogin(){
     if(result.type==='cam-error'){s.textContent=result.msg;s.style.color='#ef4444';return;}
     if(result.type==='no-face'){s.textContent='No face detected — look at the camera';s.style.color='var(--muted)';return;}
     if(result.type==='detected'){
-      const match=frMatchDescriptor(result.descriptor);
-      if(match){
+      s.textContent='🔍 Verifying your face…';s.style.color='#0f766e';
+      // Match ONLY against this specific employee's stored face
+      const isMatch=frMatchSingleEmployee(result.descriptor, faceData.descriptor);
+      if(isMatch){
         frStopCamera();
-        s.textContent=`✅ Face matched: ${match.name}`;s.style.color='#166534';
-        // Find employee and log them in
-        const emp=D.employees.find(e=>e.name.toLowerCase()===match.name.toLowerCase());
+        s.textContent=`✅ Face verified! Logging in…`;s.style.color='#166534';
+        // Find employee object and login
+        const emp=D.employees.find(e=>e.email.toLowerCase()===email);
         if(emp){
-          setTimeout(()=>{
-            loginAsEmployee(emp);
-          },800);
+          setTimeout(()=>loginAsEmployee(emp),800);
         } else {
-          s.textContent='Face recognized but employee not found. Use password.';s.style.color='#ef4444';
+          // Fetch from Supabase if not in local cache
+          sb('employees','GET',null,`?email=eq.${encodeURIComponent(email)}&limit=1`).then(rows=>{
+            if(rows&&rows.length){
+              const row=rows[0];
+              const empObj={id:row.emp_id||row.id,_uuid:row.id,name:row.name,email:row.email,phone:row.phone||'',dob:row.dob||'',dept:row.department||'',role:row.role||'',status:row.status||'Active',salary:row.salary||0,joined:row.date_of_joining||'',passwordHash:row.password_hash||'emp@123'};
+              loginAsEmployee(empObj);
+            }
+          });
         }
-      } else if(frGetEnrolled().length===0){
-        s.textContent='No faces enrolled yet — use password to sign in';s.style.color='var(--muted)';
       } else {
-        s.textContent='🔍 Face not recognized — try again';s.style.color='#92400e';
+        s.textContent='❌ Face does not match. Try again or use password.';s.style.color='#ef4444';
       }
     }
   });
@@ -1911,34 +1973,43 @@ async function attEnrollFace(){
   if(s){s.textContent='Capturing…';s.style.color='#0f766e';}
   const desc=await frCaptureSingle('att-enroll-video');
   if(!desc){if(s){s.textContent='No face detected. Try again.';s.style.color='#ef4444';}return;}
-  const list=frGetEnrolled().filter(e=>e.name.toLowerCase()!==emp.name.toLowerCase());
-  list.push({name:emp.name,descriptor:desc});
-  frSaveEnrolled(list);
+  // Save to Supabase linked to this employee
+  await frSaveFaceToSupabase(emp, desc);
   frStopCamera();
-  if(s){s.textContent='✅ Face enrolled successfully!';s.style.color='#166534';}
-  setTimeout(()=>navEmp('emp-attendance'),1000);
+  if(s){s.textContent='✅ Face enrolled! Only you can use it to login.';s.style.color='#166534';}
+  setTimeout(()=>navEmp('emp-attendance'),1200);
 }
 
-function startAttFaceScan(){
+async function startAttFaceScan(){
   const emp=currentEmployee;
+  const s=$('att-scan-status');
+  if(s){s.textContent='Loading your face data…';s.style.color='var(--muted)';}
+
+  // Load this employee's specific face from Supabase
+  const faceData=await frLoadFaceFromSupabase(emp.email);
+  if(!faceData){
+    if(s){s.textContent='Face not found. Please enroll your face first.';s.style.color='#ef4444';}
+    setTimeout(()=>navEmp('emp-attendance'),1500);
+    return;
+  }
+
   frStartCamera('att-scan-video','att-scan-canvas',result=>{
     const s=$('att-scan-status');
     if(!s)return;
     if(result.type==='cam-error'){s.textContent=result.msg;s.style.color='#ef4444';}
     else if(result.type==='no-face'){s.textContent='No face detected — look at camera';s.style.color='var(--muted)';}
     else if(result.type==='detected'){
-      const match=frMatchDescriptor(result.descriptor);
-      if(match&&match.name.toLowerCase()===emp.name.toLowerCase()){
+      s.textContent='🔍 Verifying your face…';s.style.color='#0f766e';
+      // Match ONLY against this employee's own stored face
+      const isMatch=frMatchSingleEmployee(result.descriptor, faceData.descriptor);
+      if(isMatch){
         frStopCamera();
-        s.textContent='✅ Face matched! Marking attendance…';s.style.color='#166534';
-        // Auto mark present with current time
+        s.textContent='✅ Face verified! Marking attendance…';s.style.color='#166534';
         const now=new Date();
         const timeStr=now.toTimeString().slice(0,5);
         setTimeout(()=>submitFaceAtt(timeStr),800);
-      } else if(match){
-        s.textContent='❌ Face matched a different person';s.style.color='#ef4444';
       } else {
-        s.textContent='🔍 Face detected, verifying…';s.style.color='#0f766e';
+        s.textContent='❌ Face not matching your enrolled face. Try again.';s.style.color='#ef4444';
       }
     }
   });
