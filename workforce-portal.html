@@ -1822,6 +1822,11 @@ function renderEmployeeApp(){
     const emp=currentEmployee;
     const isEnrolled=frGetEnrolled().some(e=>e.name.toLowerCase()===emp.name.toLowerCase());
     setTimeout(()=>{
+      // Init location for check-in button
+      initAttGeo();
+      // Load history
+      loadAttHistory();
+      // Start face scan/enroll
       if(isEnrolled) startAttFaceScan();
       else startAttFaceEnroll();
     },300);
@@ -1877,84 +1882,300 @@ function empDashboard(){
 function empAttendance(){
   const emp=currentEmployee;
   const today=todayStr();
-  const existing=D.attendance.find(a=>a.empName===emp.name&&a.date===today||a.empId===emp._uuid&&a.date===today);
+  const sessions=D.attSessions?D.attSessions.filter(s=>s.empName===emp.name&&s.date===today):[];
+  const activeSession=sessions.find(s=>!s.checkOut);
   const isEnrolled=frGetEnrolled().some(e=>e.name.toLowerCase()===emp.name.toLowerCase());
+
+  // Calculate total hours today
+  let totalMins=0;
+  sessions.forEach(s=>{
+    if(s.checkIn&&s.checkOut){
+      const diff=(new Date(s.checkOut)-new Date(s.checkIn))/60000;
+      totalMins+=diff;
+    }
+  });
+  const totalHrs=Math.floor(totalMins/60),totalMin=Math.floor(totalMins%60);
+
   return `
   <div class="page-hd"><div class="pg-title">Mark attendance</div></div>
-  <div class="card" style="max-width:500px">
-    <div class="card-hd"><h3>Today — ${today}</h3></div>
-    ${existing?`<div class="alert alert-s" style="margin-bottom:1rem">✅ Attendance already marked: <strong>${existing.status}</strong> — you can update below</div>`:''}
 
-    <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:1rem">
-      <button id="att-tab-face" onclick="switchAttTab('face')" style="flex:1;padding:9px;border:none;background:#0f766e;color:#fff;font-weight:700;font-size:13px;cursor:pointer">🎭 Face scan</button>
-      <button id="att-tab-manual" onclick="switchAttTab('manual')" style="flex:1;padding:9px;border:none;background:var(--white);color:var(--muted);font-weight:600;font-size:13px;cursor:pointer">✋ Manual</button>
+  <div class="card" style="max-width:520px;margin-bottom:1rem">
+    <div class="card-hd"><h3>Today — ${today}</h3>
+      <span style="font-size:12px;color:var(--muted)">${sessions.length} session${sessions.length!==1?'s':''} · ${totalHrs}h ${totalMin}m total</span>
     </div>
 
-    <div id="att-face-panel">
-      ${!isEnrolled?`
-      <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px;margin-bottom:1rem;font-size:13px;color:#92400e">
-        ⚠️ Your face is not enrolled yet. Enroll below to use face attendance.
+    ${activeSession?`
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px;margin-bottom:1rem">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:700;color:#166534;font-size:14px">🟢 Currently checked in</div>
+          <div style="font-size:12px;color:#166534;margin-top:2px">Since ${new Date(activeSession.checkIn).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
+          ${activeSession.location?`<div style="font-size:11px;color:#166534;margin-top:2px">📍 ${activeSession.location}</div>`:''}
+        </div>
+        <button class="btn" style="background:#ef4444;color:#fff;font-weight:700;padding:10px 20px;font-size:14px" onclick="checkOutNow()">Check Out</button>
       </div>
-      <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:1rem">
-        <div style="font-weight:600;font-size:13px;margin-bottom:8px">📸 Enroll your face</div>
-        <div style="position:relative;width:100%;max-width:320px;margin:0 auto">
-          <video id="att-enroll-video" autoplay muted playsinline style="width:100%;border-radius:8px;background:#000"></video>
-          <canvas id="att-enroll-canvas" style="position:absolute;top:0;left:0;width:100%;border-radius:8px"></canvas>
-        </div>
-        <div id="att-enroll-status" style="font-size:12px;color:var(--muted);text-align:center;margin-top:8px">Position your face in the camera</div>
-        <button class="btn btn-primary" style="width:100%;margin-top:8px;background:#0f766e" onclick="attEnrollFace()">📸 Capture & Enroll Face</button>
-      </div>`:`
-      <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:1rem">
-        <div style="font-weight:600;font-size:13px;margin-bottom:8px">🎭 Scan your face to mark attendance</div>
-        <div style="position:relative;width:100%;max-width:320px;margin:0 auto">
-          <video id="att-scan-video" autoplay muted playsinline style="width:100%;border-radius:8px;background:#000"></video>
-          <canvas id="att-scan-canvas" style="position:absolute;top:0;left:0;width:100%;border-radius:8px"></canvas>
-        </div>
-        <div id="att-scan-status" style="font-size:13px;font-weight:600;text-align:center;margin-top:8px;color:var(--muted)">Loading camera…</div>
-        <div style="margin-top:8px;text-align:center;font-size:11px;color:var(--muted)">
-          <span style="cursor:pointer;text-decoration:underline;color:#ef4444" onclick="deleteEnrolledFace('${emp.name}')">Remove enrolled face</span>
-        </div>
-      </div>`}
-      <div id="att-geo-box">${geoBoxHTML()}</div>
-    </div>
+    </div>`:`
+    <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:1rem">
+      <div style="font-weight:600;font-size:13px;margin-bottom:4px;color:var(--muted)">Not checked in yet</div>
+      <div id="att-location-status" style="font-size:12px;color:var(--muted);margin-bottom:10px">📍 Getting your location…</div>
+      <button class="btn btn-primary" style="width:100%;background:#0f766e;padding:12px;font-size:15px;font-weight:700" onclick="checkInNow()">✅ Check In</button>
+    </div>`}
 
-    <div id="att-manual-panel" class="hidden">
-      <div id="att-geo-box-manual">${geoBoxHTML()}</div>
-      <div class="frow">
-        <div class="fld"><label>In time</label><input type="time" id="emp-in" value="${existing?.in||new Date().toTimeString().slice(0,5)}"></div>
-        <div class="fld"><label>Out time</label><input type="time" id="emp-out" value="${existing?.out||'18:00'}"></div>
-      </div>
-      <div class="fld"><label>Status</label>
-        <select id="emp-att-status">
-          <option ${existing?.status==='Present'?'selected':''}>Present</option>
-          <option ${existing?.status==='Half Day'?'selected':''}>Half Day</option>
-          <option ${existing?.status==='Absent'?'selected':''}>Absent</option>
-        </select>
-      </div>
-      <button class="btn btn-primary" style="width:100%;background:#0f766e" onclick="submitEmpAtt()">${existing?'Update attendance':'Mark attendance'}</button>
-    </div>
+    ${sessions.length>0?`
+    <div style="margin-top:4px">
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">TODAY'S SESSIONS</div>
+      ${sessions.map((s,i)=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f3f4f6">
+        <div style="width:28px;height:28px;border-radius:50%;background:${s.checkOut?'#dcfce7':'#fef3c7'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${s.checkOut?'#166534':'#92400e'}">${i+1}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600">
+            ${new Date(s.checkIn).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}
+            ${s.checkOut?` → ${new Date(s.checkOut).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`:'→ <span style="color:#0f766e">Active</span>'}
+          </div>
+          ${s.location?`<div style="font-size:11px;color:var(--muted)">📍 ${s.location}</div>`:''}
+        </div>
+        <div style="font-size:12px;font-weight:600;color:var(--muted)">
+          ${s.checkOut?`${Math.floor((new Date(s.checkOut)-new Date(s.checkIn))/3600000)}h ${Math.floor(((new Date(s.checkOut)-new Date(s.checkIn))%3600000)/60000)}m`:'ongoing'}
+        </div>
+      </div>`).join('')}
+    </div>`:''}
   </div>
 
-  <div class="card" style="margin-top:1rem;padding:0">
+  <div class="card" style="max-width:520px;margin-bottom:1rem">
+    <div class="card-hd"><h3>🎭 Face scan attendance</h3></div>
+    ${!isEnrolled?`
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px;margin-bottom:1rem;font-size:12px;color:#92400e">
+      ⚠️ Enroll your face first to use face check-in
+    </div>
+    <div style="position:relative;width:100%;max-width:300px;margin:0 auto">
+      <video id="att-enroll-video" autoplay muted playsinline style="width:100%;border-radius:8px;background:#000"></video>
+      <canvas id="att-enroll-canvas" style="position:absolute;top:0;left:0;width:100%;border-radius:8px"></canvas>
+    </div>
+    <div id="att-enroll-status" style="font-size:12px;color:var(--muted);text-align:center;margin:8px 0">Position your face</div>
+    <button class="btn btn-primary" style="width:100%;background:#0f766e" onclick="attEnrollFace()">📸 Enroll Face</button>`:`
+    <div style="position:relative;width:100%;max-width:300px;margin:0 auto">
+      <video id="att-scan-video" autoplay muted playsinline style="width:100%;border-radius:8px;background:#000"></video>
+      <canvas id="att-scan-canvas" style="position:absolute;top:0;left:0;width:100%;border-radius:8px"></canvas>
+    </div>
+    <div id="att-scan-status" style="font-size:13px;font-weight:600;text-align:center;margin:8px 0;color:var(--muted)">Loading camera…</div>
+    <div style="text-align:center;font-size:11px;color:var(--muted);margin-top:4px">
+      <span style="cursor:pointer;color:#ef4444;text-decoration:underline" onclick="deleteEnrolledFace('${emp.name}')">Remove enrolled face</span>
+    </div>`}
+  </div>
+
+  <div class="card" style="max-width:520px;padding:0">
     <div class="card-hd" style="padding:1rem 1rem 0"><h3>My attendance history</h3></div>
-    <table style="margin-top:8px"><thead><tr><th style="width:30%;padding-left:12px">Date</th><th style="width:20%">In</th><th style="width:20%">Out</th><th style="width:30%">Status</th></tr></thead>
-    <tbody>${D.attendance.filter(a=>a.empName===emp.name||a.empId===emp._uuid||a.empId===emp.id).slice(0,20).map(a=>`<tr><td style="padding-left:12px">${a.date}</td><td>${a.in||'--'}</td><td>${a.out||'--'}</td><td>${badge(a.status)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;padding:1rem;color:var(--muted)">No records yet</td></tr>'}</tbody></table>
+    <table style="margin-top:8px"><thead><tr>
+      <th style="width:20%;padding-left:12px">Date</th>
+      <th style="width:16%">Check In</th>
+      <th style="width:16%">Check Out</th>
+      <th style="width:28%">Location</th>
+      <th style="width:20%">Duration</th>
+    </tr></thead>
+    <tbody id="att-history-body">
+      <tr><td colspan="5" style="text-align:center;padding:1rem;color:var(--muted)">Loading…</td></tr>
+    </tbody></table>
   </div>`;
 }
 
-function switchAttTab(tab){
-  $('att-face-panel').classList.toggle('hidden', tab!=='face');
-  $('att-manual-panel').classList.toggle('hidden', tab!=='manual');
-  $('att-tab-face').style.cssText=`flex:1;padding:9px;border:none;background:${tab==='face'?'#0f766e':'var(--white)'};color:${tab==='face'?'#fff':'var(--muted)'};font-weight:${tab==='face'?700:600};font-size:13px;cursor:pointer`;
-  $('att-tab-manual').style.cssText=`flex:1;padding:9px;border:none;background:${tab==='manual'?'#0f766e':'var(--white)'};color:${tab==='manual'?'#fff':'var(--muted)'};font-weight:${tab==='manual'?700:600};font-size:13px;cursor:pointer`;
-  if(tab==='face'){
-    const emp=currentEmployee;
-    const isEnrolled=frGetEnrolled().some(e=>e.name.toLowerCase()===emp.name.toLowerCase());
-    if(isEnrolled) startAttFaceScan();
-    else startAttFaceEnroll();
-  } else {
-    frStopCamera();
+// ─── MULTI-SESSION ATTENDANCE ─────────────────────────────────────
+let _attGeoState={status:'idle',lat:null,lng:null,address:null};
+
+function initAttGeo(callback){
+  if(!navigator.geolocation){_attGeoState={status:'error'};if(callback)callback();return;}
+  const el=$('att-location-status');
+  if(el)el.textContent='📍 Getting your location…';
+  navigator.geolocation.getCurrentPosition(
+    pos=>{
+      _attGeoState={status:'ok',lat:pos.coords.latitude,lng:pos.coords.longitude};
+      // Reverse geocode
+      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`)
+        .then(r=>r.json()).then(d=>{
+          const area=d.address?.suburb||d.address?.neighbourhood||d.address?.road||d.address?.city||d.address?.town||'';
+          const city=d.address?.city||d.address?.town||d.address?.state_district||'';
+          _attGeoState.address=area?`${area}, ${city}`:city||'Location detected';
+          const el=$('att-location-status');
+          if(el)el.textContent=`📍 ${_attGeoState.address}`;
+          if(callback)callback();
+        }).catch(()=>{
+          _attGeoState.address='Location detected';
+          const el=$('att-location-status');
+          if(el)el.textContent='📍 Location detected';
+          if(callback)callback();
+        });
+    },
+    ()=>{_attGeoState={status:'error'};const el=$('att-location-status');if(el)el.textContent='📍 Location unavailable';if(callback)callback();},
+    {timeout:8000,enableHighAccuracy:true}
+  );
+}
+
+async function checkInNow(){
+  const emp=currentEmployee;
+  const now=new Date();
+  const today=todayStr();
+  const btn=document.querySelector('.card button[onclick="checkInNow()"]');
+  if(btn){btn.disabled=true;btn.textContent='Checking in…';}
+
+  // Get location first
+  await new Promise(resolve=>initAttGeo(resolve));
+
+  const session={
+    _localId:Date.now(),
+    empName:emp.name,
+    empId:emp._uuid||emp.id,
+    date:today,
+    checkIn:now.toISOString(),
+    checkOut:null,
+    location:_attGeoState.address||'',
+    lat:_attGeoState.lat||null,
+    lng:_attGeoState.lng||null
+  };
+
+  // Save to Supabase
+  const r=await sb('attendance_sessions','POST',{
+    employee_id:emp._uuid||null,
+    employee_name:emp.name,
+    date:today,
+    check_in:session.checkIn,
+    location:session.location,
+    latitude:session.lat,
+    longitude:session.lng,
+    company_id:currentCompany?currentCompany.company_id:'KSPL'
+  });
+  if(r&&r[0]) session._uuid=r[0].id;
+
+  if(!D.attSessions) D.attSessions=[];
+  D.attSessions.unshift(session);
+  save();
+
+  showToast(`✅ Checked in at ${now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}${session.location?' — '+session.location:''}`, 'success');
+  navEmp('emp-attendance');
+}
+
+async function checkOutNow(){
+  const emp=currentEmployee;
+  const today=todayStr();
+  const now=new Date();
+
+  const activeSession=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
+  if(!activeSession){showToast('No active session found','info');return;}
+
+  activeSession.checkOut=now.toISOString();
+
+  // Update in Supabase
+  if(activeSession._uuid){
+    await sb('attendance_sessions','PATCH',{check_out:activeSession.checkOut},`?id=eq.${activeSession._uuid}`);
   }
+
+  // Calculate total hours for today and update main attendance record
+  const todaySessions=D.attSessions.filter(s=>s.empName===emp.name&&s.date===today);
+  let totalMins=0;
+  todaySessions.forEach(s=>{if(s.checkIn&&s.checkOut)totalMins+=(new Date(s.checkOut)-new Date(s.checkIn))/60000;});
+  const totalHrs=(totalMins/60).toFixed(1);
+  const status=totalMins>=240?'Present':totalMins>=120?'Half Day':'Present';
+
+  // Get all locations for today
+  const locations=[...new Set(todaySessions.filter(s=>s.location).map(s=>s.location))].join(' → ');
+
+  // Update/create main attendance record
+  const firstSession=todaySessions[todaySessions.length-1];
+  const lastCheckOut=todaySessions[0];
+  const existing=await sb('attendance','GET',null,`?employee_name=eq.${encodeURIComponent(emp.name)}&date=eq.${today}&select=id`);
+  const attPayload={
+    employee_id:emp._uuid||null,
+    employee_name:emp.name,
+    date:today,
+    status,
+    in_time:new Date(firstSession.checkIn).toTimeString().slice(0,5),
+    out_time:now.toTimeString().slice(0,5),
+    company_id:currentCompany?currentCompany.company_id:'KSPL'
+  };
+  if(existing&&existing.length>0){
+    await sb('attendance','PATCH',attPayload,`?id=eq.${existing[0].id}`);
+  } else {
+    await sb('attendance','POST',attPayload);
+  }
+
+  save();
+  const duration=`${Math.floor(totalMins/60)}h ${Math.floor(totalMins%60)}m`;
+  showToast(`✅ Checked out — ${duration} total today`, 'success');
+  navEmp('emp-attendance');
+}
+
+// Auto check-in via face scan
+async function faceCheckIn(timeStr){
+  const emp=currentEmployee;
+  const now=new Date();
+  const today=todayStr();
+
+  // Get location
+  await new Promise(resolve=>{
+    if(_attGeoState.status==='ok'){resolve();return;}
+    navigator.geolocation.getCurrentPosition(
+      pos=>{
+        _attGeoState={status:'ok',lat:pos.coords.latitude,lng:pos.coords.longitude};
+        fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`)
+          .then(r=>r.json()).then(d=>{
+            const area=d.address?.suburb||d.address?.neighbourhood||d.address?.road||'';
+            const city=d.address?.city||d.address?.town||'';
+            _attGeoState.address=area?`${area}, ${city}`:city;
+            resolve();
+          }).catch(()=>resolve());
+      },
+      ()=>{_attGeoState={status:'error'};resolve();},
+      {timeout:5000,enableHighAccuracy:true}
+    );
+  });
+
+  const activeSession=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
+
+  if(activeSession){
+    // Already checked in — check out
+    activeSession.checkOut=now.toISOString();
+    if(activeSession._uuid) await sb('attendance_sessions','PATCH',{check_out:activeSession.checkOut},`?id=eq.${activeSession._uuid}`);
+    save();
+    showToast(`✅ Checked OUT at ${timeStr}`, 'success');
+  } else {
+    // Check in
+    const session={
+      _localId:Date.now(),empName:emp.name,empId:emp._uuid||emp.id,date:today,
+      checkIn:now.toISOString(),checkOut:null,
+      location:_attGeoState.address||'',lat:_attGeoState.lat||null,lng:_attGeoState.lng||null
+    };
+    const r=await sb('attendance_sessions','POST',{
+      employee_id:emp._uuid||null,employee_name:emp.name,date:today,
+      check_in:session.checkIn,location:session.location,
+      latitude:session.lat,longitude:session.lng,
+      company_id:currentCompany?currentCompany.company_id:'KSPL'
+    });
+    if(r&&r[0]) session._uuid=r[0].id;
+    if(!D.attSessions) D.attSessions=[];
+    D.attSessions.unshift(session);
+    save();
+    showToast(`✅ Checked IN at ${timeStr}${session.location?' — '+session.location:''}`, 'success');
+  }
+  navEmp('emp-attendance');
+}
+
+// Load attendance history from Supabase
+async function loadAttHistory(){
+  const emp=currentEmployee;
+  const tbody=$('att-history-body');
+  if(!tbody)return;
+  const rows=await sb('attendance_sessions','GET',null,`?employee_name=eq.${encodeURIComponent(emp.name)}&order=check_in.desc&limit=30`);
+  if(!rows||!rows.length){tbody.innerHTML=`<tr><td colspan="5" style="text-align:center;padding:1rem;color:var(--muted)">No sessions yet</td></tr>`;return;}
+  tbody.innerHTML=rows.map(r=>{
+    const cin=new Date(r.check_in);
+    const cout=r.check_out?new Date(r.check_out):null;
+    const dur=cout?`${Math.floor((cout-cin)/3600000)}h ${Math.floor(((cout-cin)%3600000)/60000)}m`:'ongoing';
+    return `<tr>
+      <td style="padding-left:12px;font-size:12px">${r.date}</td>
+      <td style="font-size:12px">${cin.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</td>
+      <td style="font-size:12px">${cout?cout.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'<span style="color:#0f766e">Active</span>'}</td>
+      <td style="font-size:11px;color:var(--muted)">${r.location||'—'}</td>
+      <td style="font-size:12px;font-weight:600">${dur}</td>
+    </tr>`;
+  }).join('');
 }
 
 function startAttFaceEnroll(){
@@ -2006,8 +2227,12 @@ async function startAttFaceScan(){
         frStopCamera();
         const now=new Date();
         const timeStr=now.toTimeString().slice(0,5);
-        s.textContent=`✅ Face verified! Marking Present at ${timeStr}…`;s.style.color='#166534';
-        setTimeout(()=>submitFaceAtt(timeStr),800);
+        const emp=currentEmployee;
+        const today=todayStr();
+        const activeSession=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
+        s.textContent=activeSession?`✅ Face verified! Checking OUT at ${timeStr}…`:`✅ Face verified! Checking IN at ${timeStr}…`;
+        s.style.color='#166534';
+        setTimeout(()=>faceCheckIn(timeStr),800);
       } else {
         s.textContent='❌ Face not matching your enrolled face. Try again.';s.style.color='#ef4444';
       }
