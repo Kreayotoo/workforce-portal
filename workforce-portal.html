@@ -1099,7 +1099,7 @@ function renderLogin(){
         <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--muted)">
           New here? <span style="color:#0f766e;cursor:pointer;font-weight:700" onclick="showRegister()">Create your account →</span>
         </div>
-        <div style="margin-top:8px;text-align:center;font-size:11px;color:var(--muted)">Default password is <strong>emp@123</strong></div>
+        <div style="margin-top:8px;text-align:center;font-size:11px;color:var(--muted)">Default password is <strong>emp@123</strong> · <span style="color:#0f766e;cursor:pointer;font-weight:600" onclick="showForgotPassword()">Forgot password?</span></div>
       </div>
     </div>
   </div>
@@ -1211,34 +1211,42 @@ async function doEmpLogin(){
   // Check Supabase for password
   const rows=await sb('employees','GET',null,`?email=eq.${encodeURIComponent(em.toLowerCase())}&limit=1`);
   let empObj=null;
+  let passwordCorrect=false;
+
   if(!rows||!rows.length){
     const local=D.employees.find(e=>e.email.toLowerCase()===em.toLowerCase());
     if(!local){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">No employee found. <span style="cursor:pointer;text-decoration:underline" onclick="showRegister()">Register here</span></div>`;return;}
-    if(pw!==(local.passwordHash||'emp@123')){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Wrong password</div>`;return;}
+    passwordCorrect = pw===(local.passwordHash||'emp@123');
     empObj=local;
   } else {
     const row=rows[0];
-    if(pw!==(row.password_hash||'emp@123')){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Wrong password</div>`;return;}
+    passwordCorrect = pw===(row.password_hash||'emp@123');
     empObj={id:row.emp_id||row.id,_uuid:row.id,name:row.name,email:row.email,phone:row.phone||'',dob:row.dob||'',dept:row.department||'',role:row.role||'',status:row.status||'Active',salary:row.salary||0,joined:row.date_of_joining||'',selfRegistered:row.self_registered||false,passwordHash:row.password_hash||'emp@123'};
     const idx=D.employees.findIndex(e=>e.email.toLowerCase()===em.toLowerCase());
     if(idx>=0)D.employees[idx]=empObj; else D.employees.push(empObj);
     save();
   }
 
-  // Password correct — now send OTP
-  _empLoginData=empObj;
-  if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e" style="color:#0f766e;background:#f0fdf4;border-color:#bbf7d0">Sending OTP to ${empObj.email}…</div>`;
-  const result=await sendOTP(empObj.email, empObj.name);
-  if(!result.success){
-    if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Failed to send OTP. Please try again.</div>`;
-    return;
+  if(passwordCorrect){
+    // ✅ Password correct — login directly, no OTP needed
+    if($('emp-login-err'))$('emp-login-err').innerHTML='';
+    loginAsEmployee(empObj);
+  } else {
+    // ❌ Wrong password — send OTP as fallback
+    if(!empObj.email){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Wrong password</div>`;return;}
+    if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e" style="color:#92400e;background:#fffbeb;border-color:#fde68a">⚠️ Wrong password. Sending OTP to your email as alternative…</div>`;
+    _empLoginData=empObj;
+    const result=await sendOTP(empObj.email, empObj.name);
+    if(!result.success){
+      if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Wrong password. OTP also failed to send. Please check your credentials.</div>`;
+      return;
+    }
+    if($('emp-login-form'))$('emp-login-form').classList.add('hidden');
+    if($('emp-otp-form'))$('emp-otp-form').classList.remove('hidden');
+    if($('emp-otp-email-show'))$('emp-otp-email-show').textContent=empObj.email;
+    if($('emp-login-err'))$('emp-login-err').innerHTML='';
+    startOTPTimer('emp-otp-timer');
   }
-  // Show OTP form
-  if($('emp-login-form'))$('emp-login-form').classList.add('hidden');
-  if($('emp-otp-form'))$('emp-otp-form').classList.remove('hidden');
-  if($('emp-otp-email-show'))$('emp-otp-email-show').textContent=empObj.email;
-  if($('emp-login-err'))$('emp-login-err').innerHTML='';
-  startOTPTimer('emp-otp-timer');
 }
 
 function empOTPBack(){
@@ -1273,6 +1281,127 @@ function empVerifyOTP(){
   clearOTP(_empLoginData.email);
   loginAsEmployee(_empLoginData);
   _empLoginData=null;
+}
+
+// ─── FORGOT PASSWORD ─────────────────────────────────────────────
+let _fpEmail='';
+
+function showForgotPassword(){
+  $('root').innerHTML=`
+  <div style="min-height:100vh;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:#fff;border-radius:14px;padding:2rem;max-width:400px;width:100%;border:1px solid var(--border);box-shadow:0 4px 20px rgba(0,0,0,.08)">
+    <div style="text-align:center;margin-bottom:1.5rem">
+      <div style="font-size:32px;margin-bottom:.5rem">🔑</div>
+      <h2 style="font-size:20px;font-weight:700">Reset your password</h2>
+      <p style="font-size:13px;color:var(--muted);margin-top:.25rem">Enter your work email to receive an OTP</p>
+    </div>
+    <div id="fp-step-1">
+      <div class="fld"><label>Work email</label><input type="email" id="fp-email" placeholder="yourname@company.com" onkeydown="if(event.key==='Enter')fpSendOTP()"></div>
+      <div id="fp-err-1"></div>
+      <button class="btn btn-primary" style="width:100%;padding:10px;background:#0f766e;margin-top:.5rem" onclick="fpSendOTP()">Send OTP →</button>
+      <div style="text-align:center;margin-top:1rem;font-size:13px">
+        <span style="color:#0f766e;cursor:pointer;font-weight:600" onclick="renderApp()">← Back to login</span>
+      </div>
+    </div>
+    <div id="fp-step-2" class="hidden">
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:1rem;font-size:12px;color:#1e40af">
+        📧 OTP sent to <strong id="fp-email-show"></strong>
+      </div>
+      <div class="fld"><label>Enter OTP</label>
+        <input type="text" id="fp-otp" placeholder="6-digit code" maxlength="6"
+          style="letter-spacing:8px;font-size:20px;font-weight:700;text-align:center"
+          onkeydown="if(event.key==='Enter')fpVerifyOTP()">
+      </div>
+      <div id="fp-otp-timer" style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:8px"></div>
+      <div id="fp-err-2"></div>
+      <div style="display:flex;gap:8px;margin-top:.5rem">
+        <button class="btn btn-sec" style="flex:1" onclick="fpBack1()">← Back</button>
+        <button class="btn btn-primary" style="flex:2;background:#0f766e" onclick="fpVerifyOTP()">Verify OTP →</button>
+      </div>
+      <div style="text-align:center;margin-top:10px;font-size:12px;color:var(--muted)">
+        Didn't receive? <span style="color:#0f766e;cursor:pointer;font-weight:600" onclick="fpResendOTP()">Resend OTP</span>
+      </div>
+    </div>
+    <div id="fp-step-3" class="hidden">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;margin-bottom:1rem;font-size:12px;color:#166534">
+        ✅ Email verified! Set your new password below.
+      </div>
+      <div class="fld"><label>New password</label><input type="password" id="fp-new-pw" placeholder="Min 6 characters"></div>
+      <div class="fld"><label>Confirm password</label><input type="password" id="fp-confirm-pw" placeholder="Repeat password" onkeydown="if(event.key==='Enter')fpResetPassword()"></div>
+      <div id="fp-err-3"></div>
+      <button class="btn btn-primary" style="width:100%;padding:10px;background:#0f766e;margin-top:.5rem" onclick="fpResetPassword()">Reset password ✅</button>
+    </div>
+  </div>
+  </div>`;
+}
+
+async function fpSendOTP(){
+  const email=($('fp-email')||{}).value?.trim().toLowerCase();
+  const err=$('fp-err-1');
+  if(!email){if(err)err.innerHTML=`<div class="alert alert-e">Enter your email</div>`;return;}
+  const rows=await sb('employees','GET',null,`?email=eq.${encodeURIComponent(email)}&select=id,name`);
+  if(!rows||!rows.length){if(err)err.innerHTML=`<div class="alert alert-e">No employee found with this email</div>`;return;}
+  const btn=document.querySelector('#fp-step-1 .btn-primary');
+  if(btn){btn.disabled=true;btn.textContent='Sending…';}
+  const result=await sendOTP(email,rows[0].name);
+  if(btn){btn.disabled=false;btn.textContent='Send OTP →';}
+  if(!result.success){if(err)err.innerHTML=`<div class="alert alert-e">Failed to send OTP. Try again.</div>`;return;}
+  _fpEmail=email;
+  $('fp-step-1').classList.add('hidden');
+  $('fp-step-2').classList.remove('hidden');
+  if($('fp-email-show'))$('fp-email-show').textContent=email;
+  startOTPTimer('fp-otp-timer');
+}
+
+function fpBack1(){
+  $('fp-step-2').classList.add('hidden');
+  $('fp-step-1').classList.remove('hidden');
+  if(_otpTimerInterval){clearInterval(_otpTimerInterval);_otpTimerInterval=null;}
+}
+
+async function fpResendOTP(){
+  if(!_fpEmail)return;
+  const rows=await sb('employees','GET',null,`?email=eq.${encodeURIComponent(_fpEmail)}&select=name`);
+  const name=rows&&rows.length?rows[0].name:'';
+  const result=await sendOTP(_fpEmail,name);
+  const err=$('fp-err-2');
+  if(result.success){
+    if(err)err.innerHTML=`<div class="alert alert-s">✅ New OTP sent!</div>`;
+    if($('fp-otp'))$('fp-otp').value='';
+    startOTPTimer('fp-otp-timer');
+  } else {
+    if(err)err.innerHTML=`<div class="alert alert-e">Failed to resend. Try again.</div>`;
+  }
+}
+
+function fpVerifyOTP(){
+  const otp=($('fp-otp')||{}).value?.trim();
+  const err=$('fp-err-2');
+  if(!otp||otp.length!==6){if(err)err.innerHTML=`<div class="alert alert-e">Enter the 6-digit OTP</div>`;return;}
+  const result=verifyOTP(_fpEmail,otp);
+  if(!result.valid){if(err)err.innerHTML=`<div class="alert alert-e">${result.msg}</div>`;return;}
+  if(_otpTimerInterval){clearInterval(_otpTimerInterval);_otpTimerInterval=null;}
+  $('fp-step-2').classList.add('hidden');
+  $('fp-step-3').classList.remove('hidden');
+}
+
+async function fpResetPassword(){
+  const pw=($('fp-new-pw')||{}).value;
+  const pw2=($('fp-confirm-pw')||{}).value;
+  const err=$('fp-err-3');
+  if(!pw||pw.length<6){if(err)err.innerHTML=`<div class="alert alert-e">Password must be at least 6 characters</div>`;return;}
+  if(pw!==pw2){if(err)err.innerHTML=`<div class="alert alert-e">Passwords do not match</div>`;return;}
+  showSyncBanner('Updating password…');
+  const r=await sb('employees','PATCH',{password_hash:pw},`?email=eq.${encodeURIComponent(_fpEmail)}`);
+  hideSyncBanner();
+  if(!r){if(err)err.innerHTML=`<div class="alert alert-e">Failed to update. Try again.</div>`;return;}
+  const local=D.employees.find(e=>e.email.toLowerCase()===_fpEmail);
+  if(local) local.passwordHash=pw;
+  save();
+  clearOTP(_fpEmail);
+  _fpEmail='';
+  alert('✅ Password reset successfully! Login with your new password.');
+  renderApp();
 }
 function loginAsEmployee(emp){
   const nearest=geoState.status==='ok'?getNearestOffice(geoState.lat,geoState.lng):null;
