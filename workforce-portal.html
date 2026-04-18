@@ -254,26 +254,40 @@ const badge = s => {
 };
 
 // ─── EMAILJS OTP ENGINE ───────────────────────────────────────────
-const EJS_SERVICE  = 'service_owvkilp';
+const EJS_SERVICE  = 'service_ihujo1g';
 const EJS_TEMPLATE = 'template_q5rvvmd';
 const EJS_KEY      = 'wBI1zfEMugYGwO9bJ';
-let _otpStore = {}; // { email: { otp, expiry, verified } }
+const EJS_PRIVATE  = 'hLag-0b2-EUfAFlthMyDv';
+let _ejsReady = false;
+function initEmailJS(){
+  if(_ejsReady) return;
+  try{ emailjs.init({publicKey: EJS_KEY, privateKey: EJS_PRIVATE}); _ejsReady=true; }catch(e){ console.warn('EmailJS not ready yet'); }
+}
+let _otpStore = {};
 
 function generateOTP(){ return String(Math.floor(100000 + Math.random()*900000)); }
 
 async function sendOTP(email, name){
+  initEmailJS();
   const otp = generateOTP();
   _otpStore[email] = { otp, expiry: Date.now() + 10*60*1000, verified: false };
+  console.log('📧 Sending OTP', otp, 'to', email);
   try{
-    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
+    const res = await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
       to_email: email,
+      email: email,
       to_name: name || email.split('@')[0],
-      otp
-    }, EJS_KEY);
+      name: name || email.split('@')[0],
+      otp: otp,
+      message: `Your OTP is: ${otp}`
+    });
+    console.log('✅ OTP sent:', res.status, res.text);
     return { success: true };
   }catch(e){
-    console.error('❌ OTP send error:', e);
-    return { success: false, error: e.text || e.message };
+    console.error('❌ OTP error:', JSON.stringify(e));
+    // Show OTP in console for testing if email fails
+    console.warn('🔑 OTP for testing:', otp);
+    return { success: false, error: e.text || e.message || JSON.stringify(e) };
   }
 }
 
