@@ -1870,6 +1870,7 @@ function empDashboard(){
   <div class="page-hd">
     <div><div class="pg-title">Hi, ${emp.name.split(' ')[0]}! 👋</div><div class="pg-sub">${dateLabel()} · ${emp.role} · ${emp.dept}</div></div>
   </div>
+  ${celebrationsPanel()}
   <div class="stat-grid">
     <div class="stat"><div class="stat-lbl">Days present</div><div class="stat-val">${present}</div><div class="stat-sub">This month</div></div>
     <div class="stat"><div class="stat-lbl">Leave taken</div><div class="stat-val">${approved}</div><div class="stat-sub">Days this year</div></div>
@@ -2488,6 +2489,246 @@ function changeEmpPw(){
   $('cp-msg').innerHTML=`<div class="alert alert-s">✅ Password updated successfully!</div>`;
   $('cp-cur').value='';$('cp-new').value='';$('cp-conf').value='';
 }
+// ─── CELEBRATIONS ENGINE ─────────────────────────────────────────
+const INDIAN_FESTIVALS = [
+  {name:"New Year's Day",month:1,day:1,emoji:"🎉"},
+  {name:"Republic Day",month:1,day:26,emoji:"🇮🇳"},
+  {name:"Holi",month:3,day:14,emoji:"🎨"},
+  {name:"Ugadi",month:3,day:30,emoji:"🌸"},
+  {name:"Good Friday",month:4,day:18,emoji:"✝️"},
+  {name:"Easter",month:4,day:20,emoji:"🐣"},
+  {name:"Eid ul-Fitr",month:3,day:31,emoji:"🌙"},
+  {name:"Ambedkar Jayanti",month:4,day:14,emoji:"🇮🇳"},
+  {name:"Ram Navami",month:4,day:6,emoji:"🪔"},
+  {name:"Labour Day",month:5,day:1,emoji:"🛠️"},
+  {name:"Eid ul-Adha",month:6,day:7,emoji:"🌙"},
+  {name:"Independence Day",month:8,day:15,emoji:"🇮🇳"},
+  {name:"Janmashtami",month:8,day:16,emoji:"🪈"},
+  {name:"Ganesh Chaturthi",month:8,day:27,emoji:"🐘"},
+  {name:"Onam",month:9,day:5,emoji:"🌺"},
+  {name:"Gandhi Jayanti",month:10,day:2,emoji:"🇮🇳"},
+  {name:"Navratri",month:10,day:2,emoji:"💃"},
+  {name:"Dussehra",month:10,day:12,emoji:"🏹"},
+  {name:"Diwali",month:10,day:20,emoji:"🪔"},
+  {name:"Bhai Dooj",month:10,day:22,emoji:"🪔"},
+  {name:"Guru Nanak Jayanti",month:11,day:5,emoji:"🙏"},
+  {name:"Christmas",month:12,day:25,emoji:"🎄"},
+  {name:"New Year's Eve",month:12,day:31,emoji:"🎆"}
+];
+
+function getCelebrations(){
+  const today=new Date();
+  const todayM=today.getMonth()+1, todayD=today.getDate();
+  const result={birthdays:[],welcome:[],sendoff:[],festivals:[]};
+
+  // Birthdays — match month+day from DOB
+  D.employees.forEach(e=>{
+    if(!e.dob)return;
+    try{
+      const d=parseAnyDate(e.dob);
+      if(!d)return;
+      const dt=new Date(d);
+      if(dt.getMonth()+1===todayM && dt.getDate()===todayD)
+        result.birthdays.push(e);
+    }catch(ex){}
+  });
+
+  // Welcome — joined today or within last 7 days
+  D.employees.forEach(e=>{
+    if(!e.joined)return;
+    try{
+      const d=parseAnyDate(e.joined);
+      if(!d)return;
+      const dt=new Date(d);
+      const diff=(today-dt)/86400000;
+      if(diff>=0 && diff<7) result.welcome.push({emp:e,days:Math.floor(diff)});
+    }catch(ex){}
+  });
+
+  // Sendoff — Inactive employees (recently marked inactive)
+  D.employees.forEach(e=>{
+    if(e.status==='Inactive') result.sendoff.push(e);
+  });
+
+  // Festivals today or upcoming 7 days
+  INDIAN_FESTIVALS.forEach(f=>{
+    const fDate=new Date(today.getFullYear(),f.month-1,f.day);
+    const diff=Math.floor((fDate-today)/86400000);
+    if(diff>=0 && diff<=7) result.festivals.push({...f,daysAway:diff});
+    // Also check if today
+    if(f.month===todayM && f.day===todayD) {
+      if(!result.festivals.find(x=>x.name===f.name))
+        result.festivals.unshift({...f,daysAway:0});
+    }
+  });
+
+  return result;
+}
+
+async function sendBirthdayWish(empId){
+  const emp=D.employees.find(e=>e.id===empId||e._uuid===empId);
+  if(!emp)return;
+  const sender=currentRole==='employee'?currentEmployee?.name:(currentCompany?currentCompany.name:'Kreayotoo Team');
+  const modal=document.createElement('div');
+  modal.className='modal-bg';
+  modal.id='wish-modal';
+  modal.innerHTML=`
+  <div class="modal" style="max-width:400px">
+    <div class="modal-hd"><h3>🎂 Send Birthday Wish</h3><button class="xbtn" onclick="document.getElementById('wish-modal').remove()">×</button></div>
+    <div style="text-align:center;margin-bottom:1rem">
+      <div style="font-size:48px">🎂🎉🎈</div>
+      <div style="font-size:16px;font-weight:700;margin-top:8px">${emp.name}</div>
+      <div style="font-size:13px;color:var(--muted)">${emp.role} · ${emp.dept}</div>
+    </div>
+    <div class="fld"><label>Your wish message</label>
+      <textarea id="wish-msg" rows="4" placeholder="Happy Birthday ${emp.name.split(' ')[0]}! Wishing you a wonderful day full of joy and happiness! 🎂">Happy Birthday ${emp.name.split(' ')[0]}! 🎂🎉 Wishing you a wonderful day filled with joy, laughter, and happiness. May this year bring you great success and amazing opportunities!</textarea>
+    </div>
+    <div class="modal-ftr">
+      <button class="btn btn-sec" onclick="document.getElementById('wish-modal').remove()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitWish('${empId}','birthday')">🎂 Send Wish</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function sendWelcomeWish(empId){
+  const emp=D.employees.find(e=>e.id===empId||e._uuid===empId);
+  if(!emp)return;
+  const modal=document.createElement('div');
+  modal.className='modal-bg';
+  modal.id='wish-modal';
+  modal.innerHTML=`
+  <div class="modal" style="max-width:400px">
+    <div class="modal-hd"><h3>👋 Send Welcome Message</h3><button class="xbtn" onclick="document.getElementById('wish-modal').remove()">×</button></div>
+    <div style="text-align:center;margin-bottom:1rem">
+      <div style="font-size:48px">🎊🤝🌟</div>
+      <div style="font-size:16px;font-weight:700;margin-top:8px">${emp.name}</div>
+      <div style="font-size:13px;color:var(--muted)">${emp.role} · ${emp.dept}</div>
+    </div>
+    <div class="fld"><label>Welcome message</label>
+      <textarea id="wish-msg" rows="4">Welcome to the team, ${emp.name.split(' ')[0]}! 🎊 We're thrilled to have you on board. Wishing you a fantastic journey ahead with us!</textarea>
+    </div>
+    <div class="modal-ftr">
+      <button class="btn btn-sec" onclick="document.getElementById('wish-modal').remove()">Cancel</button>
+      <button class="btn btn-primary" style="background:#059669" onclick="submitWish('${empId}','welcome')">👋 Send Welcome</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function sendSendoffWish(empId){
+  const emp=D.employees.find(e=>e.id===empId||e._uuid===empId);
+  if(!emp)return;
+  const modal=document.createElement('div');
+  modal.className='modal-bg';
+  modal.id='wish-modal';
+  modal.innerHTML=`
+  <div class="modal" style="max-width:400px">
+    <div class="modal-hd"><h3>👏 Send Farewell Message</h3><button class="xbtn" onclick="document.getElementById('wish-modal').remove()">×</button></div>
+    <div style="text-align:center;margin-bottom:1rem">
+      <div style="font-size:48px">🌟💐🙏</div>
+      <div style="font-size:16px;font-weight:700;margin-top:8px">${emp.name}</div>
+      <div style="font-size:13px;color:var(--muted)">${emp.role} · ${emp.dept}</div>
+    </div>
+    <div class="fld"><label>Farewell message</label>
+      <textarea id="wish-msg" rows="4">It's been a privilege working with you, ${emp.name.split(' ')[0]}! 🌟 Thank you for your contributions and dedication. Wishing you all the best in your future endeavours!</textarea>
+    </div>
+    <div class="modal-ftr">
+      <button class="btn btn-sec" onclick="document.getElementById('wish-modal').remove()">Cancel</button>
+      <button class="btn btn-primary" style="background:#7c3aed" onclick="submitWish('${empId}','sendoff')">💐 Send Farewell</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+async function submitWish(empId, type){
+  const emp=D.employees.find(e=>e.id===empId||e._uuid===empId);
+  const msg=($('wish-msg')||{}).value?.trim();
+  if(!emp||!msg)return;
+  const sender=currentRole==='employee'?currentEmployee?.name:(currentCompany?currentCompany.name:'Kreayotoo Team');
+  const typeLabels={birthday:'🎂 Birthday wish',welcome:'👋 Welcome message',sendoff:'💐 Farewell message'};
+  const notif={msg:`${typeLabels[type]} for ${emp.name} from ${sender}: "${msg.slice(0,60)}${msg.length>60?'…':''}"`,type:'success',read:false};
+  D.notifications.unshift({id:Date.now(),...notif,time:'Just now'});
+  await sbSaveNotification(notif);
+  // Try to send email via EmailJS
+  try{
+    initEmailJS();
+    await emailjs.send(EJS_SERVICE,'template_q5rvvmd',{
+      to_email:emp.email, to_name:emp.name,
+      otp:msg, message:msg
+    });
+  }catch(e){console.log('Wish email:',e);}
+  save();
+  document.getElementById('wish-modal')?.remove();
+  showToast(`✅ ${typeLabels[type]} sent to ${emp.name}!`,'success');
+}
+
+function celebrationsPanel(){
+  const cel=getCelebrations();
+  if(!cel.birthdays.length && !cel.welcome.length && !cel.festivals.length && !cel.sendoff.length) return '';
+
+  return `
+  <div class="card" style="margin-bottom:.75rem;background:linear-gradient(135deg,#fff9f0,#fff5f9)">
+    <div class="card-hd"><h3>🎊 Today's Celebrations</h3></div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+
+    ${cel.festivals.length?`
+      ${cel.festivals.map(f=>`
+      <div style="display:flex;align-items:center;gap:12px;background:${f.daysAway===0?'linear-gradient(135deg,#fef3c7,#fde68a)':'linear-gradient(135deg,#f0fdf4,#dcfce7)'};border-radius:10px;padding:12px 14px;border:1px solid ${f.daysAway===0?'#fcd34d':'#bbf7d0'}">
+        <div style="font-size:32px">${f.emoji}</div>
+        <div style="flex:1">
+          <div style="font-size:15px;font-weight:700;color:#92400e">${f.name}</div>
+          <div style="font-size:12px;color:#78350f">${f.daysAway===0?'Today! 🎉':`In ${f.daysAway} day${f.daysAway>1?'s':''}`}</div>
+        </div>
+        ${f.daysAway===0?`<span style="background:#f59e0b;color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">Today!</span>`:''}
+      </div>`).join('')}`:''}
+
+    ${cel.birthdays.length?`
+      <div style="background:linear-gradient(135deg,#fdf4ff,#fae8ff);border-radius:10px;padding:12px 14px;border:1px solid #e9d5ff">
+        <div style="font-size:13px;font-weight:700;color:#7c3aed;margin-bottom:8px">🎂 Birthday${cel.birthdays.length>1?'s':''} Today</div>
+        ${cel.birthdays.map(e=>`
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="font-size:28px">🎂</div>
+          <div style="flex:1">
+            <div style="font-size:15px;font-weight:700">${e.name}</div>
+            <div style="font-size:12px;color:var(--muted)">${e.role} · ${e.dept}</div>
+          </div>
+          <button class="btn" style="background:#7c3aed;color:#fff;font-size:13px;padding:6px 14px" onclick="sendBirthdayWish('${e.id}')">🎂 Wish</button>
+        </div>`).join('')}
+      </div>`:''}
+
+    ${cel.welcome.length?`
+      <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-radius:10px;padding:12px 14px;border:1px solid #bbf7d0">
+        <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:8px">🎊 New Joinee${cel.welcome.length>1?'s':''}</div>
+        ${cel.welcome.map(({emp:e,days})=>`
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="font-size:28px">${days===0?'🎊':'👋'}</div>
+          <div style="flex:1">
+            <div style="font-size:15px;font-weight:700">${e.name}</div>
+            <div style="font-size:12px;color:var(--muted)">${days===0?'Joined today!':days===1?'Joined yesterday':`Joined ${days} days ago`} · ${e.dept}</div>
+          </div>
+          <button class="btn" style="background:#059669;color:#fff;font-size:13px;padding:6px 14px" onclick="sendWelcomeWish('${e.id}')">👋 Welcome</button>
+        </div>`).join('')}
+      </div>`:''}
+
+    ${cel.sendoff.length?`
+      <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border-radius:10px;padding:12px 14px;border:1px solid #ddd6fe">
+        <div style="font-size:13px;font-weight:700;color:#5b21b6;margin-bottom:8px">💐 Farewell</div>
+        ${cel.sendoff.map(e=>`
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="font-size:28px">💐</div>
+          <div style="flex:1">
+            <div style="font-size:15px;font-weight:700">${e.name}</div>
+            <div style="font-size:12px;color:var(--muted)">${e.role} · ${e.dept}</div>
+          </div>
+          <button class="btn" style="background:#7c3aed;color:#fff;font-size:13px;padding:6px 14px" onclick="sendSendoffWish('${e.id}')">💐 Farewell</button>
+        </div>`).join('')}
+      </div>`:''}
+
+    </div>
+  </div>`;
+}
+
 function pgDashboard(){
   const active=D.employees.filter(e=>e.status==='Active').length;
   const pLeaves=D.leaves.filter(l=>l.status==='Pending').length;
@@ -2503,6 +2744,8 @@ function pgDashboard(){
   <div class="modules-grid" style="grid-template-columns:repeat(auto-fill,minmax(90px,1fr));margin-bottom:.75rem">
     ${mods.map(([ic,lb,pg])=>`<div class="mod-card" onclick="nav('${pg}')"><div class="mod-ic">${ic}</div><div class="mod-lb">${lb}</div>${pg==='notifications'&&unreadCount()>0?'<div class="mod-dot"></div>':''}</div>`).join('')}
   </div>
+
+  ${celebrationsPanel()}
 
   <div class="stat-grid" style="margin-bottom:.75rem">
     <div class="stat" style="padding:.6rem .875rem"><div class="stat-lbl">Total employees</div><div class="stat-val" style="font-size:20px">${D.employees.length}</div><div class="stat-sub">${DEPTS.length} departments</div></div>
