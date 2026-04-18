@@ -674,19 +674,20 @@ function renderApp(){
       if(!D.loggedIn||currentRole!=='admin') { clearInterval(window._adminRefreshTimer); window._adminRefreshTimer=null; return; }
       const prevEmpCount = D.employees.length;
       const prevLeaveCount = (D.leaves||[]).filter(l=>l.status==='Pending').length;
+      const prevSessionCount = (D.attSessions||[]).length;
       await syncFromSupabase();
       const newEmpCount = D.employees.length;
       const newLeaveCount = (D.leaves||[]).filter(l=>l.status==='Pending').length;
-      // Show toast if new employee registered
-      if(newEmpCount > prevEmpCount){
+      const newSessionCount = (D.attSessions||[]).length;
+      // Always re-render current page with fresh data
+      nav(currentPage);
+      // Show toasts for new events
+      if(newEmpCount > prevEmpCount)
         showToast(`👤 ${newEmpCount - prevEmpCount} new employee(s) joined!`, 'success');
-        nav(currentPage);
-      }
-      // Show toast if new leave request
-      if(newLeaveCount > prevLeaveCount){
+      if(newLeaveCount > prevLeaveCount)
         showToast(`🏖 New leave request pending approval`, 'info');
-        nav(currentPage);
-      }
+      if(newSessionCount > prevSessionCount)
+        showToast(`📍 New attendance check-in detected`, 'info');
     }, 30000);
   }
   const uc = unreadCount();
@@ -1768,8 +1769,8 @@ async function submitRegistration(){
 function logout(){
   D.loggedIn=false;currentRole='admin';currentEmployee=null;currentCompany=null;
   geoState={status:'idle'};frStopCamera();
-  // Clear auto-refresh timer
   if(window._adminRefreshTimer){clearInterval(window._adminRefreshTimer);window._adminRefreshTimer=null;}
+  if(window._empRefreshTimer){clearInterval(window._empRefreshTimer);window._empRefreshTimer=null;}
   save();renderApp();
 }
 
@@ -1797,6 +1798,15 @@ let empPage = 'emp-dashboard';
 function renderEmployeeApp(){
   const emp = currentEmployee;
   if(!emp){ logout(); return; }
+  // Start employee auto-refresh every 30 seconds
+  if(!window._empRefreshTimer){
+    window._empRefreshTimer = setInterval(async()=>{
+      if(!D.loggedIn||currentRole!=='employee'){clearInterval(window._empRefreshTimer);window._empRefreshTimer=null;return;}
+      await syncFromSupabase();
+      // Re-render only non-camera pages to avoid disrupting face scan
+      if(empPage!=='emp-attendance') navEmp(empPage);
+    }, 30000);
+  }
   $('root').innerHTML = `
   <div class="app">
     <div class="topbar" style="background:#0f766e">
