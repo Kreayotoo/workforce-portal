@@ -2188,11 +2188,11 @@ function pgAttendance(){
   const isToday=selDate===todayStr();
   // Match attendance by empId (could be UUID or emp_id) OR by empName
   const recs=D.attendance.filter(a=>a.date===selDate);
-  const findRec=(emp)=>recs.find(a=>
-    a.empName===emp.name ||
-    a.empId===emp._uuid ||
-    a.empId===emp.id
-  );
+  // Only use existing records strictly for the selected date — never carry over from other days
+  const findRec=(emp)=>{
+    const rec=recs.find(a=>a.empName===emp.name||a.empId===emp._uuid||a.empId===emp.id);
+    return rec||null; // Return null (not a default) so grid shows fresh Not marked
+  };
   const present=recs.filter(a=>a.status==='Present').length;
   const absent=recs.filter(a=>a.status==='Absent').length;
   return `
@@ -2215,8 +2215,7 @@ function pgAttendance(){
     <div class="card-hd" style="padding:1rem 1rem 0"><h3>Mark attendance — ${selDate}</h3></div>
     <table style="margin-top:8px"><thead><tr><th style="width:26%;padding-left:12px">Employee</th><th style="width:18%">Department</th><th style="width:15%">In time</th><th style="width:15%">Out time</th><th style="width:26%">Status</th></tr></thead>
     <tbody>${D.employees.map(e=>{
-      const r=findRec(e);
-      // For today: show existing record or fresh blank. For past dates: show existing or Not marked.
+      const r=findRec(e); // null if no record for this exact date
       const status=r?r.status:'Not marked';
       const inT=r?r.in||'09:00':'09:00';
       const outT=r?r.out||'18:00':'18:00';
@@ -2225,7 +2224,7 @@ function pgAttendance(){
       <td style="font-size:12px">${e.dept}</td>
       <td><input type="time" class="att-in" data-id="${e.id}" value="${inT}" style="width:100px"></td>
       <td><input type="time" class="att-out" data-id="${e.id}" value="${outT}" style="width:100px"></td>
-      <td><select class="att-st" data-id="${e.id}" style="width:130px">
+      <td><select class="att-st" data-id="${e.id}" style="width:130px;${status==='Present'?'background:#dcfce7;color:#166534':status==='Absent'?'background:#fee2e2;color:#991b1b':status==='Half Day'?'background:#fef3c7;color:#92400e':''}">
         <option ${status==='Present'?'selected':''}>Present</option>
         <option ${status==='Absent'?'selected':''}>Absent</option>
         <option ${status==='Half Day'?'selected':''}>Half Day</option>
@@ -2264,6 +2263,8 @@ async function saveAtt(){
   document.querySelectorAll('.att-st').forEach(s=>{
     const id=s.dataset.id,emp=D.employees.find(e=>e.id===id);
     if(!emp)return;
+    // Skip saving "Not marked" — only save actual statuses
+    if(s.value==='Not marked') return;
     const inT=document.querySelector(`.att-in[data-id="${id}"]`).value;
     const outT=document.querySelector(`.att-out[data-id="${id}"]`).value;
     // Find existing record by UUID, emp_id, or name — all for same date
