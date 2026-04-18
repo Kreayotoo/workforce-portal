@@ -2004,9 +2004,9 @@ async function startAttFaceScan(){
       const isMatch=frMatchSingleEmployee(result.descriptor, faceData.descriptor);
       if(isMatch){
         frStopCamera();
-        s.textContent='✅ Face verified! Marking attendance…';s.style.color='#166534';
         const now=new Date();
         const timeStr=now.toTimeString().slice(0,5);
+        s.textContent=`✅ Face verified! Marking Present at ${timeStr}…`;s.style.color='#166534';
         setTimeout(()=>submitFaceAtt(timeStr),800);
       } else {
         s.textContent='❌ Face not matching your enrolled face. Try again.';s.style.color='#ef4444';
@@ -2017,17 +2017,22 @@ async function startAttFaceScan(){
 
 async function submitFaceAtt(inTime){
   const emp=currentEmployee,today=todayStr();
+  // Capture exact current time with seconds
+  const now=new Date();
+  const exactTime=now.toTimeString().slice(0,8); // HH:MM:SS
+  const displayTime=now.toTimeString().slice(0,5); // HH:MM for display
+
   const existing=await sb('attendance','GET',null,`?employee_name=eq.${encodeURIComponent(emp.name)}&date=eq.${today}&select=id`);
   D.attendance=D.attendance.filter(a=>!(a.empName===emp.name&&a.date===today));
-  const rec={empId:emp._uuid||emp.id,empName:emp.name,date:today,status:'Present',in:inTime,out:'18:00'};
+  const rec={empId:emp._uuid||emp.id,empName:emp.name,date:today,status:'Present',in:displayTime,out:''};
   if(existing&&existing.length>0) rec._uuid=existing[0].id;
   D.attendance.unshift(rec);
   await sbSaveAttendance(rec);
-  const notif={msg:`${emp.name} marked Present via face scan`,type:'success',read:false};
+  const notif={msg:`${emp.name} marked Present at ${displayTime} via face scan`,type:'success',read:false};
   D.notifications.unshift({id:Date.now(),...notif,time:'Just now'});
   sbSaveNotification(notif);
   save();
-  showToast('✅ Attendance marked Present via face!','success');
+  showToast(`✅ Present marked at ${displayTime}`,'success');
   navEmp('emp-attendance');
 }
 
