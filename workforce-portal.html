@@ -2206,7 +2206,6 @@ async function startAttFaceScan(){
   const s=$('att-scan-status');
   if(s){s.textContent='Loading your face data…';s.style.color='var(--muted)';}
 
-  // Load this employee's specific face from Supabase
   const faceData=await frLoadFaceFromSupabase(emp.email);
   if(!faceData){
     if(s){s.textContent='Face not found. Please enroll your face first.';s.style.color='#ef4444';}
@@ -2214,30 +2213,58 @@ async function startAttFaceScan(){
     return;
   }
 
+  let _scanned=false; // prevent multiple triggers
+
   frStartCamera('att-scan-video','att-scan-canvas',result=>{
     const s=$('att-scan-status');
-    if(!s)return;
+    if(!s||_scanned)return;
     if(result.type==='cam-error'){s.textContent=result.msg;s.style.color='#ef4444';}
     else if(result.type==='no-face'){s.textContent='No face detected — look at camera';s.style.color='var(--muted)';}
     else if(result.type==='detected'){
       s.textContent='🔍 Verifying your face…';s.style.color='#0f766e';
-      // Match ONLY against this employee's own stored face
       const isMatch=frMatchSingleEmployee(result.descriptor, faceData.descriptor);
       if(isMatch){
+        _scanned=true; // STOP further scans immediately
         frStopCamera();
         const now=new Date();
         const timeStr=now.toTimeString().slice(0,5);
-        const emp=currentEmployee;
         const today=todayStr();
         const activeSession=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
+
+        // Show confirmation before submitting
         s.textContent=activeSession?`✅ Face verified! Checking OUT at ${timeStr}…`:`✅ Face verified! Checking IN at ${timeStr}…`;
         s.style.color='#166534';
-        setTimeout(()=>faceCheckIn(timeStr),800);
+
+        // Show confirm buttons
+        const scanWrap=$('att-scan-video')?.parentElement?.parentElement;
+        if(scanWrap){
+          const confirmDiv=document.createElement('div');
+          confirmDiv.style.cssText='display:flex;gap:8px;margin-top:10px';
+          confirmDiv.innerHTML=`
+            <button class="btn btn-sec" style="flex:1" onclick="attRescan()">🔄 Rescan</button>
+            <button class="btn btn-primary" style="flex:2;background:#0f766e" onclick="attConfirmScan('${timeStr}')">✅ Confirm ${activeSession?'Check Out':'Check In'}</button>
+          `;
+          scanWrap.appendChild(confirmDiv);
+        }
       } else {
-        s.textContent='❌ Face not matching your enrolled face. Try again.';s.style.color='#ef4444';
+        s.textContent='❌ Face not matching. Try again.';s.style.color='#ef4444';
+        // Reset after 2 seconds to try again
+        setTimeout(()=>{
+          if(!_scanned&&$('att-scan-status')) $('att-scan-status').textContent='Look at the camera and hold still';
+        },2000);
       }
     }
   });
+}
+
+function attRescan(){
+  frStopCamera();
+  navEmp('emp-attendance'); // Reload page to rescan
+}
+
+async function attConfirmScan(timeStr){
+  frStopCamera();
+  await faceCheckIn(timeStr);
 }
 
 async function submitFaceAtt(inTime){
