@@ -1573,11 +1573,11 @@ function renderEmployeeApp(){
 
 function empDashboard(){
   const emp=currentEmployee;
-  const myAtt=D.attendance.filter(a=>a.empId===emp.id);
+  const myAtt=D.attendance.filter(a=>a.empName===emp.name||a.empId===emp._uuid||a.empId===emp.id);
   const present=myAtt.filter(a=>a.status==='Present').length;
   const myLeaves=D.leaves.filter(l=>l.emp===emp.name);
   const approved=myLeaves.filter(l=>l.status==='Approved').reduce((s,l)=>s+(l.days||0),0);
-  const todayAtt=D.attendance.find(a=>a.empId===emp.id&&a.date===todayStr());
+  const todayAtt=D.attendance.find(a=>a.empName===emp.name&&a.date===todayStr()||a.empId===emp._uuid&&a.date===todayStr());
   const pf=Math.round((emp.salary||0)*.12),tds=Math.round((emp.salary||0)*.1),net=(emp.salary||0)-pf-tds;
   return `
   <div class="page-hd">
@@ -1620,7 +1620,7 @@ function empDashboard(){
 function empAttendance(){
   const emp=currentEmployee;
   const today=todayStr();
-  const existing=D.attendance.find(a=>a.empId===emp.id&&a.date===today);
+  const existing=D.attendance.find(a=>a.empName===emp.name&&a.date===today||a.empId===emp._uuid&&a.date===today);
   return `
   <div class="page-hd"><div class="pg-title">Mark attendance</div></div>
   <div class="card" style="max-width:480px">
@@ -1643,7 +1643,7 @@ function empAttendance(){
   <div class="card" style="margin-top:1rem;padding:0">
     <div class="card-hd" style="padding:1rem 1rem 0"><h3>My attendance history</h3></div>
     <table style="margin-top:8px"><thead><tr><th style="width:30%;padding-left:12px">Date</th><th style="width:20%">In</th><th style="width:20%">Out</th><th style="width:30%">Status</th></tr></thead>
-    <tbody>${D.attendance.filter(a=>a.empId===emp.id).slice(0,20).map(a=>`<tr><td style="padding-left:12px">${a.date}</td><td>${a.in||'--'}</td><td>${a.out||'--'}</td><td>${badge(a.status)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;padding:1rem;color:var(--muted)">No records yet</td></tr>'}</tbody></table>
+    <tbody>${D.attendance.filter(a=>a.empName===emp.name||a.empId===emp._uuid||a.empId===emp.id).slice(0,20).map(a=>`<tr><td style="padding-left:12px">${a.date}</td><td>${a.in||'--'}</td><td>${a.out||'--'}</td><td>${badge(a.status)}</td></tr>`).join('')||'<tr><td colspan="4" style="text-align:center;padding:1rem;color:var(--muted)">No records yet</td></tr>'}</tbody></table>
   </div>`;
 }
 
@@ -1651,7 +1651,7 @@ async function submitEmpAtt(){
   const emp=currentEmployee,today=todayStr();
   const status=$('emp-att-status').value,inT=$('emp-in').value,outT=$('emp-out').value;
   // Remove existing local record
-  D.attendance=D.attendance.filter(a=>!(a.empId===emp.id&&a.date===today));
+  D.attendance=D.attendance.filter(a=>!(a.empName===emp.name&&a.date===today||a.empId===emp._uuid&&a.date===today));
   const rec={empId:emp._uuid||emp.id,empName:emp.name,date:today,status,in:inT,out:outT};
   // Check if record exists in Supabase
   const existing=await sb('attendance','GET',null,`?employee_name=eq.${encodeURIComponent(emp.name)}&date=eq.${today}&select=id`);
@@ -2189,7 +2189,9 @@ function pgAttendance(){
   // Match attendance by empId (could be UUID or emp_id) OR by empName
   const recs=D.attendance.filter(a=>a.date===selDate);
   const findRec=(emp)=>recs.find(a=>
-    a.empId===emp._uuid || a.empId===emp.id || a.empName===emp.name
+    a.empName===emp.name ||
+    a.empId===emp._uuid ||
+    a.empId===emp.id
   );
   const present=recs.filter(a=>a.status==='Present').length;
   const absent=recs.filter(a=>a.status==='Absent').length;
