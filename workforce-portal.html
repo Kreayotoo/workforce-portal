@@ -406,7 +406,6 @@ async function syncFromSupabase(){
     if(hols!==null&&hols.length) D.holidays=hols.map(h=>({_uuid:h.id,id:h.id,name:h.name,date:h.date,type:h.type||'National'}));
     if(locs!==null&&locs.length) D.officeLocations=locs.map(l=>({_uuid:l.id,id:l.location_id,name:l.name,lat:parseFloat(l.lat),lng:parseFloat(l.lng),radius:l.radius||500,color:l.color||'#3b82f6'}));
     if(sessions!==null){
-      // Merge Supabase sessions with local ones (keep local photos)
       const localSessions=D.attSessions||[];
       D.attSessions=sessions.map(s=>{
         const local=localSessions.find(l=>l._uuid===s.id);
@@ -414,7 +413,7 @@ async function syncFromSupabase(){
           _uuid:s.id,_localId:s.id,empName:s.employee_name,empId:s.employee_id,
           date:s.date,checkIn:s.check_in,checkOut:s.check_out||null,
           location:s.location||'',lat:s.latitude,lng:s.longitude,
-          photo:local?.photo||'' // Keep local photo if available
+          photo:s.photo||local?.photo||'' // Load from Supabase first, fallback to local
         };
       });
     }
@@ -2033,7 +2032,7 @@ async function checkInNow(){
   const r=await sb('attendance_sessions','POST',{
     employee_id:emp._uuid||null,employee_name:emp.name,date:today,
     check_in:session.checkIn,location:session.location,
-    latitude:session.lat,longitude:session.lng,
+    latitude:session.lat,longitude:session.lng,photo:null,
     company_id:currentCompany?currentCompany.company_id:'KSPL'
   });
   if(r&&r[0]) session._uuid=r[0].id;
@@ -2152,6 +2151,7 @@ async function faceCheckIn(timeStr, photo=''){
       employee_id:emp._uuid||null,employee_name:emp.name,date:today,
       check_in:session.checkIn,location:session.location,
       latitude:session.lat,longitude:session.lng,
+      photo:photo||null,
       company_id:currentCompany?currentCompany.company_id:'KSPL'
     });
     if(r&&r[0]) session._uuid=r[0].id;
