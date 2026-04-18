@@ -386,6 +386,7 @@ async function syncFromSupabase(){
     const companies = await sb('companies','GET',null,'?select=*').catch(()=>null);
     const hols = await sb('holidays','GET',null,`?select=*${cFilter}&order=date.asc`).catch(()=>null);
     const locs = await sb('office_locations','GET',null,`?select=*${cFilter}`).catch(()=>null);
+    const sessions = await sb('attendance_sessions','GET',null,`?select=*${cFilter}&order=check_in.desc&limit=200`).catch(()=>null);
 
     if(emps!==null) D.employees=emps.map(e=>({
       id:e.emp_id||e.id,_uuid:e.id,name:e.name,email:e.email,
@@ -404,6 +405,19 @@ async function syncFromSupabase(){
     if(companies!==null) D.companies=companies;
     if(hols!==null&&hols.length) D.holidays=hols.map(h=>({_uuid:h.id,id:h.id,name:h.name,date:h.date,type:h.type||'National'}));
     if(locs!==null&&locs.length) D.officeLocations=locs.map(l=>({_uuid:l.id,id:l.location_id,name:l.name,lat:parseFloat(l.lat),lng:parseFloat(l.lng),radius:l.radius||500,color:l.color||'#3b82f6'}));
+    if(sessions!==null){
+      // Merge Supabase sessions with local ones (keep local photos)
+      const localSessions=D.attSessions||[];
+      D.attSessions=sessions.map(s=>{
+        const local=localSessions.find(l=>l._uuid===s.id);
+        return {
+          _uuid:s.id,_localId:s.id,empName:s.employee_name,empId:s.employee_id,
+          date:s.date,checkIn:s.check_in,checkOut:s.check_out||null,
+          location:s.location||'',lat:s.latitude,lng:s.longitude,
+          photo:local?.photo||'' // Keep local photo if available
+        };
+      });
+    }
     SB_READY=true;
     saveData(D);
     hideSyncBanner();
@@ -1084,45 +1098,22 @@ function renderLogin(){
       <div id="emp-login-tab" class="hidden">
         <div id="geo-box-wrap-emp">${geoBoxHTML()}</div>
         <div id="emp-login-err"></div>
-
-        <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:1rem">
-          <button id="emp-meth-face" onclick="setEmpLoginMethod('face')" style="flex:1;padding:9px;border:none;background:#0f766e;color:#fff;font-weight:700;font-size:12px;cursor:pointer">🎭 Face login</button>
-          <button id="emp-meth-pass" onclick="setEmpLoginMethod('pass')" style="flex:1;padding:9px;border:none;background:var(--white);color:var(--muted);font-weight:600;font-size:12px;cursor:pointer">🔑 Password</button>
+        <div id="emp-login-form">
+          <div class="fld"><label>Your work email</label><input type="email" id="emp-email" placeholder="yourname@company.com" autocomplete="username"></div>
+          <div class="fld"><label>Password</label><input type="password" id="emp-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doEmpLogin()"></div>
+          <button class="btn btn-primary" style="width:100%;padding:10px;background:#0f766e" onclick="doEmpLogin()">Sign in as Employee</button>
         </div>
-
-        <div id="emp-face-login-panel">
-          <div class="fld"><label>Your work email</label>
-            <input type="email" id="emp-face-email" placeholder="yourname@company.com" autocomplete="username">
+        <div id="emp-otp-form" class="hidden">
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:1rem;font-size:12px;color:#1e40af">
+            📧 OTP sent to <strong id="emp-otp-email-show"></strong>
           </div>
-          <div id="emp-face-email-err"></div>
-          <button class="btn btn-primary" style="width:100%;background:#0f766e;margin-bottom:1rem" onclick="startEmpFaceLoginForEmail()">Start Face Scan →</button>
-          <div id="emp-face-scan-wrap" class="hidden">
-            <div style="position:relative;width:100%;max-width:320px;margin:0 auto 8px">
-              <video id="emp-face-video" autoplay muted playsinline style="width:100%;border-radius:8px;background:#000"></video>
-              <canvas id="emp-face-canvas" style="position:absolute;top:0;left:0;width:100%;border-radius:8px"></canvas>
-            </div>
-            <div id="emp-face-status" style="font-size:13px;font-weight:600;text-align:center;margin-bottom:8px;color:var(--muted)">Loading camera…</div>
+          <div class="fld"><label>Enter OTP *</label>
+            <input type="text" id="emp-otp-input" placeholder="Enter 6-digit code" maxlength="6"
+              style="letter-spacing:8px;font-size:20px;font-weight:700;text-align:center"
+              onkeydown="if(event.key==='Enter')empVerifyOTP()">
           </div>
-          <div style="text-align:center;font-size:11px;color:var(--muted)">Not working? <span style="cursor:pointer;color:#0f766e;font-weight:600" onclick="setEmpLoginMethod('pass')">Use password instead</span></div>
-        </div>
-
-        <div id="emp-pass-login-panel" class="hidden">
-          <div id="emp-login-form">
-            <div class="fld"><label>Your work email</label><input type="email" id="emp-email" placeholder="yourname@company.com" autocomplete="username"></div>
-            <div class="fld"><label>Password</label><input type="password" id="emp-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doEmpLogin()"></div>
-            <button class="btn btn-primary" style="width:100%;padding:10px;background:#0f766e" onclick="doEmpLogin()">Sign in as Employee</button>
-          </div>
-          <div id="emp-otp-form" class="hidden">
-            <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:1rem;font-size:12px;color:#1e40af">
-              📧 OTP sent to <strong id="emp-otp-email-show"></strong>
-            </div>
-            <div class="fld"><label>Enter OTP *</label>
-              <input type="text" id="emp-otp-input" placeholder="Enter 6-digit code" maxlength="6"
-                style="letter-spacing:8px;font-size:20px;font-weight:700;text-align:center"
-                onkeydown="if(event.key==='Enter')empVerifyOTP()">
-            </div>
-            <div id="emp-otp-timer" style="font-size:12px;color:var(--muted);margin-bottom:8px;text-align:center"></div>
-            <div id="emp-otp-err"></div>
+          <div id="emp-otp-timer" style="font-size:12px;color:var(--muted);margin-bottom:8px;text-align:center"></div>
+          <div id="emp-otp-err"></div>
             <div style="display:flex;gap:8px;margin-top:.5rem">
               <button class="btn btn-sec" style="flex:1" onclick="empOTPBack()">← Back</button>
               <button class="btn btn-primary" style="flex:2;background:#0f766e" onclick="empVerifyOTP()">Verify & Sign in</button>
@@ -1131,7 +1122,6 @@ function renderLogin(){
               Didn't receive? <span style="color:#0f766e;cursor:pointer;font-weight:600" onclick="empResendOTP()">Resend OTP</span>
             </div>
           </div>
-        </div>
 
         <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--muted)">
           New here? <span style="color:#0f766e;cursor:pointer;font-weight:700" onclick="showRegister()">Create your account →</span>
@@ -1152,7 +1142,7 @@ function switchLoginTab(tab){
     const btn=$(`tab-${t}`);
     if(btn) btn.style.cssText=`flex:1;padding:9px;border:none;background:${t===tab?colors[t]:'var(--white)'};color:${t===tab?'#fff':'var(--muted)'};font-weight:${t===tab?700:600};font-size:12px;cursor:pointer`;
   });
-  if(tab==='emp'){frStopCamera();captureGeo();setTimeout(()=>startEmpFaceLogin(),200);}
+  if(tab==='emp'){frStopCamera();captureGeo();}
   else if(tab==='admin'){frStopCamera();setTimeout(startFaceScan,100);captureGeo();}
   else{frStopCamera();}
 }
@@ -2020,43 +2010,36 @@ function initAttGeo(callback){
 
 async function checkInNow(){
   const emp=currentEmployee;
-  const now=new Date();
   const today=todayStr();
+
+  // Block if already checked in
+  const activeSession=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
+  if(activeSession){
+    showToast('⚠️ Already checked in! Check out first before checking in again.','info');
+    return;
+  }
+
+  const now=new Date();
   const btn=document.querySelector('.card button[onclick="checkInNow()"]');
   if(btn){btn.disabled=true;btn.textContent='Checking in…';}
 
-  // Get location first
   await new Promise(resolve=>initAttGeo(resolve));
 
   const session={
-    _localId:Date.now(),
-    empName:emp.name,
-    empId:emp._uuid||emp.id,
-    date:today,
-    checkIn:now.toISOString(),
-    checkOut:null,
-    location:_attGeoState.address||'',
-    lat:_attGeoState.lat||null,
-    lng:_attGeoState.lng||null
+    _localId:Date.now(),empName:emp.name,empId:emp._uuid||emp.id,date:today,
+    checkIn:now.toISOString(),checkOut:null,
+    location:_attGeoState.address||'',lat:_attGeoState.lat||null,lng:_attGeoState.lng||null
   };
-
-  // Save to Supabase
   const r=await sb('attendance_sessions','POST',{
-    employee_id:emp._uuid||null,
-    employee_name:emp.name,
-    date:today,
-    check_in:session.checkIn,
-    location:session.location,
-    latitude:session.lat,
-    longitude:session.lng,
+    employee_id:emp._uuid||null,employee_name:emp.name,date:today,
+    check_in:session.checkIn,location:session.location,
+    latitude:session.lat,longitude:session.lng,
     company_id:currentCompany?currentCompany.company_id:'KSPL'
   });
   if(r&&r[0]) session._uuid=r[0].id;
-
   if(!D.attSessions) D.attSessions=[];
   D.attSessions.unshift(session);
   save();
-
   showToast(`✅ Checked in at ${now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}${session.location?' — '+session.location:''}`, 'success');
   navEmp('emp-attendance');
 }
@@ -2138,15 +2121,27 @@ async function faceCheckIn(timeStr, photo=''){
   const activeSession=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
 
   if(activeSession){
-    // Check out — save checkout photo too
+    // Check OUT
     activeSession.checkOut=now.toISOString();
     activeSession.checkOutPhoto=photo||'';
     activeSession.checkOutLocation=_attGeoState.address||'';
     if(activeSession._uuid) await sb('attendance_sessions','PATCH',{check_out:activeSession.checkOut},`?id=eq.${activeSession._uuid}`);
+
+    // Update main attendance record
+    const todaySessions=D.attSessions.filter(s=>s.empName===emp.name&&s.date===today);
+    let totalMins=0;
+    todaySessions.forEach(s=>{if(s.checkIn&&s.checkOut)totalMins+=(new Date(s.checkOut)-new Date(s.checkIn))/60000;});
+    const status=totalMins>=240?'Present':totalMins>=120?'Half Day':'Present';
+    const firstSession=todaySessions[todaySessions.length-1];
+    const existing=await sb('attendance','GET',null,`?employee_name=eq.${encodeURIComponent(emp.name)}&date=eq.${today}&select=id`);
+    const attPayload={employee_id:emp._uuid||null,employee_name:emp.name,date:today,status,in_time:new Date(firstSession.checkIn).toTimeString().slice(0,5),out_time:now.toTimeString().slice(0,5),company_id:currentCompany?currentCompany.company_id:'KSPL'};
+    if(existing&&existing.length>0) await sb('attendance','PATCH',attPayload,`?id=eq.${existing[0].id}`);
+    else await sb('attendance','POST',attPayload);
+
     save();
     showToast(`✅ Checked OUT at ${timeStr}`, 'success');
   } else {
-    // Check in — save checkin photo
+    // Check IN — save with photo
     const session={
       _localId:Date.now(),empName:emp.name,empId:emp._uuid||emp.id,date:today,
       checkIn:now.toISOString(),checkOut:null,
