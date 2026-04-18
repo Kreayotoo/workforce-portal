@@ -763,17 +763,43 @@ function geoBoxHTML(){
   return '';
 }
 
+// ─── PRECISE REVERSE GEOCODING ───────────────────────────────────
+async function getLocationName(lat, lng){
+  try{
+    const r=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&zoom=18&addressdetails=1`);
+    const d=await r.json();
+    const a=d.address||{};
+    // Priority: most specific → least specific
+    // quarter/neighbourhood/road are more precise than suburb
+    const specific=a.amenity||a.building||a.tourism||a.leisure||'';
+    const street=a.road||a.pedestrian||a.path||'';
+    const local=a.quarter||a.neighbourhood||a.residential||a.hamlet||'';
+    const area=a.suburb||a.village||a.town_district||'';
+    const city=a.city||a.town||a.municipality||a.county||'';
+
+    // Build location string from most specific available parts
+    if(specific && street) return `${specific}, ${street}, ${city}`;
+    if(specific) return `${specific}, ${city}`;
+    if(local && city) return `${local}, ${city}`;
+    if(street && city) return `${street}, ${city}`;
+    if(area && city) return `${area}, ${city}`;
+    if(city) return city;
+    return d.display_name?.split(',').slice(0,2).join(',').trim()||'Location detected';
+  }catch(e){
+    return 'Location detected';
+  }
+}
+
 function captureGeo(){
   if(!navigator.geolocation){geoState={status:'error',error:'Geolocation not supported'};if($('geo-box-wrap'))$('geo-box-wrap').innerHTML=geoBoxHTML();return;}
   geoState={status:'loading'};if($('geo-box-wrap'))$('geo-box-wrap').innerHTML=geoBoxHTML();
   navigator.geolocation.getCurrentPosition(
     pos=>{
       geoState={status:'ok',lat:pos.coords.latitude,lng:pos.coords.longitude,accuracy:pos.coords.accuracy,city:null,address:null};
-      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`)
-        .then(r=>r.json()).then(d=>{
-          geoState.city=d.address?.city||d.address?.town||d.address?.village||'';
-          geoState.address=(d.address?.road?d.address.road+', ':'')+geoState.city;
-        }).catch(()=>{}).finally(()=>{if($('geo-box-wrap'))$('geo-box-wrap').innerHTML=geoBoxHTML();});
+      getLocationName(pos.coords.latitude,pos.coords.longitude).then(name=>{
+        geoState.address=name;
+        geoState.city=name;
+      }).catch(()=>{}).finally(()=>{if($('geo-box-wrap'))$('geo-box-wrap').innerHTML=geoBoxHTML();});
     },
     err=>{const m={1:'Location permission denied',2:'Position unavailable',3:'Request timed out'};geoState={status:'error',error:m[err.code]||err.message};if($('geo-box-wrap'))$('geo-box-wrap').innerHTML=geoBoxHTML();}
     ,{timeout:10000,enableHighAccuracy:true}
@@ -1986,21 +2012,17 @@ function initAttGeo(callback){
   navigator.geolocation.getCurrentPosition(
     pos=>{
       _attGeoState={status:'ok',lat:pos.coords.latitude,lng:pos.coords.longitude};
-      // Reverse geocode
-      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`)
-        .then(r=>r.json()).then(d=>{
-          const area=d.address?.suburb||d.address?.neighbourhood||d.address?.road||d.address?.city||d.address?.town||'';
-          const city=d.address?.city||d.address?.town||d.address?.state_district||'';
-          _attGeoState.address=area?`${area}, ${city}`:city||'Location detected';
-          const el=$('att-location-status');
-          if(el)el.textContent=`📍 ${_attGeoState.address}`;
-          if(callback)callback();
-        }).catch(()=>{
-          _attGeoState.address='Location detected';
-          const el=$('att-location-status');
-          if(el)el.textContent='📍 Location detected';
-          if(callback)callback();
-        });
+      getLocationName(pos.coords.latitude,pos.coords.longitude).then(name=>{
+        _attGeoState.address=name;
+        const el=$('att-location-status');
+        if(el)el.textContent=`📍 ${name}`;
+        if(callback)callback();
+      }).catch(()=>{
+        _attGeoState.address='Location detected';
+        const el=$('att-location-status');
+        if(el)el.textContent='📍 Location detected';
+        if(callback)callback();
+      });
     },
     ()=>{_attGeoState={status:'error'};const el=$('att-location-status');if(el)el.textContent='📍 Location unavailable';if(callback)callback();},
     {timeout:8000,enableHighAccuracy:true}
@@ -2104,13 +2126,9 @@ async function faceCheckIn(timeStr, photo=''){
     navigator.geolocation.getCurrentPosition(
       pos=>{
         _attGeoState={status:'ok',lat:pos.coords.latitude,lng:pos.coords.longitude};
-        fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`)
-          .then(r=>r.json()).then(d=>{
-            const area=d.address?.suburb||d.address?.neighbourhood||d.address?.road||'';
-            const city=d.address?.city||d.address?.town||'';
-            _attGeoState.address=area?`${area}, ${city}`:city;
-            resolve();
-          }).catch(()=>resolve());
+        getLocationName(pos.coords.latitude,pos.coords.longitude)
+          .then(name=>{_attGeoState.address=name;resolve();})
+          .catch(()=>resolve());
       },
       ()=>{_attGeoState={status:'error'};resolve();},
       {timeout:5000,enableHighAccuracy:true}
