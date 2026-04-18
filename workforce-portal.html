@@ -1923,21 +1923,30 @@ function empAttendance(){
 
     ${sessions.length>0?`
     <div style="margin-top:4px">
-      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">TODAY'S SESSIONS</div>
-      ${sessions.map((s,i)=>`
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f3f4f6">
-        <div style="width:28px;height:28px;border-radius:50%;background:${s.checkOut?'#dcfce7':'#fef3c7'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${s.checkOut?'#166534':'#92400e'}">${i+1}</div>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">
-            ${new Date(s.checkIn).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}
-            ${s.checkOut?` → ${new Date(s.checkOut).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`:'→ <span style="color:#0f766e">Active</span>'}
+      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;letter-spacing:.5px">TODAY'S SESSIONS</div>
+      ${sessions.map((s,i)=>{
+        const cin=new Date(s.checkIn);
+        const cout=s.checkOut?new Date(s.checkOut):null;
+        const dur=cout?`${Math.floor((cout-cin)/3600000)}h ${Math.floor(((cout-cin)%3600000)/60000)}m`:'ongoing';
+        return `
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #f3f4f6">
+          ${s.photo?`<img src="${s.photo}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;border:2px solid ${s.checkOut?'#bbf7d0':'#fde68a'};flex-shrink:0">`:`<div style="width:48px;height:48px;border-radius:8px;background:${s.checkOut?'#dcfce7':'#fef3c7'};display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${s.checkOut?'✅':'🟢'}</div>`}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700;color:${s.checkOut?'#166534':'#0f766e'}">
+              Session ${i+1} · ${dur}
+            </div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">
+              🕐 ${cin.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}
+              ${cout?` → ${cout.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`:' → <span style="color:#0f766e;font-weight:600">Active</span>'}
+            </div>
+            ${s.location?`<div style="font-size:11px;color:var(--muted);margin-top:2px">📍 ${s.location}</div>`:''}
+            ${s.checkOutLocation&&s.checkOutLocation!==s.location?`<div style="font-size:11px;color:var(--muted);margin-top:1px">📍 Out: ${s.checkOutLocation}</div>`:''}
           </div>
-          ${s.location?`<div style="font-size:11px;color:var(--muted)">📍 ${s.location}</div>`:''}
-        </div>
-        <div style="font-size:12px;font-weight:600;color:var(--muted)">
-          ${s.checkOut?`${Math.floor((new Date(s.checkOut)-new Date(s.checkIn))/3600000)}h ${Math.floor(((new Date(s.checkOut)-new Date(s.checkIn))%3600000)/60000)}m`:'ongoing'}
-        </div>
-      </div>`).join('')}
+          <div style="font-size:11px;text-align:right;flex-shrink:0">
+            <span style="background:${s.checkOut?'#dcfce7':'#fef3c7'};color:${s.checkOut?'#166534':'#92400e'};padding:2px 8px;border-radius:20px;font-weight:600">${s.checkOut?'Done':'Active'}</span>
+          </div>
+        </div>`;
+      }).join('')}
     </div>`:''}
   </div>
 
@@ -2102,8 +2111,7 @@ async function checkOutNow(){
   navEmp('emp-attendance');
 }
 
-// Auto check-in via face scan
-async function faceCheckIn(timeStr){
+async function faceCheckIn(timeStr, photo=''){
   const emp=currentEmployee;
   const now=new Date();
   const today=todayStr();
@@ -2130,17 +2138,20 @@ async function faceCheckIn(timeStr){
   const activeSession=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
 
   if(activeSession){
-    // Already checked in — check out
+    // Check out — save checkout photo too
     activeSession.checkOut=now.toISOString();
+    activeSession.checkOutPhoto=photo||'';
+    activeSession.checkOutLocation=_attGeoState.address||'';
     if(activeSession._uuid) await sb('attendance_sessions','PATCH',{check_out:activeSession.checkOut},`?id=eq.${activeSession._uuid}`);
     save();
     showToast(`✅ Checked OUT at ${timeStr}`, 'success');
   } else {
-    // Check in
+    // Check in — save checkin photo
     const session={
       _localId:Date.now(),empName:emp.name,empId:emp._uuid||emp.id,date:today,
       checkIn:now.toISOString(),checkOut:null,
-      location:_attGeoState.address||'',lat:_attGeoState.lat||null,lng:_attGeoState.lng||null
+      location:_attGeoState.address||'',lat:_attGeoState.lat||null,lng:_attGeoState.lng||null,
+      photo:photo||''
     };
     const r=await sb('attendance_sessions','POST',{
       employee_id:emp._uuid||null,employee_name:emp.name,date:today,
@@ -2213,7 +2224,7 @@ async function startAttFaceScan(){
     return;
   }
 
-  let _scanned=false; // prevent multiple triggers
+  let _scanned=false;
 
   frStartCamera('att-scan-video','att-scan-canvas',result=>{
     const s=$('att-scan-status');
@@ -2224,33 +2235,47 @@ async function startAttFaceScan(){
       s.textContent='🔍 Verifying your face…';s.style.color='#0f766e';
       const isMatch=frMatchSingleEmployee(result.descriptor, faceData.descriptor);
       if(isMatch){
-        _scanned=true; // STOP further scans immediately
+        _scanned=true;
+        // Capture photo from video at this exact moment
+        const video=$('att-scan-video');
+        let photoDataUrl='';
+        if(video){
+          const canvas=document.createElement('canvas');
+          canvas.width=video.videoWidth||320;
+          canvas.height=video.videoHeight||240;
+          canvas.getContext('2d').drawImage(video,0,0);
+          photoDataUrl=canvas.toDataURL('image/jpeg',0.7);
+        }
         frStopCamera();
         const now=new Date();
         const timeStr=now.toTimeString().slice(0,5);
         const today=todayStr();
         const activeSession=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
 
-        // Show confirmation before submitting
         s.textContent=activeSession?`✅ Face verified! Checking OUT at ${timeStr}…`:`✅ Face verified! Checking IN at ${timeStr}…`;
         s.style.color='#166534';
 
-        // Show confirm buttons
-        const scanWrap=$('att-scan-video')?.parentElement?.parentElement;
+        // Show captured photo preview + confirm buttons
+        const scanWrap=s.parentElement;
         if(scanWrap){
           const confirmDiv=document.createElement('div');
-          confirmDiv.style.cssText='display:flex;gap:8px;margin-top:10px';
+          confirmDiv.id='att-confirm-div';
+          confirmDiv.style.cssText='margin-top:10px';
           confirmDiv.innerHTML=`
-            <button class="btn btn-sec" style="flex:1" onclick="attRescan()">🔄 Rescan</button>
-            <button class="btn btn-primary" style="flex:2;background:#0f766e" onclick="attConfirmScan('${timeStr}')">✅ Confirm ${activeSession?'Check Out':'Check In'}</button>
-          `;
+            ${photoDataUrl?`<div style="text-align:center;margin-bottom:10px">
+              <img src="${photoDataUrl}" style="width:120px;height:90px;object-fit:cover;border-radius:10px;border:3px solid #0f766e">
+              <div style="font-size:11px;color:var(--muted);margin-top:4px">Captured photo</div>
+            </div>`:''}
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-sec" style="flex:1" onclick="attRescan()">🔄 Rescan</button>
+              <button class="btn btn-primary" style="flex:2;background:#0f766e" onclick="attConfirmScan('${timeStr}','${encodeURIComponent(photoDataUrl)}')">✅ Confirm ${activeSession?'Check Out':'Check In'}</button>
+            </div>`;
           scanWrap.appendChild(confirmDiv);
         }
       } else {
         s.textContent='❌ Face not matching. Try again.';s.style.color='#ef4444';
-        // Reset after 2 seconds to try again
         setTimeout(()=>{
-          if(!_scanned&&$('att-scan-status')) $('att-scan-status').textContent='Look at the camera and hold still';
+          if(!_scanned&&$('att-scan-status'))$('att-scan-status').textContent='Look at the camera and hold still';
         },2000);
       }
     }
@@ -2259,12 +2284,16 @@ async function startAttFaceScan(){
 
 function attRescan(){
   frStopCamera();
-  navEmp('emp-attendance'); // Reload page to rescan
+  const d=$('att-confirm-div');if(d)d.remove();
+  const s=$('att-scan-status');
+  if(s){s.textContent='Loading camera…';s.style.color='var(--muted)';}
+  setTimeout(()=>startAttFaceScan(),500);
 }
 
-async function attConfirmScan(timeStr){
+async function attConfirmScan(timeStr, photoEncoded){
   frStopCamera();
-  await faceCheckIn(timeStr);
+  const photo=photoEncoded?decodeURIComponent(photoEncoded):'';
+  await faceCheckIn(timeStr, photo);
 }
 
 async function submitFaceAtt(inTime){
