@@ -2885,77 +2885,60 @@ function pgAttendance(){
     <div class="stat"><div class="stat-lbl">Rate</div><div class="stat-val">${(present+absent)?Math.round(present/(present+absent)*100):0}%</div></div>
   </div>
 
-  ${dateSessions.length>0?`
-  <div class="card" style="margin-bottom:1rem">
-    <div class="card-hd"><h3>📸 Face check-ins — ${selDate}</h3><span class="muted">${dateSessions.length} sessions</span></div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:.5rem">
-      ${[...new Set(dateSessions.map(s=>s.empName))].map(name=>{
-        const empSessions=dateSessions.filter(s=>s.empName===name);
-        const firstIn=empSessions[empSessions.length-1];
-        const lastOut=empSessions.find(s=>s.checkOut);
-        let totalMins=0;
-        empSessions.forEach(s=>{if(s.checkIn&&s.checkOut)totalMins+=(new Date(s.checkOut)-new Date(s.checkIn))/60000;});
-        const emp=D.employees.find(e=>e.name===name);
-        const activeNow=empSessions.some(s=>!s.checkOut);
-        return `
-        <div style="border:1px solid var(--border);border-radius:12px;overflow:hidden;background:#fff">
-          <div style="background:${activeNow?'#0f766e':'#1a1a4e'};color:#fff;padding:8px 12px;display:flex;align-items:center;gap:8px">
-            ${firstIn?.photo?`<img src="${firstIn.photo}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,.5)">`:`<div style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700">${initials(name)}</div>`}
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${name}</div>
-              <div style="font-size:10px;opacity:.7">${emp?emp.role:''}</div>
-            </div>
-            <span style="background:${activeNow?'rgba(255,255,255,.25)':'rgba(255,255,255,.15)'};padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700">${activeNow?'🟢 Active':'✅ Done'}</span>
-          </div>
-          <div style="padding:10px 12px">
-            ${empSessions.map((s,i)=>`
-            <div style="display:flex;align-items:center;gap:8px;padding:4px 0;${i<empSessions.length-1?'border-bottom:1px solid #f3f4f6':''}">
-              ${s.photo?`<img src="${s.photo}" style="width:28px;height:28px;border-radius:6px;object-fit:cover;border:1px solid #e2e5ea;flex-shrink:0">`:
-              `<div style="width:28px;height:28px;border-radius:6px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0">${i+1}</div>`}
-              <div style="flex:1;min-width:0">
-                <div style="font-size:11px;font-weight:600">
-                  ${new Date(s.checkIn).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}
-                  ${s.checkOut?`→ ${new Date(s.checkOut).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`:'→ <span style="color:#0f766e">Active</span>'}
-                </div>
-                ${s.location?`<div style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📍 ${s.location}</div>`:''}
-              </div>
-            </div>`).join('')}
-            <div style="margin-top:8px;padding-top:6px;border-top:1px solid #f3f4f6;display:flex;justify-content:space-between;font-size:11px">
-              <span style="color:var(--muted)">${empSessions.length} session${empSessions.length!==1?'s':''}</span>
-              <span style="font-weight:700;color:#0f766e">${Math.floor(totalMins/60)}h ${Math.floor(totalMins%60)}m total</span>
-            </div>
-          </div>
-        </div>`;
-      }).join('')}
-    </div>
-    <div style="margin-top:8px;text-align:right">
-      <button class="btn btn-sec" style="font-size:12px" onclick="loadAdminSessions('${selDate}')">🔄 Load from database</button>
-    </div>
-  </div>`:`
-  <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:1rem;font-size:13px;color:var(--muted);text-align:center">
-    No face check-in sessions for ${selDate}.
-    <button class="btn btn-sec" style="font-size:12px;margin-left:8px" onclick="loadAdminSessions('${selDate}')">🔄 Load from database</button>
-  </div>`}
-
   <div class="card" style="padding:0;margin-bottom:1rem">
     <div class="card-hd" style="padding:1rem 1rem 0"><h3>Mark attendance — ${selDate}</h3></div>
-    <table style="margin-top:8px"><thead><tr><th style="width:26%;padding-left:12px">Employee</th><th style="width:18%">Department</th><th style="width:15%">In time</th><th style="width:15%">Out time</th><th style="width:26%">Status</th></tr></thead>
+    <table style="margin-top:8px"><thead><tr>
+      <th style="width:28%;padding-left:12px">Employee</th>
+      <th style="width:14%">In time</th>
+      <th style="width:14%">Out time</th>
+      <th style="width:20%">Status</th>
+      <th style="width:24%">Sessions & Location</th>
+    </tr></thead>
     <tbody>${D.employees.map(e=>{
       const r=findRec(e);
       const status=r?r.status:'Not marked';
       const inT=r?r.in||'09:00':'09:00';
       const outT=r?r.out||'18:00':'18:00';
-      return`<tr>
-      <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:8px">${av(e.name)}${e.name}</div></td>
-      <td style="font-size:12px">${e.dept}</td>
-      <td><input type="time" class="att-in" data-id="${e.id}" value="${inT}" style="width:100px"></td>
-      <td><input type="time" class="att-out" data-id="${e.id}" value="${outT}" style="width:100px"></td>
-      <td><select class="att-st" data-id="${e.id}" style="width:130px;${status==='Present'?'background:#dcfce7;color:#166534':status==='Absent'?'background:#fee2e2;color:#991b1b':status==='Half Day'?'background:#fef3c7;color:#92400e':''}">
+      const empSessions=dateSessions.filter(s=>s.empName===e.name);
+      const activeSession=empSessions.find(s=>!s.checkOut);
+      let totalMins=0;
+      empSessions.forEach(s=>{if(s.checkIn&&s.checkOut)totalMins+=(new Date(s.checkOut)-new Date(s.checkIn))/60000;});
+      return`<tr style="vertical-align:top">
+      <td style="padding-left:12px;padding-top:10px">
+        <div style="display:flex;align-items:center;gap:8px">${av(e.name)}
+          <div>
+            <div style="font-size:13px;font-weight:600">${e.name}</div>
+            <div style="font-size:11px;color:var(--muted)">${e.dept}</div>
+          </div>
+        </div>
+      </td>
+      <td style="padding-top:10px"><input type="time" class="att-in" data-id="${e.id}" value="${inT}" style="width:100px"></td>
+      <td style="padding-top:10px"><input type="time" class="att-out" data-id="${e.id}" value="${outT}" style="width:100px"></td>
+      <td style="padding-top:10px"><select class="att-st" data-id="${e.id}" style="width:120px;${status==='Present'?'background:#dcfce7;color:#166534':status==='Absent'?'background:#fee2e2;color:#991b1b':status==='Half Day'?'background:#fef3c7;color:#92400e':''}">
         <option ${status==='Present'?'selected':''}>Present</option>
         <option ${status==='Absent'?'selected':''}>Absent</option>
         <option ${status==='Half Day'?'selected':''}>Half Day</option>
         <option ${status==='Not marked'?'selected':''}>Not marked</option>
       </select></td>
+      <td style="padding:6px 8px">
+        ${empSessions.length>0?`
+        <div style="display:flex;flex-direction:column;gap:4px">
+          ${empSessions.map((s,i)=>{
+            const cin=new Date(s.checkIn);
+            const cout=s.checkOut?new Date(s.checkOut):null;
+            return `<div style="display:flex;align-items:center;gap:6px;background:${s.checkOut?'#f0fdf4':'#fffbeb'};border-radius:6px;padding:4px 6px;border:1px solid ${s.checkOut?'#bbf7d0':'#fde68a'}">
+              ${s.photo?`<img src="${s.photo}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid ${s.checkOut?'#86efac':'#fde68a'}">`:`<div style="width:28px;height:28px;border-radius:50%;background:${s.checkOut?'#dcfce7':'#fef3c7'};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:${s.checkOut?'#166534':'#92400e'};flex-shrink:0">${i+1}</div>`}
+              <div style="min-width:0;flex:1">
+                <div style="font-size:11px;font-weight:600;color:${s.checkOut?'#166534':'#0f766e'}">
+                  ${cin.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}${cout?` → ${cout.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`:'<span style="color:#0f766e"> → Active</span>'}
+                </div>
+                ${s.location?`<div style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📍 ${s.location}</div>`:''}
+              </div>
+            </div>`;
+          }).join('')}
+          <div style="font-size:10px;color:var(--muted);text-align:right">${empSessions.length} session${empSessions.length!==1?'s':''} · ${Math.floor(totalMins/60)}h ${Math.floor(totalMins%60)}m</div>
+        </div>`:`<span style="font-size:11px;color:var(--muted)">No sessions</span>`}
+      </td>
     </tr>`;}
     ).join('')}</tbody></table>
   </div>
