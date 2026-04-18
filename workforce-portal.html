@@ -2185,11 +2185,17 @@ async function setEmpPw(id,name){
 function pgAttendance(){
   const selDate=window._attDate||todayStr();
   window._attDate=selDate;
+  const isToday=selDate===todayStr();
+  // Match attendance by empId (could be UUID or emp_id) OR by empName
   const recs=D.attendance.filter(a=>a.date===selDate);
+  const findRec=(emp)=>recs.find(a=>
+    a.empId===emp._uuid || a.empId===emp.id || a.empName===emp.name
+  );
   const present=recs.filter(a=>a.status==='Present').length;
+  const absent=recs.filter(a=>a.status==='Absent').length;
   return `
   <div class="page-hd">
-    <div class="pg-title">Attendance</div>
+    <div><div class="pg-title">Attendance</div><div class="pg-sub">${isToday?'Today — '+selDate:selDate}</div></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <input type="date" id="att-date" value="${selDate}" style="width:160px" onchange="window._attDate=this.value;nav('attendance')">
       <button class="btn btn-sec" onclick="markAllAtt('Present')">All present</button>
@@ -2197,25 +2203,53 @@ function pgAttendance(){
       <button class="btn btn-primary" onclick="saveAtt()">Save attendance</button>
     </div>
   </div>
-  <div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+  <div class="stat-grid" style="grid-template-columns:repeat(4,minmax(0,1fr))">
     <div class="stat"><div class="stat-lbl">Present</div><div class="stat-val">${present}</div></div>
-    <div class="stat"><div class="stat-lbl">Absent</div><div class="stat-val">${recs.filter(a=>a.status==='Absent').length}</div></div>
-    <div class="stat"><div class="stat-lbl">Rate</div><div class="stat-val">${recs.length?Math.round(present/recs.length*100):0}%</div></div>
+    <div class="stat"><div class="stat-lbl">Absent</div><div class="stat-val">${absent}</div></div>
+    <div class="stat"><div class="stat-lbl">Not marked</div><div class="stat-val">${D.employees.length-recs.filter(a=>a.status!=='Not marked').length}</div></div>
+    <div class="stat"><div class="stat-lbl">Rate</div><div class="stat-val">${(present+absent)?Math.round(present/(present+absent)*100):0}%</div></div>
   </div>
   <div class="card" style="padding:0;margin-bottom:1rem">
     <div class="card-hd" style="padding:1rem 1rem 0"><h3>Mark attendance — ${selDate}</h3></div>
     <table style="margin-top:8px"><thead><tr><th style="width:26%;padding-left:12px">Employee</th><th style="width:18%">Department</th><th style="width:15%">In time</th><th style="width:15%">Out time</th><th style="width:26%">Status</th></tr></thead>
-    <tbody>${D.employees.map(e=>{const r=recs.find(a=>a.empId===e.id)||{status:'Not marked',in:'09:00',out:'18:00'};return`<tr>
-      <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:8px">${av(e.name)}${e.name}</div></td><td>${e.dept}</td>
-      <td><input type="time" class="att-in" data-id="${e.id}" value="${r.in||'09:00'}" style="width:100px"></td>
-      <td><input type="time" class="att-out" data-id="${e.id}" value="${r.out||'18:00'}" style="width:100px"></td>
-      <td><select class="att-st" data-id="${e.id}" style="width:130px"><option ${r.status==='Present'?'selected':''}>Present</option><option ${r.status==='Absent'?'selected':''}>Absent</option><option ${r.status==='Half Day'?'selected':''}>Half Day</option><option ${r.status==='Not marked'?'selected':''}>Not marked</option></select></td>
-    </tr>`;}).join('')}</tbody></table>
+    <tbody>${D.employees.map(e=>{
+      const r=findRec(e);
+      // For today: show existing record or fresh blank. For past dates: show existing or Not marked.
+      const status=r?r.status:'Not marked';
+      const inT=r?r.in||'09:00':'09:00';
+      const outT=r?r.out||'18:00':'18:00';
+      return`<tr>
+      <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:8px">${av(e.name)}${e.name}</div></td>
+      <td style="font-size:12px">${e.dept}</td>
+      <td><input type="time" class="att-in" data-id="${e.id}" value="${inT}" style="width:100px"></td>
+      <td><input type="time" class="att-out" data-id="${e.id}" value="${outT}" style="width:100px"></td>
+      <td><select class="att-st" data-id="${e.id}" style="width:130px">
+        <option ${status==='Present'?'selected':''}>Present</option>
+        <option ${status==='Absent'?'selected':''}>Absent</option>
+        <option ${status==='Half Day'?'selected':''}>Half Day</option>
+        <option ${status==='Not marked'?'selected':''}>Not marked</option>
+      </select></td>
+    </tr>`;}
+    ).join('')}</tbody></table>
   </div>
   <div class="card" style="padding:0">
-    <div class="card-hd" style="padding:1rem 1rem 0"><h3>Attendance log</h3></div>
-    <table style="margin-top:8px"><thead><tr><th style="width:28%;padding-left:12px">Employee</th><th style="width:18%">Date</th><th style="width:15%">In</th><th style="width:15%">Out</th><th style="width:24%">Status</th></tr></thead>
-    <tbody>${D.attendance.slice(0,30).map(a=>`<tr><td style="padding-left:12px">${a.empName}</td><td>${a.date}</td><td>${a.in||'--'}</td><td>${a.out||'--'}</td><td>${badge(a.status)}</td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--muted)">No records yet</td></tr>'}</tbody></table>
+    <div class="card-hd" style="padding:1rem 1rem 0">
+      <h3>Attendance log</h3>
+      <span class="muted">${D.attendance.length} total records</span>
+    </div>
+    <table style="margin-top:8px"><thead><tr>
+      <th style="width:22%;padding-left:12px">Employee</th>
+      <th style="width:16%">Date</th>
+      <th style="width:13%">In</th>
+      <th style="width:13%">Out</th>
+      <th style="width:18%">Status</th>
+    </tr></thead>
+    <tbody>${D.attendance.slice(0,50).map(a=>`<tr>
+      <td style="padding-left:12px">${a.empName}</td>
+      <td style="font-size:12px;color:var(--muted)">${a.date}</td>
+      <td>${a.in||'--'}</td><td>${a.out||'--'}</td>
+      <td>${badge(a.status)}</td>
+    </tr>`).join('')||'<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--muted)">No records yet</td></tr>'}</tbody></table>
   </div>`;
 }
 function markAllAtt(status){
@@ -2230,15 +2264,23 @@ async function saveAtt(){
     if(!emp)return;
     const inT=document.querySelector(`.att-in[data-id="${id}"]`).value;
     const outT=document.querySelector(`.att-out[data-id="${id}"]`).value;
-    const existing=D.attendance.find(a=>(a.empId===id||a.empId===emp._uuid)&&a.date===date);
-    D.attendance=D.attendance.filter(a=>!((a.empId===id||a.empId===emp._uuid)&&a.date===date));
+    // Find existing record by UUID, emp_id, or name — all for same date
+    const existing=D.attendance.find(a=>a.date===date&&(
+      a.empId===id || a.empId===emp._uuid || a.empName===emp.name
+    ));
+    // Remove existing local records for this employee on this date
+    D.attendance=D.attendance.filter(a=>!(a.date===date&&(
+      a.empId===id || a.empId===emp._uuid || a.empName===emp.name
+    )));
     const rec={empId:emp._uuid||id,empName:emp.name,date,status:s.value,in:inT,out:outT};
-    if(existing)rec._uuid=existing._uuid;
+    if(existing&&existing._uuid) rec._uuid=existing._uuid;
     D.attendance.unshift(rec);
     promises.push(sbSaveAttendance(rec));
   });
   await Promise.all(promises);
-  save();hideSyncBanner();alert('✅ Attendance saved!');
+  save();hideSyncBanner();
+  showToast('✅ Attendance saved for '+date,'success');
+  nav('attendance');
 }
 
 // ─── LEAVE ───────────────────────────────────────────────────────
