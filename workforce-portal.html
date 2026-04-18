@@ -2920,7 +2920,7 @@ function showEmpPopup(empId){
           return `<div style="display:flex;align-items:center;gap:8px;background:${s.checkOut?'#f0fdf4':'#fffbeb'};border-radius:8px;padding:8px;border:1px solid ${s.checkOut?'#bbf7d0':'#fde68a'}">
             ${s.photo?`<img src="${s.photo}" style="width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0">`:`<div style="width:36px;height:36px;border-radius:8px;background:${s.checkOut?'#dcfce7':'#fef3c7'};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:${s.checkOut?'#166534':'#92400e'}">${i+1}</div>`}
             <div style="flex:1">
-              <div style="font-size:12px;font-weight:700">${cin.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})} ${cout?`→ ${cout.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}':'→ <span style="color:#0f766e">Active</span>'}</div>
+              <div style="font-size:12px;font-weight:700">${cin.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})} ${cout?`→ ${cout.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`:'→ <span style="color:#0f766e">Active</span>'}</div>
               ${s.location?`<div style="font-size:11px;color:var(--muted)">📍 ${s.location}</div>`:''}
             </div>
           </div>`;
