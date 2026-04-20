@@ -1624,7 +1624,7 @@ async function fpResetPassword(){
   alert('✅ Password reset successfully! Login with your new password.');
   renderApp();
 }
-function loginAsEmployee(emp){
+async function loginAsEmployee(emp){
   const nearest=geoState.status==='ok'?getNearestOffice(geoState.lat,geoState.lng):null;
   const log={id:Date.now(),user:emp.name,email:emp.email,time:new Date().toLocaleString('en-IN'),lat:geoState.lat,lng:geoState.lng,accuracy:geoState.accuracy,address:geoState.address||geoState.city||'Unknown',geoStatus:geoState.status,inOffice:nearest?nearest.inZone:null,nearestOffice:nearest?nearest.name:null,method:'password'};
   if(!D.loginLogs)D.loginLogs=[];D.loginLogs.unshift(log);
@@ -1632,7 +1632,45 @@ function loginAsEmployee(emp){
   currentRole='employee';currentEmployee=emp;D.loggedIn=true;
   empPage='emp-dashboard';
   save();
-  // KYC gate: block portal if KYC is incomplete
+
+  // Show quick loading state while we verify KYC status from server
+  $('root').innerHTML=`<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f0f2f5">
+    <div style="text-align:center">
+      <div style="font-size:40px;margin-bottom:12px">👋</div>
+      <div style="font-size:16px;font-weight:600;color:#111">Welcome back, ${emp.name.split(' ')[0]}!</div>
+      <div style="font-size:13px;color:#64748b;margin-top:6px">Loading your workspace…</div>
+    </div>
+  </div>`;
+
+  // Fetch fresh KYC status from server — do not trust cached value.
+  // This prevents re-prompting users who already completed KYC if their local cache is stale.
+  try{
+    if(emp._uuid){
+      const fresh = await sb('employees','GET',null,`?id=eq.${emp._uuid}&select=kyc_completed,kyc_completed_at,aadhaar_number,pan_number,dob,address,bank_account,bank_ifsc,bank_name,emergency_contact_name,emergency_contact_phone,emergency_contact_relation`);
+      if(fresh && fresh[0]){
+        const row = fresh[0];
+        emp.kycCompleted = !!row.kyc_completed;
+        emp.kycCompletedAt = row.kyc_completed_at;
+        // Hydrate any other fields that might be stale
+        if(row.aadhaar_number) emp.aadhaar = row.aadhaar_number;
+        if(row.pan_number) emp.pan = row.pan_number;
+        if(row.dob) emp.dob = row.dob;
+        if(row.address) emp.address = row.address;
+        if(row.bank_account) emp.bankAccount = row.bank_account;
+        if(row.bank_ifsc) emp.bankIfsc = row.bank_ifsc;
+        if(row.bank_name) emp.bankName = row.bank_name;
+        if(row.emergency_contact_name) emp.emergencyName = row.emergency_contact_name;
+        if(row.emergency_contact_phone) emp.emergencyPhone = row.emergency_contact_phone;
+        if(row.emergency_contact_relation) emp.emergencyRelation = row.emergency_contact_relation;
+        // Persist so next time is fast
+        const idx=D.employees.findIndex(e=>e._uuid===emp._uuid);
+        if(idx>=0) D.employees[idx]=emp;
+        save();
+      }
+    }
+  }catch(e){ console.warn('Fresh KYC check failed, using cached value:', e); }
+
+  // KYC gate: block portal only if KYC is incomplete according to DB (or cache if DB unreachable)
   if(!emp.kycCompleted){ renderKYCGate(); return; }
   renderEmployeeApp();
 }
@@ -1768,11 +1806,42 @@ async function submitKYC(){
     emergency_contact_name:emName, emergency_contact_phone:emPhone, emergency_contact_relation:emRelation,
     kyc_completed:true, kyc_completed_at:new Date().toISOString()
   };
-  const r=await sb('employees','PATCH',payload,`?id=eq.${emp._uuid}`);
-  if(!r){if(err)err.innerHTML=`<div class="alert alert-e">Failed to save. Check your connection and try again.</div>`;return;}
+  // Use return=representation so we get the updated row back and can verify kyc_completed was actually set
+  let saved=null;
+  try{
+    const res = await fetch(`${SB_URL}/rest/v1/employees?id=eq.${emp._uuid}`,{
+      method:'PATCH',
+      headers:{...SB_HDR, 'Prefer':'return=representation'},
+      body:JSON.stringify(payload)
+    });
+    if(res.ok){
+      const rows = await res.json();
+      saved = rows && rows[0] ? rows[0] : null;
+    } else {
+      const errText = await res.text();
+      console.error('❌ KYC save failed:', res.status, errText);
+    }
+  }catch(e){ console.error('❌ KYC save error:', e); }
 
-  // Update local
-  Object.assign(emp,{aadhaar,pan,dob,address,bankAccount,bankIfsc,bankName,emergencyName:emName,emergencyPhone:emPhone,emergencyRelation:emRelation,kycCompleted:true});
+  if(!saved){
+    if(err)err.innerHTML=`<div class="alert alert-e">Failed to save. If this persists, your database may be missing KYC columns. Ask admin to run the KYC migration SQL.</div>`;
+    return;
+  }
+
+  // Verify the kyc_completed flag was actually persisted (column exists)
+  if(saved.kyc_completed !== true){
+    if(err)err.innerHTML=`<div class="alert alert-e">KYC completion flag wasn't saved by the database. The <code>kyc_completed</code> column may be missing. Ask admin to run the KYC migration SQL.</div>`;
+    console.error('❌ kyc_completed returned as:', saved.kyc_completed, '— column likely missing or had a failed constraint');
+    return;
+  }
+
+  // Update local with what the server confirmed
+  Object.assign(emp,{
+    aadhaar, pan, dob, address,
+    bankAccount, bankIfsc, bankName,
+    emergencyName:emName, emergencyPhone:emPhone, emergencyRelation:emRelation,
+    kycCompleted:true, kycCompletedAt:saved.kyc_completed_at
+  });
   const idx=D.employees.findIndex(e=>e._uuid===emp._uuid);
   if(idx>=0) D.employees[idx]=emp;
   save();
