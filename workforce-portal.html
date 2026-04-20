@@ -481,7 +481,6 @@ async function sbSaveEmployee(emp){
   if(emp.selfRegistered!==undefined) payload.self_registered=!!emp.selfRegistered;
   if(emp.passwordHash) payload.password_hash=emp.passwordHash;
   if(emp.empType) payload.emp_type=emp.empType;
-  if(emp.salaryStructure) payload.salary_structure=emp.salaryStructure;
 
   try{
     if(emp._uuid){
@@ -5459,14 +5458,60 @@ async function updateSalaryStructure(id, newStruct){
 }
 
 async function updateSalary(id,val){
-  const v=parseInt(val);if(isNaN(v)||v<=0)return;
-  const e=D.employees.find(x=>x.id===id);
-  if(!e)return;
+  const v=parseInt(val);
+  if(isNaN(v)||v<=0){ showToast('Enter a valid CTC','info'); return; }
+  const e=D.employees.find(x=>x.id===id||x._uuid===id);
+  if(!e){ console.error('Employee not found:', id); return; }
   const oldSalary=e.salary||0;
   if(v===oldSalary) return;
+
+  // Narrow PATCH — only update salary field, verify with return=representation
+  if(!e._uuid){
+    // Employee not yet synced to Supabase — need a full save
+    e.salary=v;
+    const r=await sbSaveEmployee(e);
+    if(!r){ showToast('❌ Failed to save — employee not synced','info'); return; }
+    save();
+    showToast(`✅ CTC updated for ${e.name}: ₹${fmt(v)}`,'success');
+    nav('payroll');
+    return;
+  }
+
+  // Existing employee — narrow PATCH
+  try{
+    const res = await fetch(`${SB_URL}/rest/v1/employees?id=eq.${e._uuid}`,{
+      method:'PATCH',
+      headers:{...SB_HDR, 'Prefer':'return=representation'},
+      body:JSON.stringify({salary:v})
+    });
+    if(!res.ok){
+      const errText=await res.text();
+      console.error('❌ Salary update failed:', res.status, errText);
+      showToast(`❌ Save failed: ${errText.substring(0,80)}`,'info');
+      return;
+    }
+    const rows=await res.json();
+    if(!rows||!rows[0]){
+      showToast('❌ Update returned no row — check employee exists in DB','info');
+      return;
+    }
+    // Verify the server returned the new value
+    if(parseInt(rows[0].salary)!==v){
+      showToast(`❌ DB saved ₹${rows[0].salary}, expected ₹${v}`,'info');
+      return;
+    }
+  }catch(err){
+    console.error('❌ Salary update error:', err);
+    showToast('❌ Network error while saving','info');
+    return;
+  }
+
+  // Success — update local
   e.salary=v;
-  await sbSaveEmployee(e);
+  const idx=D.employees.findIndex(x=>x._uuid===e._uuid);
+  if(idx>=0) D.employees[idx]=e;
   save();
+
   // Notify employee of salary change
   if(e.email){
     const direction=v>oldSalary?'revised upward':'revised';
@@ -5476,6 +5521,8 @@ async function updateSalary(id,val){
       to:e.email
     });
   }
+
+  showToast(`✅ CTC updated for ${e.name}: ₹${fmt(oldSalary)} → ₹${fmt(v)}`,'success');
   nav('payroll');
 }
 
