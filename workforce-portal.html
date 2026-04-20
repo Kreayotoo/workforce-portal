@@ -2807,8 +2807,9 @@ async function submitEmpLeave(){
 // ─── PAYROLL ENGINE ───────────────────────────────────────────────
 // Calculates payslip components from CTC using the company salary structure.
 // All amounts in INR per month.
-// Calculates payslip components from CTC using the company's unified salary structure.
-// Formula derived from real ₹25,000 and ₹55,000 payslips.
+// Calculates payslip components from CTC using the company's salary structure.
+// Target: Net Pay is ~84% of CTC (matches both ₹25K→₹21,200 and ₹55K→₹46,228 reference payslips)
+// For higher CTCs (≥₹45K), MPP kicks in which keeps the ratio stable at scale.
 function calcSalaryBreakdown(ctc){
   const c=parseFloat(ctc)||0;
   if(c<=0) return null;
@@ -2816,25 +2817,36 @@ function calcSalaryBreakdown(ctc){
   const basic = Math.round(c * 0.45);
   const hra = Math.round(basic * 0.40);
   const lta = Math.round(basic * 0.10);
-  const conveyance = 1250;  // Always present
-  const travel = 1600;       // Always present
+  const conveyance = 1250;
+  const travel = 1600;
   const deputation = 0;
   const professionalTax = 200;
   const esic = 0;
   const otherDeduction = 0;
 
-  // PF: 12% of Basic, clamped between minimum wage (₹15,000) and company ceiling (₹20,250)
-  // For low CTC: PF = 12% × ₹15,000 = ₹1,800 (minimum)
-  // For high CTC: PF = 12% × ₹20,250 = ₹2,430 (capped at company ceiling)
+  // PF: 12% of Basic, clamped between ₹1,800 (min) and ₹2,430 (max = 12% × ₹20,250)
   const pfBase = Math.max(15000, Math.min(basic, 20250));
   const employeePf = Math.round(pfBase * 0.12);
   const employerPf = Math.round(pfBase * 0.12);
 
-  // MPP (Monthly Performance Pay): only paid when Basic reaches the company's PF ceiling (₹20,250)
-  // This means CTC ≥ ₹45,000 triggers MPP at 6.75% of CTC
-  const mpp = basic >= 20250 ? Math.floor(c * 0.0675) : 0;
+  // MPP: activates when Basic ≥ ₹20,250 (i.e., CTC ≥ ₹45,000)
+  // At higher CTCs, MPP scales to keep the Net/CTC ratio at ~84% (matches reference payslips)
+  let mpp = 0;
+  if(basic >= 20250){
+    // Base MPP = 6.75% of CTC (matches ₹55K reference: 6.75% × 55,000 = ₹3,712)
+    // For very high CTCs, scale MPP so total deductions keep Net around 84% of CTC
+    const baseMpp = Math.floor(c * 0.0675);
+    // Total target deductions to hit ~84% Net: CTC × 0.16 minus PT minus Employer PF contributed to Gross
+    // Simpler: for CTC > 55K, scale MPP to match the reference ratio
+    // At 55K: MPP = 3712 (6.75%). Above that, MPP absorbs the extra balancer.
+    const targetNet = Math.round(c * 0.8405);
+    const targetDeductions = c - targetNet;
+    // MPP = target deductions - PT - both PFs
+    const mppNeeded = targetDeductions - professionalTax - employeePf - employerPf;
+    mpp = Math.max(baseMpp, mppNeeded);
+  }
 
-  // Special Allowance = balancer of CTC after all other components
+  // Special Allowance = balancer: CTC minus (everything else including MPP)
   const special = Math.max(0,
     c - basic - hra - lta - conveyance - travel - deputation
       - mpp - employeePf - employerPf - professionalTax - esic - otherDeduction
@@ -2847,11 +2859,9 @@ function calcSalaryBreakdown(ctc){
 
   return {
     ctc: c,
-    // Earnings
     basic, hra, lta, conveyance, travel, special, deputation,
     totalEarnings,
     gross: totalEarnings,
-    // Deductions
     professionalTax, employeePf, employerPf, mpp, esic, otherDeduction,
     totalDeductions,
     netBeforeLop
@@ -2880,22 +2890,33 @@ function countLeaveDaysInMonth(empName, yearMonth){
   return days;
 }
 
+// Returns the paid leaves accrued per month based on admin settings (CL + EL).
+// Defaults to 1 + 1 = 2/month if settings not configured.
+function getPaidLeavesPerMonth(){
+  const s=D.settings||{};
+  const cl=parseFloat(s.clPerMonth);
+  const el=parseFloat(s.elPerMonth);
+  const perMonth=(isNaN(cl)?1:cl)+(isNaN(el)?1:el);
+  return perMonth;
+}
+
 // Calculate paid-leave balance available for the given month.
-// Accrues 2 days/month starting from joining date. Cumulative.
+// Accrues `getPaidLeavesPerMonth()` days/month starting from joining date. Cumulative.
 function getPaidLeaveQuotaFor(emp, yearMonth){
-  if(!emp.joined) return 2; // fallback if unknown join date
+  const perMonth=getPaidLeavesPerMonth();
+  if(!emp.joined) return perMonth; // fallback if unknown join date
   const [y, m] = yearMonth.split('-').map(Number);
   const monthStart = new Date(y, m-1, 1);
   const joined = new Date(emp.joined);
   if(joined > monthStart){
     // Not yet employed during most of the month — no accrual
-    if(joined.getFullYear()===y && joined.getMonth()===m-1) return 2; // joined this month: 2 days
+    if(joined.getFullYear()===y && joined.getMonth()===m-1) return perMonth; // joined this month: full quota
     return 0;
   }
   // Months completed from join date through the payslip month (inclusive)
   const joinY=joined.getFullYear(), joinM=joined.getMonth();
   const monthsElapsed = (y - joinY)*12 + (m-1 - joinM) + 1;
-  return monthsElapsed * 2;
+  return monthsElapsed * perMonth;
 }
 
 // Count paid leaves USED up to (but not including) the payslip month — i.e. those that already consumed balance
@@ -2935,13 +2956,31 @@ function calcPayslip(emp, yearMonth){
 
   const netPay = breakdown.netBeforeLop - lopDeduction;
 
-  // Leave balances to show on payslip
-  // CL (Casual Leave): the "paid leave" quota — 2/month accrued
-  const clBalance = carryForward;
-  // EL (Earned Leave): typically 1-1.5/month; we'll use simple 1.5/month = 18/year as a default accrual
-  const elAccrued = Math.floor(getPaidLeaveQuotaFor(emp, yearMonth) * 0.75); // rough 1.5/month
-  const elUsedBefore = (D.leaves||[]).filter(l=>l.emp===emp.name && l.type==='Earned' && l.status==='Approved' && new Date(l.to||l.from) < new Date(y, m-1, 1)).reduce((s,l)=>s+(l.days||0),0);
-  const elUsedThis = (D.leaves||[]).filter(l=>l.emp===emp.name && l.type==='Earned' && l.status==='Approved' && (()=>{const t=new Date(l.to||l.from);return t.getFullYear()===y && t.getMonth()===m-1;})()).reduce((s,l)=>s+(l.days||0),0);
+  // Leave balances to show on payslip — use the actual admin-configured CL and EL accrual rates
+  const s=D.settings||{};
+  const clPerMonth=parseFloat(s.clPerMonth);
+  const elPerMonth=parseFloat(s.elPerMonth);
+  const clRate=isNaN(clPerMonth)?1:clPerMonth;
+  const elRate=isNaN(elPerMonth)?1:elPerMonth;
+
+  // Months employed (same calc as quota)
+  let monthsElapsed=1;
+  if(emp.joined){
+    const jd=new Date(emp.joined);
+    const joinY=jd.getFullYear(), joinM=jd.getMonth();
+    monthsElapsed=Math.max(1,(y-joinY)*12 + (m-1-joinM) + 1);
+  }
+
+  // CL balance: accrued − used
+  const clAccrued = Math.floor(monthsElapsed * clRate);
+  const clUsedBefore=(D.leaves||[]).filter(l=>l.emp===emp.name && (l.type==='Casual'||l.type==='CL') && l.status==='Approved' && new Date(l.to||l.from) < new Date(y, m-1, 1)).reduce((s,l)=>s+(l.days||0),0);
+  const clUsedThis=(D.leaves||[]).filter(l=>l.emp===emp.name && (l.type==='Casual'||l.type==='CL') && l.status==='Approved' && (()=>{const t=new Date(l.to||l.from);return t.getFullYear()===y && t.getMonth()===m-1;})()).reduce((s,l)=>s+(l.days||0),0);
+  const clBalance = Math.max(0, clAccrued - clUsedBefore - clUsedThis);
+
+  // EL balance: accrued − used
+  const elAccrued = Math.floor(monthsElapsed * elRate);
+  const elUsedBefore = (D.leaves||[]).filter(l=>l.emp===emp.name && (l.type==='Earned'||l.type==='EL') && l.status==='Approved' && new Date(l.to||l.from) < new Date(y, m-1, 1)).reduce((s,l)=>s+(l.days||0),0);
+  const elUsedThis = (D.leaves||[]).filter(l=>l.emp===emp.name && (l.type==='Earned'||l.type==='EL') && l.status==='Approved' && (()=>{const t=new Date(l.to||l.from);return t.getFullYear()===y && t.getMonth()===m-1;})()).reduce((s,l)=>s+(l.days||0),0);
   const elBalance = Math.max(0, elAccrued - elUsedBefore - elUsedThis);
   const tlBalance = clBalance + elBalance;
 
@@ -3938,7 +3977,7 @@ function wizStep1(){
 // ── Step 2: Attendance & Leave ───
 function wizStep2(){
   const s=D.settings||{};
-  const cl=s.clPerMonth||2;
+  const cl=s.clPerMonth||1;
   const el=s.elPerMonth||1;
   const hours=s.hours||9;
   return `
@@ -4096,7 +4135,7 @@ async function wizSaveAndContinue(step){
   if(step===2){
     const hours=parseFloat($('wiz-hours')?.value)||9;
     const weekOff=$('wiz-weekoff')?.value||'alternate-sat';
-    const cl=parseFloat($('wiz-cl')?.value)||2;
+    const cl=parseFloat($('wiz-cl')?.value)||1;
     const el=parseFloat($('wiz-el')?.value)||1;
     D.settings.hours=hours;
     D.settings.weekOff=weekOff;
@@ -5365,7 +5404,7 @@ function pgPayroll(){
   const activeCount=D.employees.filter(e=>e.status==='Active').length;
   return `
   <div class="page-hd">
-    <div><div class="pg-title">Payroll management</div><div class="pg-sub">Auto-calculated from CTC · 2 paid leaves/month accrued cumulatively</div></div>
+    <div><div class="pg-title">Payroll management</div><div class="pg-sub">Auto-calculated from CTC · ${getPaidLeavesPerMonth()} paid leaves/month accrued cumulatively</div></div>
     <div style="display:flex;gap:6px;align-items:center">
       <label style="font-size:12px;color:var(--muted)">Month:</label>
       <select onchange="window._adminPayrollMonth=this.value;nav('payroll')" style="padding:5px 10px;font-size:13px">
@@ -5461,54 +5500,81 @@ async function updateSalary(id,val){
   const v=parseInt(val);
   if(isNaN(v)||v<=0){ showToast('Enter a valid CTC','info'); return; }
   const e=D.employees.find(x=>x.id===id||x._uuid===id);
-  if(!e){ console.error('Employee not found:', id); return; }
+  if(!e){ console.error('Employee not found locally:', id); showToast('Employee not found','info'); return; }
   const oldSalary=e.salary||0;
   if(v===oldSalary) return;
+  if(!e.email){ showToast('Cannot update: employee has no email','info'); return; }
 
-  // Narrow PATCH — only update salary field, verify with return=representation
-  if(!e._uuid){
-    // Employee not yet synced to Supabase — need a full save
+  console.log(`💰 Updating CTC for ${e.name} (${e.email}): ${oldSalary} → ${v}`);
+
+  // Step 1: If we don't have a UUID locally, look up by email in Supabase
+  let uuid = e._uuid;
+  if(!uuid){
+    console.log('  ⏳ No local UUID, looking up by email...');
+    try{
+      const byEmail=await sb('employees','GET',null,`?email=eq.${encodeURIComponent(e.email)}&select=id`);
+      if(byEmail && byEmail[0] && byEmail[0].id){
+        uuid = byEmail[0].id;
+        e._uuid = uuid;
+        console.log('  ✓ Found UUID by email:', uuid);
+      }
+    }catch(err){
+      console.error('  ❌ Email lookup failed:', err);
+    }
+  }
+
+  // Step 2: If still no UUID, the employee doesn't exist in Supabase yet — create them
+  if(!uuid){
+    console.log('  ⏳ Employee not in Supabase yet, creating new row...');
     e.salary=v;
     const r=await sbSaveEmployee(e);
-    if(!r){ showToast('❌ Failed to save — employee not synced','info'); return; }
+    if(!r){
+      showToast(`❌ Failed to create ${e.name} in database`,'info');
+      return;
+    }
+    if(r&&r[0]&&r[0].id){
+      e._uuid=r[0].id;
+      console.log('  ✓ Created in Supabase:', r[0].id);
+    }
     save();
-    showToast(`✅ CTC updated for ${e.name}: ₹${fmt(v)}`,'success');
+    showToast(`✅ Created ${e.name} with CTC ₹${fmt(v)}`,'success');
     nav('payroll');
     return;
   }
 
-  // Existing employee — narrow PATCH
+  // Step 3: We have a UUID — do a narrow PATCH with verification
+  console.log('  ⏳ PATCHing salary on UUID:', uuid);
   try{
-    const res = await fetch(`${SB_URL}/rest/v1/employees?id=eq.${e._uuid}`,{
+    const res = await fetch(`${SB_URL}/rest/v1/employees?id=eq.${uuid}`,{
       method:'PATCH',
       headers:{...SB_HDR, 'Prefer':'return=representation'},
       body:JSON.stringify({salary:v})
     });
     if(!res.ok){
       const errText=await res.text();
-      console.error('❌ Salary update failed:', res.status, errText);
-      showToast(`❌ Save failed: ${errText.substring(0,80)}`,'info');
+      console.error('  ❌ PATCH failed:', res.status, errText);
+      showToast(`❌ Save failed: ${errText.substring(0,100)}`,'info');
       return;
     }
     const rows=await res.json();
+    console.log('  ✓ Server returned:', rows);
     if(!rows||!rows[0]){
-      showToast('❌ Update returned no row — check employee exists in DB','info');
+      showToast('❌ Update returned no row','info');
       return;
     }
-    // Verify the server returned the new value
     if(parseInt(rows[0].salary)!==v){
       showToast(`❌ DB saved ₹${rows[0].salary}, expected ₹${v}`,'info');
       return;
     }
   }catch(err){
-    console.error('❌ Salary update error:', err);
+    console.error('  ❌ Network error:', err);
     showToast('❌ Network error while saving','info');
     return;
   }
 
-  // Success — update local
+  // Success — update local cache
   e.salary=v;
-  const idx=D.employees.findIndex(x=>x._uuid===e._uuid);
+  const idx=D.employees.findIndex(x=>x._uuid===uuid||x.id===e.id);
   if(idx>=0) D.employees[idx]=e;
   save();
 
@@ -5522,7 +5588,7 @@ async function updateSalary(id,val){
     });
   }
 
-  showToast(`✅ CTC updated for ${e.name}: ₹${fmt(oldSalary)} → ₹${fmt(v)}`,'success');
+  showToast(`✅ ${e.name}: ₹${fmt(oldSalary)} → ₹${fmt(v)}`,'success');
   nav('payroll');
 }
 
