@@ -3218,7 +3218,7 @@ function showEmpPopup(empId){
               ${s.location?(inMapUrl
                 ?`<div style="font-size:11px;margin-top:1px"><a href="${inMapUrl}" target="_blank" rel="noopener" style="color:#2563eb;text-decoration:none">📍 In: ${s.location} <span style="font-size:9px;opacity:.7">↗</span></a></div>`
                 :`<div style="font-size:11px;color:var(--muted)">📍 In: ${s.location}</div>`):''}
-              ${s.checkOutLocation&&s.checkOutLocation!==s.location?(outMapUrl
+              ${s.checkOutLocation?(outMapUrl
                 ?`<div style="font-size:11px;margin-top:1px"><a href="${outMapUrl}" target="_blank" rel="noopener" style="color:#dc2626;text-decoration:none">📍 Out: ${s.checkOutLocation} <span style="font-size:9px;opacity:.7">↗</span></a></div>`
                 :`<div style="font-size:11px;color:var(--muted)">📍 Out: ${s.checkOutLocation}</div>`):''}
             </div>
@@ -3318,7 +3318,7 @@ function pgAttendance(){
                 ${s.location?(inMapUrl
                   ?`<div style="font-size:11px;margin-top:1px"><a href="${inMapUrl}" target="_blank" rel="noopener" title="Open check-in location in Google Maps" style="color:#2563eb;text-decoration:none">📍 In: ${s.location} <span style="font-size:9px;opacity:.7">↗</span></a></div>`
                   :`<div style="font-size:11px;color:var(--muted)">📍 In: ${s.location}</div>`):''}
-                ${s.checkOutLocation&&s.checkOutLocation!==s.location?(outMapUrl
+                ${s.checkOutLocation?(outMapUrl
                   ?`<div style="font-size:11px;margin-top:1px"><a href="${outMapUrl}" target="_blank" rel="noopener" title="Open check-out location in Google Maps" style="color:#dc2626;text-decoration:none">📍 Out: ${s.checkOutLocation} <span style="font-size:9px;opacity:.7">↗</span></a></div>`
                   :`<div style="font-size:11px;color:var(--muted)">📍 Out: ${s.checkOutLocation}</div>`):''}
               </div>
