@@ -821,13 +821,12 @@ function renderApp(){
     </div>
     <div class="body-row">
       <div class="sidebar">
-        ${(()=>{const pendingKyc=(D.changeRequests||[]).filter(r=>r.status==='Pending').length;return [['⊞','dashboard','Dashboard'],['👥','employees','Employees'],['📅','attendance','Attendance'],['🏖','leave','Leave'],['💰','payroll','Payroll'],['🧾','expenses','Expenses'],['⭐','performance','Performance'],['📆','holidays','Holidays'],['🏢','orgchart','Org Chart'],['🪪','idcards','ID Cards'],['📋','kycrequests','KYC Requests',pendingKyc],['🗺','locations','Locations'],['🔔','notifications','Notifications'],['⚙','settings','Settings'],...(!currentCompany?[['🏭','companies','Companies']]:[])];})()
-        .map(([ic,pg,tt,badge])=>`
-        <div class="si ${currentPage===pg?'act':''}" title="${tt}${badge?' ('+badge+' pending)':''}" onclick="nav('${pg}')">
+        ${[['⊞','dashboard','Dashboard'],['👥','employees','Employees'],['📅','attendance','Attendance'],['🏖','leave','Leave'],['💰','payroll','Payroll'],['🧾','expenses','Expenses'],['⭐','performance','Performance'],['📆','holidays','Holidays'],['🏢','orgchart','Org Chart'],['🪪','idcards','ID Cards'],['🗺','locations','Locations'],['🔔','notifications','Notifications'],['⚙','settings','Settings'],...(!currentCompany?[['🏭','companies','Companies']]:[])]
+        .map(([ic,pg,tt])=>`
+        <div class="si ${currentPage===pg?'act':''}" title="${tt}" onclick="nav('${pg}')">
           <div class="si-icon">${ic}</div>
-          <span class="si-label">${tt}${badge?` <span style="background:#ef4444;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:4px">${badge}</span>`:''}</span>
+          <span class="si-label">${tt}</span>
           ${pg==='notifications'&&uc>0?'<div class="si-dot"></div>':''}
-          ${pg==='kycrequests'&&badge?'<div class="si-dot"></div>':''}
         </div>`).join('')}
       </div>
       <div class="main" id="main-content"></div>
@@ -2815,37 +2814,20 @@ function renderProfileTab(tab, emp){
   `;
 
   if(tab==='kyc'){
-    const pending=(D.changeRequests||[]).find(r=>r.empUuid===emp._uuid&&(r.field==='aadhaar'||r.field==='pan')&&r.status==='Pending');
-    const hasAadhaar=!!emp.aadhaar, hasPan=!!emp.pan;
-    const isFirstTime = !hasAadhaar || !hasPan;
     return `
-    ${isFirstTime?`
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;font-size:12px;color:#1e40af;margin-bottom:1rem">
-      💡 <strong>First-time entry saves directly.</strong> You can add your ${!hasAadhaar?'Aadhaar':''}${!hasAadhaar&&!hasPan?' and ':''}${!hasPan?'PAN':''} without approval. Once saved, any future changes will require admin approval to prevent unauthorised edits.
-    </div>`:`
-    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400e;margin-bottom:1rem">
-      🔒 <strong>Admin approval required for changes.</strong> Aadhaar and PAN are already on file. Updates are reviewed by an administrator before taking effect.
-    </div>`}
-    ${pending?`
-    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 14px;margin-bottom:1rem">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <div style="background:#fbbf24;color:#78350f;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">⏳ PENDING APPROVAL</div>
-        <div style="font-size:11px;color:var(--muted)">Submitted ${pending.createdAt?new Date(pending.createdAt).toLocaleString('en-IN'):'just now'}</div>
-      </div>
-      <div style="font-size:13px;color:#1e40af"><strong>${pending.field==='aadhaar'?'Aadhaar':'PAN'}</strong> change requested → <code style="background:#fff;padding:1px 6px;border-radius:4px;font-size:12px">${pending.field==='aadhaar'?'XXXX XXXX '+pending.newValue.slice(-4):pending.newValue.slice(0,3)+'XX'+pending.newValue.slice(-3)}</code></div>
-      <div style="font-size:12px;color:var(--muted);margin-top:6px">You'll be notified when an administrator reviews this request.</div>
-      <button class="btn btn-sec" style="margin-top:10px;font-size:12px;padding:6px 14px" onclick="cancelChangeRequest('${pending._uuid}')">Cancel request</button>
-    </div>`:''}
+      💡 Enter your Aadhaar and PAN details. You can update these anytime.
+    </div>
     <div id="kyc-edit-msg"></div>
-    <div class="fld"><label>Aadhaar number ${!hasAadhaar?'<span style="color:#ef4444">*</span>':''}</label>
+    <div class="fld"><label>Aadhaar number <span style="color:#ef4444">*</span></label>
       <input type="text" id="pf-aadhaar" value="${emp.aadhaar?emp.aadhaar.replace(/(\d{4})(?=\d)/g,'$1 ').trim():''}" maxlength="14" inputmode="numeric" placeholder="1234 5678 9012" oninput="fmtAadhaar(this)">
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">${hasAadhaar?`Current: XXXX XXXX ${emp.aadhaar.slice(-4)} — <span style="color:#92400e">change requires approval</span>`:'<span style="color:#0f766e;font-weight:600">Not yet set — you can save this directly</span>'}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">${emp.aadhaar?`Current: XXXX XXXX ${emp.aadhaar.slice(-4)}`:'<span style="color:#0f766e;font-weight:600">Not yet set</span>'}</div>
     </div>
-    <div class="fld"><label>PAN number ${!hasPan?'<span style="color:#ef4444">*</span>':''}</label>
+    <div class="fld"><label>PAN number <span style="color:#ef4444">*</span></label>
       <input type="text" id="pf-pan" value="${emp.pan||''}" maxlength="10" placeholder="ABCDE1234F" oninput="this.value=this.value.toUpperCase()">
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">${hasPan?`Current: ${emp.pan.slice(0,3)}XX${emp.pan.slice(-3)} — <span style="color:#92400e">change requires approval</span>`:'<span style="color:#0f766e;font-weight:600">Not yet set — you can save this directly</span>'}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">${emp.pan?`Current: ${emp.pan.slice(0,3)}XX${emp.pan.slice(-3)}`:'<span style="color:#0f766e;font-weight:600">Not yet set</span>'}</div>
     </div>
-    <button class="btn btn-primary" style="background:#7c3aed" onclick="submitKYCRequest()">${isFirstTime?(hasAadhaar||hasPan?'Save &amp; request change':'💾 Save details'):'Submit for admin approval'}</button>
+    <button class="btn btn-primary" style="background:#7c3aed" onclick="submitKYCRequest()">💾 Save KYC details</button>
 
     <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border)">
       <div style="font-size:13px;font-weight:700;margin-bottom:10px">📎 Document uploads</div>
@@ -3064,7 +3046,7 @@ async function submitKYCRequest(){
   if(pan&&!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)){if(msg)msg.innerHTML=`<div class="alert alert-e">PAN format invalid (ABCDE1234F)</div>`;return;}
   if(aadhaar===emp.aadhaar&&pan===emp.pan){if(msg)msg.innerHTML=`<div class="alert alert-e">No changes detected</div>`;return;}
 
-  // Duplicate checks across other employees
+  // Duplicate checks
   if(aadhaar&&aadhaar!==emp.aadhaar){
     const dup=await sb('employees','GET',null,`?aadhaar_number=eq.${aadhaar}&id=neq.${emp._uuid}&select=id`);
     if(dup&&dup.length){if(msg)msg.innerHTML=`<div class="alert alert-e">This Aadhaar is already registered to another employee</div>`;return;}
@@ -3074,68 +3056,25 @@ async function submitKYCRequest(){
     if(dup&&dup.length){if(msg)msg.innerHTML=`<div class="alert alert-e">This PAN is already registered to another employee</div>`;return;}
   }
 
-  // Split into two buckets: first-time entries (save directly) vs changes (need approval)
-  const directSave={};         // fields where current value is empty
-  const needApproval=[];       // fields where current value exists and is being changed
-  const cid=currentCompany?currentCompany.company_id:(emp.companyId||'KSPL');
-
-  if(aadhaar && aadhaar!==emp.aadhaar){
-    if(!emp.aadhaar) directSave.aadhaar_number=aadhaar; // first-time
-    else needApproval.push({field:'aadhaar', old:emp.aadhaar, new:aadhaar});
-  }
-  if(pan && pan!==emp.pan){
-    if(!emp.pan) directSave.pan_number=pan; // first-time
-    else needApproval.push({field:'pan', old:emp.pan, new:pan});
-  }
-
   if(msg)msg.innerHTML=`<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">Saving…</div>`;
 
-  // 1) Apply first-time entries directly
-  let directSaved=false;
-  if(Object.keys(directSave).length){
-    const r=await sb('employees','PATCH',directSave,`?id=eq.${emp._uuid}`);
-    if(r){
-      if(directSave.aadhaar_number) emp.aadhaar=directSave.aadhaar_number;
-      if(directSave.pan_number) emp.pan=directSave.pan_number;
-      const idx=D.employees.findIndex(e=>e._uuid===emp._uuid); if(idx>=0) D.employees[idx]=emp;
-      save();
-      directSaved=true;
-      await sbSaveNotification({msg:`🪪 ${emp.name} added ${Object.keys(directSave).map(k=>k==='aadhaar_number'?'Aadhaar':'PAN').join(' & ')} to their profile`,type:'info'});
-    }
-  }
+  const payload={};
+  if(aadhaar) payload.aadhaar_number=aadhaar;
+  if(pan) payload.pan_number=pan;
 
-  // 2) Submit changes-to-existing as approval requests
-  let requestsSubmitted=0;
-  for(const item of needApproval){
-    const res=await sb('change_requests','POST',{
-      employee_id:emp._uuid, employee_name:emp.name, employee_email:emp.email,
-      field_name:item.field, old_value:item.old, new_value:item.new,
-      status:'Pending', company_id:cid
-    });
-    if(res) requestsSubmitted++;
-  }
-  if(requestsSubmitted){
-    const fields=needApproval.map(i=>i.field.toUpperCase()).join(' & ');
-    await sbSaveNotification({msg:`🪪 ${emp.name} requested ${fields} update — review required`,type:'warning'});
-  }
+  const r=await sb('employees','PATCH',payload,`?id=eq.${emp._uuid}`);
+  if(!r){if(msg)msg.innerHTML=`<div class="alert alert-e">Save failed. Try again.</div>`;return;}
 
-  await syncChangeRequests();
+  if(aadhaar) emp.aadhaar=aadhaar;
+  if(pan) emp.pan=pan;
+  const idx=D.employees.findIndex(e=>e._uuid===emp._uuid); if(idx>=0) D.employees[idx]=emp;
+  save();
 
-  // Feedback depending on what happened
-  if(directSaved && requestsSubmitted){
-    if(msg)msg.innerHTML=`<div class="alert alert-s">✅ Saved directly (first-time) &amp; ${requestsSubmitted} change${requestsSubmitted>1?'s':''} sent for admin approval</div>`;
-    showToast('✅ Saved — some changes awaiting approval','success');
-  } else if(directSaved){
-    if(msg)msg.innerHTML=`<div class="alert alert-s">✅ Details saved to your profile</div>`;
-    showToast('✅ KYC saved','success');
-  } else if(requestsSubmitted){
-    if(msg)msg.innerHTML=`<div class="alert alert-s">✅ Request sent — awaiting admin approval</div>`;
-    showToast('✅ Sent for admin approval','success');
-  } else {
-    if(msg)msg.innerHTML=`<div class="alert alert-e">Failed to save. Try again.</div>`;
-    return;
-  }
-  setTimeout(()=>renderEmployeeApp(),1000);
+  await sbSaveNotification({msg:`🪪 ${emp.name} updated their KYC details`,type:'info'});
+
+  if(msg)msg.innerHTML=`<div class="alert alert-s">✅ KYC details saved</div>`;
+  showToast('✅ KYC saved','success');
+  setTimeout(()=>renderEmployeeApp(),800);
 }
 
 async function cancelChangeRequest(uuid){
@@ -3408,30 +3347,75 @@ async function submitWish(empId, type){
   showToast(`✅ ${typeLabels[type]} sent to ${emp.name}!`,'success');
 }
 
+// Dismissed celebration IDs are stored per-day in localStorage so they don't reappear until tomorrow
+function getDismissedCelebrations(){
+  try{ return JSON.parse(localStorage.getItem('wf_dismissed_celebrations')||'{}'); }catch(e){ return {}; }
+}
+function setDismissedCelebrations(o){ localStorage.setItem('wf_dismissed_celebrations', JSON.stringify(o)); }
+function isCelDismissed(key){
+  const today=todayStr();
+  const d=getDismissedCelebrations();
+  return d[today]&&d[today].includes(key);
+}
+function dismissCelebration(key){
+  const today=todayStr();
+  const d=getDismissedCelebrations();
+  // Clean up any old days
+  Object.keys(d).forEach(k=>{if(k!==today) delete d[k];});
+  if(!d[today]) d[today]=[];
+  if(!d[today].includes(key)) d[today].push(key);
+  setDismissedCelebrations(d);
+  if(currentRole==='admin') nav(currentPage); else renderEmployeeApp();
+}
+function dismissAllCelebrations(){
+  if(!confirm('Dismiss all celebrations for today?')) return;
+  const today=todayStr();
+  const d=getDismissedCelebrations();
+  d[today]=['__all__'];
+  setDismissedCelebrations(d);
+  if(currentRole==='admin') nav(currentPage); else renderEmployeeApp();
+}
+
 function celebrationsPanel(){
   const cel=getCelebrations();
   if(!cel.birthdays.length && !cel.welcome.length && !cel.festivals.length && !cel.sendoff.length) return '';
 
+  // Filter out dismissed items
+  const today=todayStr();
+  const dismissed=getDismissedCelebrations()[today]||[];
+  if(dismissed.includes('__all__')) return '';
+  const festivals=cel.festivals.filter(f=>!dismissed.includes('fest:'+f.name));
+  const birthdays=cel.birthdays.filter(e=>!dismissed.includes('bday:'+e.id));
+  const welcome=cel.welcome.filter(({emp:e})=>!dismissed.includes('welcome:'+e.id));
+  const sendoff=cel.sendoff.filter(e=>!dismissed.includes('sendoff:'+e.id));
+  if(!festivals.length && !birthdays.length && !welcome.length && !sendoff.length) return '';
+
   return `
   <div class="card" style="margin-bottom:.75rem;background:linear-gradient(135deg,#fff9f0,#fff5f9)">
-    <div class="card-hd"><h3>🎊 Today's Celebrations</h3></div>
+    <div class="card-hd">
+      <h3>🎊 Today's Celebrations</h3>
+      <button class="btn-link" style="color:#991b1b;font-size:12px" onclick="dismissAllCelebrations()" title="Clear all celebrations for today">🗑 Clear all</button>
+    </div>
     <div style="display:flex;flex-direction:column;gap:10px">
 
-    ${cel.festivals.length?`
-      ${cel.festivals.map(f=>`
-      <div style="display:flex;align-items:center;gap:12px;background:${f.daysAway===0?'linear-gradient(135deg,#fef3c7,#fde68a)':'linear-gradient(135deg,#f0fdf4,#dcfce7)'};border-radius:10px;padding:12px 14px;border:1px solid ${f.daysAway===0?'#fcd34d':'#bbf7d0'}">
+    ${festivals.length?`
+      ${festivals.map(f=>`
+      <div style="position:relative;display:flex;align-items:center;gap:12px;background:${f.daysAway===0?'linear-gradient(135deg,#fef3c7,#fde68a)':'linear-gradient(135deg,#f0fdf4,#dcfce7)'};border-radius:10px;padding:12px 14px;border:1px solid ${f.daysAway===0?'#fcd34d':'#bbf7d0'}">
         <div style="font-size:32px">${f.emoji}</div>
         <div style="flex:1">
           <div style="font-size:15px;font-weight:700;color:#92400e">${f.name}</div>
           <div style="font-size:12px;color:#78350f">${f.daysAway===0?'Today! 🎉':`In ${f.daysAway} day${f.daysAway>1?'s':''}`}</div>
         </div>
         ${f.daysAway===0?`<span style="background:#f59e0b;color:#fff;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">Today!</span>`:''}
+        <button title="Dismiss" onclick="dismissCelebration('fest:${f.name.replace(/'/g,'&#39;')}')" style="background:none;border:none;cursor:pointer;color:#92400e;font-size:18px;padding:4px 8px;border-radius:4px;opacity:.6" onmouseover="this.style.opacity='1';this.style.background='rgba(0,0,0,.1)'" onmouseout="this.style.opacity='.6';this.style.background='none'">×</button>
       </div>`).join('')}`:''}
 
-    ${cel.birthdays.length?`
-      <div style="background:linear-gradient(135deg,#fdf4ff,#fae8ff);border-radius:10px;padding:12px 14px;border:1px solid #e9d5ff">
-        <div style="font-size:13px;font-weight:700;color:#7c3aed;margin-bottom:8px">🎂 Birthday${cel.birthdays.length>1?'s':''} Today</div>
-        ${cel.birthdays.map(e=>`
+    ${birthdays.length?`
+      <div style="position:relative;background:linear-gradient(135deg,#fdf4ff,#fae8ff);border-radius:10px;padding:12px 14px;border:1px solid #e9d5ff">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700;color:#7c3aed">🎂 Birthday${birthdays.length>1?'s':''} Today</div>
+        </div>
+        ${birthdays.map(e=>`
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
           <div style="font-size:28px">🎂</div>
           <div style="flex:1">
@@ -3439,13 +3423,16 @@ function celebrationsPanel(){
             <div style="font-size:12px;color:var(--muted)">${e.role} · ${e.dept}</div>
           </div>
           <button class="btn" style="background:#7c3aed;color:#fff;font-size:13px;padding:6px 14px" onclick="sendBirthdayWish('${e.id}')">🎂 Wish</button>
+          <button title="Dismiss" onclick="dismissCelebration('bday:${e.id}')" style="background:none;border:none;cursor:pointer;color:#7c3aed;font-size:18px;padding:4px 8px;border-radius:4px;opacity:.6" onmouseover="this.style.opacity='1';this.style.background='rgba(0,0,0,.08)'" onmouseout="this.style.opacity='.6';this.style.background='none'">×</button>
         </div>`).join('')}
       </div>`:''}
 
-    ${cel.welcome.length?`
-      <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-radius:10px;padding:12px 14px;border:1px solid #bbf7d0">
-        <div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:8px">🎊 New Joinee${cel.welcome.length>1?'s':''}</div>
-        ${cel.welcome.map(({emp:e,days})=>`
+    ${welcome.length?`
+      <div style="position:relative;background:linear-gradient(135deg,#f0fdf4,#dcfce7);border-radius:10px;padding:12px 14px;border:1px solid #bbf7d0">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700;color:#166534">🎊 New Joinee${welcome.length>1?'s':''}</div>
+        </div>
+        ${welcome.map(({emp:e,days})=>`
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
           <div style="font-size:28px">${days===0?'🎊':'👋'}</div>
           <div style="flex:1">
@@ -3453,13 +3440,16 @@ function celebrationsPanel(){
             <div style="font-size:12px;color:var(--muted)">${days===0?'Joined today!':days===1?'Joined yesterday':`Joined ${days} days ago`} · ${e.dept}</div>
           </div>
           <button class="btn" style="background:#059669;color:#fff;font-size:13px;padding:6px 14px" onclick="sendWelcomeWish('${e.id}')">👋 Welcome</button>
+          <button title="Dismiss" onclick="dismissCelebration('welcome:${e.id}')" style="background:none;border:none;cursor:pointer;color:#166534;font-size:18px;padding:4px 8px;border-radius:4px;opacity:.6" onmouseover="this.style.opacity='1';this.style.background='rgba(0,0,0,.08)'" onmouseout="this.style.opacity='.6';this.style.background='none'">×</button>
         </div>`).join('')}
       </div>`:''}
 
-    ${cel.sendoff.length?`
-      <div style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);border-radius:10px;padding:12px 14px;border:1px solid #ddd6fe">
-        <div style="font-size:13px;font-weight:700;color:#5b21b6;margin-bottom:8px">💐 Farewell</div>
-        ${cel.sendoff.map(e=>`
+    ${sendoff.length?`
+      <div style="position:relative;background:linear-gradient(135deg,#f5f3ff,#ede9fe);border-radius:10px;padding:12px 14px;border:1px solid #ddd6fe">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700;color:#5b21b6">💐 Farewell</div>
+        </div>
+        ${sendoff.map(e=>`
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
           <div style="font-size:28px">💐</div>
           <div style="flex:1">
@@ -3467,6 +3457,7 @@ function celebrationsPanel(){
             <div style="font-size:12px;color:var(--muted)">${e.role} · ${e.dept}</div>
           </div>
           <button class="btn" style="background:#7c3aed;color:#fff;font-size:13px;padding:6px 14px" onclick="sendSendoffWish('${e.id}')">💐 Farewell</button>
+          <button title="Dismiss" onclick="dismissCelebration('sendoff:${e.id}')" style="background:none;border:none;cursor:pointer;color:#5b21b6;font-size:18px;padding:4px 8px;border-radius:4px;opacity:.6" onmouseover="this.style.opacity='1';this.style.background='rgba(0,0,0,.08)'" onmouseout="this.style.opacity='.6';this.style.background='none'">×</button>
         </div>`).join('')}
       </div>`:''}
 
