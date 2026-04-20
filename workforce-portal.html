@@ -2240,10 +2240,48 @@ function empDashboard(){
   const todayAtt=D.attendance.find(a=>a.empName===emp.name&&a.date===todayStr()||a.empId===emp._uuid&&a.date===todayStr());
   const slip=calcPayslip(emp, currentMonth());
   const net=slip?slip.netPay:0;
+
+  // Profile completion calc: 5 required fields
+  const profileFields=[
+    {key:'name', label:'Name', filled:!!emp.name&&emp.name.trim().length>0},
+    {key:'phone', label:'Phone', filled:!!emp.phone&&emp.phone.trim().length>=10},
+    {key:'dob', label:'Date of birth', filled:!!emp.dob},
+    {key:'bloodGroup', label:'Blood group', filled:!!emp.bloodGroup},
+    {key:'address', label:'Address', filled:!!emp.address&&emp.address.trim().length>3}
+  ];
+  const filledCount=profileFields.filter(f=>f.filled).length;
+  const totalCount=profileFields.length;
+  const pct=Math.round((filledCount/totalCount)*100);
+  const missing=profileFields.filter(f=>!f.filled);
+
   return `
   <div class="page-hd">
     <div><div class="pg-title">Hi, ${emp.name.split(' ')[0]}! 👋</div><div class="pg-sub">${dateLabel()} · ${emp.role} · ${emp.dept}</div></div>
   </div>
+
+  ${pct<100?`
+  <!-- Profile completion nudge -->
+  <div style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #fbbf24;border-radius:12px;padding:16px 20px;margin-bottom:1rem;display:flex;align-items:center;gap:16px">
+    <!-- Circular progress ring -->
+    <div style="position:relative;width:72px;height:72px;flex-shrink:0">
+      <svg viewBox="0 0 72 72" style="transform:rotate(-90deg);width:72px;height:72px">
+        <circle cx="36" cy="36" r="30" stroke="#fff" stroke-width="7" fill="none" opacity=".5"/>
+        <circle cx="36" cy="36" r="30" stroke="#d97706" stroke-width="7" fill="none"
+          stroke-dasharray="${2*Math.PI*30}"
+          stroke-dashoffset="${2*Math.PI*30*(1-pct/100)}"
+          stroke-linecap="round"
+          style="transition:stroke-dashoffset .6s"/>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;color:#92400e">${pct}%</div>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:15px;font-weight:700;color:#92400e;margin-bottom:2px">📝 Complete your profile</div>
+      <div style="font-size:13px;color:#78350f;margin-bottom:6px">${filledCount} of ${totalCount} fields filled. Please add: <strong>${missing.map(m=>m.label).join(', ')}</strong></div>
+      <button onclick="navEmp('emp-profile')" style="background:#d97706;color:#fff;border:none;padding:7px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Complete now →</button>
+    </div>
+  </div>
+  `:''}
+
   ${celebrationsPanel()}
   <div class="stat-grid">
     <div class="stat"><div class="stat-lbl">Days present</div><div class="stat-val">${present}</div><div class="stat-sub">This month</div></div>
