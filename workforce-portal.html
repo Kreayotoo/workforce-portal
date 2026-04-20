@@ -4986,56 +4986,77 @@ function showEmployeeDetail(empIdOrUuid){
         `:`<div style="font-size:13px">Status: <strong>${attRec?.status||'Not marked'}</strong> · ${attRec?.in||'—'} → ${attRec?.out||'—'}</div>`}
       </div>`:''}
 
-      <!-- Basic info grid -->
-      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">👤 Personal</div>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:1rem">
+      <!-- Personal info (mirrors employee Personal tab) -->
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px">👤 <span>Personal</span></div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:10px">
+        ${infoCard('Full name',e.name||'—')}
+        ${infoCard('Employee ID',e.id||'—')}
         ${infoCard('Email',e.email||'—')}
         ${infoCard('Phone',e.phone||'—')}
         ${infoCard('Date of birth',e.dob||'—')}
-        ${infoCard('Joined',e.joined||'—')}
         ${infoCard('🩸 Blood group',e.bloodGroup||'—')}
+        ${infoCard('Joined',e.joined||'—')}
+        ${infoCard('Employee type',e.empType?(e.empType[0].toUpperCase()+e.empType.slice(1)):'Office')}
+        ${infoCard('Department',e.dept||'—')}
+        ${infoCard('Role',e.role||'—')}
         ${infoCard('Status',e.status||'Active')}
-        ${infoCard('Salary','₹'+fmt(e.salary||0))}
+        ${infoCard('CTC (monthly)','₹'+fmt(e.salary||0))}
       </div>
-      ${e.address?`<div style="background:#f8fafc;border-radius:8px;padding:10px 12px;margin-bottom:1rem"><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">📍 Address</div><div style="font-size:13px;margin-top:2px">${e.address}</div></div>`:''}
+      <div style="background:#f8fafc;border-radius:8px;padding:10px 12px;margin-bottom:1rem">
+        <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">📍 Address</div>
+        <div style="font-size:13px;margin-top:2px;${!e.address?'color:var(--muted);font-style:italic':''}">${e.address||'Not provided'}</div>
+      </div>
 
-      <!-- Identity (sensitive — masked) -->
-      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
-        <span>🪪 Identity documents</span>
+      <!-- KYC (mirrors employee KYC tab) -->
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+        <span>🪪 KYC &amp; Identity documents</span>
         <button onclick="toggleRevealIdentity(this)" data-revealed="0" style="background:#f1f5f9;border:none;color:#475569;padding:3px 10px;border-radius:12px;cursor:pointer;font-size:10px;font-weight:700">👁 Reveal</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         ${infoCardMasked('Aadhaar', e.aadhaar||'', maskAadhaar(e.aadhaar), e.aadhaar?e.aadhaar.replace(/(\d{4})(?=\d)/g,'$1 ').trim():'—')}
         ${infoCardMasked('PAN', e.pan||'', maskPAN(e.pan), e.pan||'—')}
       </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        ${infoCard('UAN (PF)',e.uan||'—')}
+        ${infoCard('KYC status', e.kycCompleted?`<span style="color:#16a34a">✓ Verified</span>`:`<span style="color:#d97706">⚠ Pending</span>`)}
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem">
         ${renderAdminKYCDocBadge('aadhaar', e, 'Aadhaar document')}
         ${renderAdminKYCDocBadge('pan', e, 'PAN document')}
       </div>
 
-      <!-- Bank -->
-      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🏦 Bank details</div>
+      <!-- Bank (mirrors employee Bank tab) -->
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🏦 Bank details</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:1rem">
         ${infoCardMasked('Account', e.bankAccount||'', maskAccount(e.bankAccount), e.bankAccount||'—')}
         ${infoCard('IFSC',e.bankIfsc||'—')}
         ${infoCard('Bank',e.bankName||'—')}
       </div>
 
-      <!-- Emergency -->
-      ${e.emergencyName?`
-      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🚨 Emergency contact</div>
+      <!-- Emergency contact (mirrors employee Emergency tab; show even if empty) -->
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🚨 Emergency contact</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:1rem">
-        ${infoCard('Name',e.emergencyName)}
+        ${infoCard('Name',e.emergencyName||'—')}
         ${infoCard('Phone',e.emergencyPhone||'—')}
         ${infoCard('Relation',e.emergencyRelation||'—')}
-      </div>`:''}
+      </div>
 
       <!-- Leave summary -->
-      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🏖 Leaves</div>
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🏖 Leaves</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1rem">
-        ${infoCard('Total',myLeaves.length)}
+        ${infoCard('Total applied',myLeaves.length)}
         ${infoCard('Approved days',approvedLeaves)}
         ${infoCard('Pending',pendingLeaves)}
+      </div>
+
+      <!-- Admin quick actions -->
+      <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;margin-bottom:1rem">
+        <div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🛠 Admin actions</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-sec" style="font-size:12px;padding:6px 12px" onclick="document.getElementById('emp-detail-overlay').remove();openEmpModal('${e.id}')">✏ Edit details</button>
+          <button class="btn btn-sec" style="font-size:12px;padding:6px 12px" onclick="document.getElementById('emp-detail-overlay').remove();nav('payroll')">💰 Payroll</button>
+          <button class="btn btn-sec" style="font-size:12px;padding:6px 12px" onclick="document.getElementById('emp-detail-overlay').remove();nav('attendance')">📅 Attendance</button>
+        </div>
       </div>
 
       <div style="display:flex;gap:8px;margin-top:1rem">
