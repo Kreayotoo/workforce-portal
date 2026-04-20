@@ -5418,28 +5418,451 @@ async function saveAtt(){
 }
 
 // ─── LEAVE ───────────────────────────────────────────────────────
+// ─── LEAVES MODULE ───────────────────────────────────────────────
+// 10 default leave types — full Kredily-style list
+const DEFAULT_LEAVE_TYPES = [
+  {code:'CL', name:'Casual Leave', icon:'🌿', color:'#3b82f6', annualQuota:12, accrual:'monthly', accrualRate:1, carryForward:false, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:false, allowedInNotice:true, description:'Short notice, personal reasons'},
+  {code:'EL', name:'Earned Leave', icon:'🏖', color:'#10b981', annualQuota:12, accrual:'monthly', accrualRate:1, carryForward:true, encash:true, weekendsCount:false, holidaysCount:false, allowedInProbation:false, allowedInNotice:false, description:'Planned time off, carry-forward enabled'},
+  {code:'SL', name:'Sick Leave', icon:'🤒', color:'#ef4444', annualQuota:10, accrual:'yearly', accrualRate:10, carryForward:false, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:true, allowedInNotice:true, description:'Medical rest with doctor certificate for 3+ days'},
+  {code:'WFH', name:'Work From Home', icon:'🏠', color:'#8b5cf6', annualQuota:0, accrual:'none', accrualRate:0, carryForward:false, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:true, allowedInNotice:true, description:'Remote working days (not deducted from leave balance)'},
+  {code:'ML', name:'Maternity Leave', icon:'👶', color:'#ec4899', annualQuota:182, accrual:'yearly', accrualRate:182, carryForward:false, encash:false, weekendsCount:true, holidaysCount:true, allowedInProbation:true, allowedInNotice:false, description:'Maternity leave as per Indian law (26 weeks)'},
+  {code:'PL', name:'Paternity Leave', icon:'🍼', color:'#06b6d4', annualQuota:15, accrual:'yearly', accrualRate:15, carryForward:false, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:true, allowedInNotice:false, description:'Paternity leave for new fathers'},
+  {code:'CO', name:'Comp Off', icon:'🔄', color:'#f59e0b', annualQuota:0, accrual:'none', accrualRate:0, carryForward:true, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:true, allowedInNotice:true, description:'Earned by working on holidays/weekends'},
+  {code:'OD', name:'On Duty', icon:'💼', color:'#0ea5e9', annualQuota:0, accrual:'none', accrualRate:0, carryForward:false, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:true, allowedInNotice:true, description:'Official work outside office (client meetings, travel)'},
+  {code:'EV', name:'Event Leave', icon:'🎉', color:'#d946ef', annualQuota:3, accrual:'yearly', accrualRate:3, carryForward:false, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:true, allowedInNotice:true, description:'For weddings, special family events'},
+  {code:'LOP', name:'Loss of Pay', icon:'⚠️', color:'#991b1b', annualQuota:0, accrual:'none', accrualRate:0, carryForward:false, encash:false, weekendsCount:true, holidaysCount:true, allowedInProbation:true, allowedInNotice:true, description:'Unpaid leave — triggered when paid balance runs out'}
+];
+
+function getLeaveTypes(){
+  const saved=D.settings?.leaveTypes;
+  if(saved&&Array.isArray(saved)&&saved.length>0) return saved;
+  return DEFAULT_LEAVE_TYPES;
+}
+
 function pgLeave(){
+  const tab=window._leaveTab||'logs';
+  const types=getLeaveTypes();
+  const pendingCount=D.leaves.filter(l=>l.status==='Pending').length;
   return `
-  <div class="page-hd"><div class="pg-title">Leave management</div><button class="btn btn-primary" onclick="openLeaveModal()">+ Apply leave</button></div>
-  <div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-    <div class="stat"><div class="stat-lbl">Pending</div><div class="stat-val">${D.leaves.filter(l=>l.status==='Pending').length}</div><div class="stat-sub">Awaiting approval</div></div>
-    <div class="stat"><div class="stat-lbl">Approved</div><div class="stat-val">${D.leaves.filter(l=>l.status==='Approved').length}</div></div>
-    <div class="stat"><div class="stat-lbl">Total days</div><div class="stat-val">${D.leaves.reduce((s,l)=>s+(l.days||0),0)}</div></div>
+  <div class="page-hd">
+    <div><div class="pg-title">🏖 Leaves</div><div class="pg-sub">Leave management · ${types.length} leave types configured</div></div>
+    <button class="btn btn-primary" onclick="openLeaveModal()">+ Apply leave</button>
   </div>
-  <div class="card" style="padding:0">
-    <div class="card-hd" style="padding:1rem 1rem 0"><h3>All leave requests</h3></div>
-    <table style="margin-top:8px"><thead><tr><th style="width:18%;padding-left:12px">Employee</th><th style="width:11%">Type</th><th style="width:12%">From</th><th style="width:12%">To</th><th style="width:6%">Days</th><th style="width:21%">Reason</th><th style="width:20%">Action</th></tr></thead>
-    <tbody>${D.leaves.map(l=>`<tr><td style="padding-left:12px">${l.emp}</td><td>${badge(l.type)}</td><td>${l.from}</td><td>${l.to}</td><td>${l.days}</td><td>${l.reason}</td>
-    <td>${l.status==='Pending'?`<div style="display:flex;gap:4px"><button class="btn-g" onclick="updateLeave('${l._uuid||l.id}','Approved')">Approve</button><button class="btn-r" onclick="updateLeave('${l._uuid||l.id}','Rejected')">Reject</button></div>`:badge(l.status)}</td></tr>`).join('')||'<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)">No requests</td></tr>'}</tbody></table>
+
+  <!-- Tabs -->
+  <div style="display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:1rem;overflow-x:auto">
+    ${[
+      ['logs','📋 Logs',pendingCount],
+      ['rules','⚙ Rules',null],
+      ['balance','📊 Balance',null],
+      ['settings','⚡ Settings',null]
+    ].map(([t,lbl,badge])=>`
+      <button onclick="window._leaveTab='${t}';nav('leave')" style="padding:10px 20px;background:${tab===t?'var(--navy)':'transparent'};color:${tab===t?'#fff':'var(--muted)'};border:none;cursor:pointer;font-size:14px;font-weight:600;border-radius:8px 8px 0 0;white-space:nowrap;display:flex;align-items:center;gap:6px">
+        ${lbl}${badge?`<span style="background:${tab===t?'rgba(255,255,255,.25)':'#ef4444'};color:#fff;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:800">${badge}</span>`:''}
+      </button>`).join('')}
   </div>
+
+  ${tab==='logs'?pgLeaveLogs():tab==='rules'?pgLeaveRules():tab==='balance'?pgLeaveBalance():pgLeaveSettings()}
   <div id="leave-modal-wrap"></div>`;
 }
+
+// ── Tab 1: LOGS (the existing leaves list) ───
+function pgLeaveLogs(){
+  const filter=window._leaveLogFilter||'Pending';
+  const search=(window._leaveLogSearch||'').toLowerCase();
+  const all=D.leaves||[];
+  const counts={
+    Pending:all.filter(l=>l.status==='Pending').length,
+    Approved:all.filter(l=>l.status==='Approved').length,
+    Rejected:all.filter(l=>l.status==='Rejected').length,
+    All:all.length
+  };
+  let rows=filter==='All'?all:all.filter(l=>l.status===filter);
+  if(search) rows=rows.filter(l=>(l.emp||'').toLowerCase().includes(search)||(l.reason||'').toLowerCase().includes(search)||(l.type||'').toLowerCase().includes(search));
+
+  return `
+  <div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <div class="stat"><div class="stat-lbl">Pending</div><div class="stat-val">${counts.Pending}</div><div class="stat-sub">Awaiting approval</div></div>
+    <div class="stat"><div class="stat-lbl">Approved</div><div class="stat-val">${counts.Approved}</div></div>
+    <div class="stat"><div class="stat-lbl">Total days</div><div class="stat-val">${all.reduce((s,l)=>s+(l.days||0),0)}</div></div>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
+    <input type="text" placeholder="🔍 Search by employee, reason, type…" value="${window._leaveLogSearch||''}" oninput="window._leaveLogSearch=this.value;nav('leave')" style="flex:1;min-width:240px;padding:8px 12px;font-size:13px">
+    ${['Pending','Approved','Rejected','All'].map(f=>`
+      <button onclick="window._leaveLogFilter='${f}';nav('leave')" style="padding:7px 14px;border-radius:20px;border:1px solid ${filter===f?'var(--navy)':'var(--border)'};background:${filter===f?'var(--navy)':'#fff'};color:${filter===f?'#fff':'var(--text)'};font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+        ${f} <span style="background:${filter===f?'rgba(255,255,255,.25)':'#f1f5f9'};padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700">${counts[f]}</span>
+      </button>`).join('')}
+    ${counts.Pending>0?`<button class="btn btn-primary" style="background:#16a34a;font-size:12px;padding:7px 14px" onclick="bulkApproveAllPending()">✓ Bulk Approve (${counts.Pending})</button>`:''}
+    <button class="btn btn-sec" style="font-size:12px;padding:7px 14px" onclick="exportLeaveLogsCSV()">⬇ Export CSV</button>
+  </div>
+
+  <div class="card" style="padding:0">
+    <table><thead><tr>
+      <th style="width:16%;padding-left:12px">Employee</th>
+      <th style="width:10%">Type</th>
+      <th style="width:11%">From</th>
+      <th style="width:11%">To</th>
+      <th style="width:6%">Days</th>
+      <th style="width:22%">Reason</th>
+      <th style="width:9%">Status</th>
+      <th style="width:15%">Action</th>
+    </tr></thead>
+    <tbody>${rows.map(l=>{
+      const typeInfo=getLeaveTypes().find(t=>t.code===l.type||t.name===l.type)||{icon:'📄',color:'#6b7280'};
+      return `<tr>
+        <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:7px">${av(l.emp,28)}<span style="font-weight:600">${l.emp}</span></div></td>
+        <td><span style="display:inline-flex;align-items:center;gap:4px;background:${typeInfo.color}22;color:${typeInfo.color};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${typeInfo.icon} ${l.type}</span></td>
+        <td>${l.from}</td>
+        <td>${l.to}</td>
+        <td><strong>${l.days}</strong></td>
+        <td style="white-space:normal;font-size:12px">${l.reason||'—'}</td>
+        <td>${badge(l.status)}</td>
+        <td>${l.status==='Pending'?`<div style="display:flex;gap:4px"><button class="btn-g" onclick="updateLeave('${l._uuid||l.id}','Approved')">✓</button><button class="btn-r" onclick="updateLeave('${l._uuid||l.id}','Rejected')">✗</button></div>`:'<span style="color:var(--muted);font-size:11px">—</span>'}</td>
+      </tr>`;
+    }).join('')||'<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--muted)">No requests match filter</td></tr>'}</tbody></table>
+  </div>`;
+}
+
+// ── Tab 2: RULES (Kredily-style sidebar + panel) ───
+function pgLeaveRules(){
+  const types=getLeaveTypes();
+  const selected=window._ruleSelectedCode||types[0].code;
+  const active=types.find(t=>t.code===selected)||types[0];
+  const empCount=D.employees.filter(e=>e.status==='Active').length;
+
+  return `
+  <div style="display:grid;grid-template-columns:280px 1fr;gap:1rem;align-items:start">
+
+    <!-- Left sidebar: leave type list -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:12px 14px;border-bottom:1px solid var(--border);background:#f8fafc">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Leave types</div>
+      </div>
+      <div style="max-height:600px;overflow-y:auto">
+        ${types.map(t=>{
+          const isActive=t.code===selected;
+          return `<div onclick="window._ruleSelectedCode='${t.code}';nav('leave')" style="padding:12px 14px;border-left:4px solid ${isActive?t.color:'transparent'};background:${isActive?'#eff6ff':'#fff'};cursor:pointer;border-bottom:1px solid var(--border);transition:.15s">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <span style="font-size:18px">${t.icon}</span>
+                  <span style="font-weight:700;font-size:14px;color:${isActive?t.color:'var(--text)'}">${t.name}</span>
+                </div>
+                <div style="font-size:11px;color:var(--muted);margin-top:3px;padding-left:26px">${empCount} Employees</div>
+              </div>
+              ${t.accrual==='none'?`<span style="background:${t.color};color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">×</span>`:`<span style="color:${t.color};font-size:18px">✓</span>`}
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- Right panel: selected type's rules -->
+    <div class="card" style="padding:1.5rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+            <span style="font-size:24px">${active.icon}</span>
+            <h2 style="font-size:20px;font-weight:700;color:${active.color}">${active.name}</h2>
+            <span style="background:${active.color}22;color:${active.color};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${active.code}</span>
+          </div>
+          <div style="font-size:13px;color:var(--muted)">${active.description}</div>
+        </div>
+        <button class="btn btn-primary" onclick="editLeaveRule('${active.code}')" style="font-size:12px">✏ Edit Rules</button>
+      </div>
+
+      <!-- Rule details -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.5rem">
+        ${ruleCard('📆 Annual Quota', active.annualQuota===0?'Not accrued':`${active.annualQuota} days/year`)}
+        ${ruleCard('⏱ Accrual', active.accrual==='monthly'?`Monthly (${active.accrualRate}/month)`:active.accrual==='yearly'?`Yearly (${active.accrualRate}/year)`:'No accrual')}
+        ${ruleCard('↪ Carry Forward', active.carryForward?'Enabled':'Disabled')}
+        ${ruleCard('💰 Encashment', active.encash?'Enabled':'Disabled')}
+        ${ruleCard('📅 Weekends count', active.weekendsCount?'Yes (included in leave)':'No (not counted)')}
+        ${ruleCard('🎉 Holidays count', active.holidaysCount?'Yes (included in leave)':'No (not counted)')}
+        ${ruleCard('👶 Allowed in probation', active.allowedInProbation?'Yes':'No')}
+        ${ruleCard('📝 Allowed in notice period', active.allowedInNotice?'Yes':'No')}
+      </div>
+
+      <div style="margin-top:1.5rem;padding:12px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;font-size:12px;color:#1e40af">
+        💡 Applied to <strong>${empCount} active employees</strong>. Changes take effect from next payroll cycle.
+      </div>
+    </div>
+  </div>`;
+}
+
+function ruleCard(label, value){
+  return `<div style="background:#f8fafc;border-radius:10px;padding:12px 14px;border:1px solid var(--border)">
+    <div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${label}</div>
+    <div style="font-size:14px;font-weight:600">${value}</div>
+  </div>`;
+}
+
+// ── Tab 3: BALANCE (per-employee leave balance grid) ───
+function pgLeaveBalance(){
+  const types=getLeaveTypes().filter(t=>t.annualQuota>0); // only accruing types
+  const emps=D.employees.filter(e=>e.status==='Active');
+  const year=new Date().getFullYear();
+
+  return `
+  <div style="margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+    <div>
+      <div style="font-size:16px;font-weight:700">📊 Leave Balance — ${year}</div>
+      <div style="font-size:12px;color:var(--muted)">Accrued minus used, per employee per leave type</div>
+    </div>
+    <button class="btn btn-sec" style="font-size:12px" onclick="exportBalanceCSV()">⬇ Export CSV</button>
+  </div>
+
+  <div class="card" style="padding:0;overflow-x:auto">
+    <table style="min-width:900px">
+      <thead><tr>
+        <th style="padding-left:12px;text-align:left">Employee</th>
+        ${types.map(t=>`<th style="text-align:center"><span style="color:${t.color}">${t.icon} ${t.code}</span></th>`).join('')}
+        <th style="text-align:center">Total</th>
+      </tr></thead>
+      <tbody>${emps.map(e=>{
+        const bal=calcLeaveBalanceFor(e, types, year);
+        const total=types.reduce((s,t)=>s+(bal[t.code]?.balance||0),0);
+        return `<tr>
+          <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:8px">${av(e.name,28)}<div><div style="font-weight:600">${e.name}</div><div style="font-size:11px;color:var(--muted)">${e.dept||'—'}</div></div></div></td>
+          ${types.map(t=>{
+            const b=bal[t.code]||{balance:0,used:0,accrued:0};
+            const pct=b.accrued>0?Math.round((b.balance/b.accrued)*100):0;
+            const color=pct>50?'#16a34a':pct>20?'#f59e0b':'#ef4444';
+            return `<td style="text-align:center"><div style="font-weight:700;color:${color};font-size:14px">${b.balance.toFixed(1)}</div><div style="font-size:10px;color:var(--muted)">${b.used}/${b.accrued}</div></td>`;
+          }).join('')}
+          <td style="text-align:center"><strong style="color:var(--navy);font-size:15px">${total.toFixed(1)}</strong></td>
+        </tr>`;
+      }).join('')||`<tr><td colspan="${types.length+2}" style="text-align:center;padding:2rem;color:var(--muted)">No active employees</td></tr>`}</tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:1rem;padding:12px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;font-size:12px;color:#1e40af">
+    💡 Balance = Accrued − Used. Colour coding: <span style="color:#16a34a;font-weight:700">green &gt; 50%</span>, <span style="color:#f59e0b;font-weight:700">amber 20-50%</span>, <span style="color:#ef4444;font-weight:700">red &lt; 20%</span>
+  </div>`;
+}
+
+function calcLeaveBalanceFor(emp, types, year){
+  const bal={};
+  const yearStart=new Date(year,0,1);
+  const now=new Date();
+  types.forEach(t=>{
+    let accrued=0;
+    if(t.accrual==='yearly') accrued=t.annualQuota;
+    else if(t.accrual==='monthly'){
+      // Months elapsed since year start OR join date, whichever later
+      const joinDate=emp.joined?new Date(emp.joined):yearStart;
+      const start=joinDate>yearStart?joinDate:yearStart;
+      const monthsElapsed=(now.getFullYear()-start.getFullYear())*12 + (now.getMonth()-start.getMonth())+1;
+      accrued=Math.max(0, monthsElapsed*t.accrualRate);
+    }
+    const used=(D.leaves||[]).filter(l=>l.emp===emp.name && (l.type===t.code||l.type===t.name) && l.status==='Approved' && new Date(l.from).getFullYear()===year).reduce((s,l)=>s+(l.days||0),0);
+    bal[t.code]={accrued, used, balance:Math.max(0,accrued-used)};
+  });
+  return bal;
+}
+
+// ── Tab 4: SETTINGS (global leave settings) ───
+function pgLeaveSettings(){
+  const s=D.settings||{};
+  const yearStart=s.leaveYearStart||'01-01';
+  const rounding=s.leaveRounding||'nearest';
+  const minNotice=s.leaveMinNotice||0;
+  const approverCascade=s.leaveApproverCascade||'direct';
+
+  return `
+  <div style="max-width:720px">
+    <div class="card">
+      <div class="card-hd"><h3>⚡ Global leave settings</h3></div>
+
+      <div class="frow">
+        <div class="fld">
+          <label>Leave year starts on</label>
+          <select id="lvs-yearstart">
+            <option value="01-01" ${yearStart==='01-01'?'selected':''}>January 1 (Calendar year)</option>
+            <option value="04-01" ${yearStart==='04-01'?'selected':''}>April 1 (Financial year — Indian)</option>
+            <option value="07-01" ${yearStart==='07-01'?'selected':''}>July 1</option>
+          </select>
+        </div>
+        <div class="fld">
+          <label>Day rounding</label>
+          <select id="lvs-rounding">
+            <option value="nearest" ${rounding==='nearest'?'selected':''}>Nearest (0.5 → round)</option>
+            <option value="ceil" ${rounding==='ceil'?'selected':''}>Round up (always)</option>
+            <option value="floor" ${rounding==='floor'?'selected':''}>Round down (always)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="frow">
+        <div class="fld">
+          <label>Minimum notice (days)</label>
+          <input type="number" id="lvs-notice" value="${minNotice}" min="0" max="30">
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Days advance notice required (excluding sick & emergency)</div>
+        </div>
+        <div class="fld">
+          <label>Approver</label>
+          <select id="lvs-approver">
+            <option value="direct" ${approverCascade==='direct'?'selected':''}>Direct manager only</option>
+            <option value="admin" ${approverCascade==='admin'?'selected':''}>Admin only</option>
+            <option value="cascade" ${approverCascade==='cascade'?'selected':''}>Manager → Admin (cascade)</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn btn-primary" onclick="saveLeaveSettings()">💾 Save settings</button>
+    </div>
+
+    <div class="card" style="margin-top:1rem">
+      <div class="card-hd"><h3>🔄 Restore defaults</h3></div>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:1rem">Reset all 10 leave types to their default rules. Existing leave applications are preserved.</p>
+      <button class="btn btn-sec" style="color:#dc2626;border-color:#fecaca" onclick="resetLeaveTypesToDefault()">↻ Restore default leave types</button>
+    </div>
+  </div>`;
+}
+
+async function saveLeaveSettings(){
+  D.settings.leaveYearStart=$('lvs-yearstart').value;
+  D.settings.leaveRounding=$('lvs-rounding').value;
+  D.settings.leaveMinNotice=parseInt($('lvs-notice').value)||0;
+  D.settings.leaveApproverCascade=$('lvs-approver').value;
+  await sbSaveSettings();
+  save();
+  showToast('✅ Leave settings saved','success');
+}
+
+async function resetLeaveTypesToDefault(){
+  if(!confirm('Reset all 10 leave types to their default rules? Existing leave applications are preserved.')) return;
+  D.settings.leaveTypes=null;
+  await sbSaveSettings();
+  save();
+  showToast('✅ Leave types reset to defaults','success');
+  nav('leave');
+}
+
+function editLeaveRule(code){
+  const types=getLeaveTypes();
+  const t=types.find(x=>x.code===code);
+  if(!t) return;
+  const wrap=$('leave-modal-wrap');
+  wrap.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('leave-modal-wrap')">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-hd"><h3>${t.icon} Edit: ${t.name}</h3><button class="xbtn" onclick="closeModal('leave-modal-wrap')">×</button></div>
+      <div class="frow">
+        <div class="fld"><label>Annual quota (days/year)</label><input type="number" id="lr-quota" value="${t.annualQuota}" min="0"></div>
+        <div class="fld"><label>Accrual type</label>
+          <select id="lr-accrual">
+            <option value="monthly" ${t.accrual==='monthly'?'selected':''}>Monthly</option>
+            <option value="yearly" ${t.accrual==='yearly'?'selected':''}>Yearly (all at once)</option>
+            <option value="none" ${t.accrual==='none'?'selected':''}>None (request-based)</option>
+          </select>
+        </div>
+      </div>
+      <div class="fld"><label>Accrual rate (per period)</label><input type="number" id="lr-rate" value="${t.accrualRate}" step="0.5" min="0"></div>
+      <div class="fld"><label>Description</label><textarea id="lr-desc" rows="2">${t.description||''}</textarea></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0">
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="lr-cf" ${t.carryForward?'checked':''}> Carry forward</label>
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="lr-enc" ${t.encash?'checked':''}> Encashment</label>
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="lr-we" ${t.weekendsCount?'checked':''}> Count weekends</label>
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="lr-hl" ${t.holidaysCount?'checked':''}> Count holidays</label>
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="lr-pb" ${t.allowedInProbation?'checked':''}> Allowed in probation</label>
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="lr-np" ${t.allowedInNotice?'checked':''}> Allowed in notice</label>
+      </div>
+      <div class="modal-ftr">
+        <button class="btn btn-sec" onclick="closeModal('leave-modal-wrap')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveLeaveRule('${code}')">💾 Save rule</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function saveLeaveRule(code){
+  const types=getLeaveTypes();
+  const idx=types.findIndex(t=>t.code===code);
+  if(idx<0) return;
+  types[idx]={
+    ...types[idx],
+    annualQuota:parseInt($('lr-quota').value)||0,
+    accrual:$('lr-accrual').value,
+    accrualRate:parseFloat($('lr-rate').value)||0,
+    description:$('lr-desc').value.trim(),
+    carryForward:$('lr-cf').checked,
+    encash:$('lr-enc').checked,
+    weekendsCount:$('lr-we').checked,
+    holidaysCount:$('lr-hl').checked,
+    allowedInProbation:$('lr-pb').checked,
+    allowedInNotice:$('lr-np').checked
+  };
+  D.settings.leaveTypes=types;
+  await sbSaveSettings();
+  save();
+  closeModal('leave-modal-wrap');
+  showToast(`✅ ${types[idx].name} rules updated`,'success');
+  nav('leave');
+}
+
+async function bulkApproveAllPending(){
+  const pending=D.leaves.filter(l=>l.status==='Pending');
+  if(!pending.length) return;
+  if(!confirm(`Approve all ${pending.length} pending leaves at once?`)) return;
+  for(const l of pending){
+    l.status='Approved';
+    await sbUpdateLeaveStatus(l);
+    const emp=D.employees.find(e=>e.name===l.emp);
+    if(emp&&emp.email){
+      await sbSaveNotification({msg:`✅ Your ${l.type||'leave'} request (${l.from}${l.to&&l.to!==l.from?' → '+l.to:''}) was approved by admin`,type:'success',to:emp.email});
+    }
+  }
+  save();
+  showToast(`✅ Approved ${pending.length} leaves`,'success');
+  nav('leave');
+}
+
+function exportLeaveLogsCSV(){
+  const rows=D.leaves||[];
+  if(!rows.length){ showToast('Nothing to export','info'); return; }
+  const hdr=['Employee','Type','From','To','Days','Status','Reason','Applied On'];
+  const lines=[hdr.join(',')];
+  rows.forEach(l=>{
+    const esc=s=>`"${String(s||'').replace(/"/g,'""')}"`;
+    lines.push([esc(l.emp),esc(l.type),esc(l.from),esc(l.to),l.days||0,esc(l.status),esc(l.reason),esc(l.appliedAt||'')].join(','));
+  });
+  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`LeaveLogs_${todayStr()}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  showToast(`✅ Downloaded ${rows.length} rows`,'success');
+}
+
+function exportBalanceCSV(){
+  const year=new Date().getFullYear();
+  const types=getLeaveTypes().filter(t=>t.annualQuota>0);
+  const emps=D.employees.filter(e=>e.status==='Active');
+  const hdr=['Employee','Department', ...types.map(t=>`${t.code} Accrued`), ...types.map(t=>`${t.code} Used`), ...types.map(t=>`${t.code} Balance`)];
+  const lines=[hdr.join(',')];
+  emps.forEach(e=>{
+    const bal=calcLeaveBalanceFor(e, types, year);
+    const row=[`"${e.name}"`,`"${e.dept||''}"`,
+      ...types.map(t=>bal[t.code]?.accrued||0),
+      ...types.map(t=>bal[t.code]?.used||0),
+      ...types.map(t=>bal[t.code]?.balance||0)
+    ];
+    lines.push(row.join(','));
+  });
+  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`LeaveBalance_${year}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  showToast(`✅ Exported ${emps.length} employees`,'success');
+}
+
 async function updateLeave(id,status){
   const l=D.leaves.find(x=>x.id===id||x._uuid===id);
   if(!l) return;
   l.status=status;
   await sbUpdateLeaveStatus(l);
-  // Notify the employee whose leave this is
   const emp=D.employees.find(e=>e.name===l.emp);
   if(emp&&emp.email){
     const icon=status==='Approved'?'✅':'❌';
@@ -5449,17 +5872,20 @@ async function updateLeave(id,status){
   save();
   nav('leave');
 }
+
 function openLeaveModal(){
+  const types=getLeaveTypes();
   $('leave-modal-wrap').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('leave-modal-wrap')">
   <div class="modal"><div class="modal-hd"><h3>Apply for leave</h3><button class="xbtn" onclick="closeModal('leave-modal-wrap')">×</button></div>
   <div class="frow"><div class="fld"><label>Employee</label><select id="lv-emp">${D.employees.map(e=>`<option>${e.name}</option>`).join('')}</select></div>
-  <div class="fld"><label>Leave type</label><select id="lv-type"><option>Casual</option><option>Sick</option><option>Earned</option><option>Maternity</option><option>Paternity</option></select></div></div>
+  <div class="fld"><label>Leave type</label><select id="lv-type">${types.map(t=>`<option value="${t.code}">${t.icon} ${t.name}</option>`).join('')}</select></div></div>
   <div class="frow"><div class="fld"><label>From date</label><input type="date" id="lv-from" value="${todayStr()}"></div>
   <div class="fld"><label>To date</label><input type="date" id="lv-to" value="${todayStr()}"></div></div>
   <div class="fld"><label>Reason</label><textarea id="lv-reason" rows="2" placeholder="Brief reason…"></textarea></div>
   <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('leave-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="submitLeave()">Submit</button></div>
   </div></div>`;
 }
+
 async function submitLeave(){
   const from=$('lv-from').value,to=$('lv-to').value;
   if(!from||!to)return;
