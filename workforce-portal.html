@@ -412,7 +412,8 @@ async function syncFromSupabase(){
       emergencyName:e.emergency_contact_name||'',emergencyPhone:e.emergency_contact_phone||'',emergencyRelation:e.emergency_contact_relation||'',
       kycCompleted:e.kyc_completed||false,kycCompletedAt:e.kyc_completed_at||null,
       paidLeaveBalance:parseFloat(e.paid_leave_balance)||0,paidLeaveLastAccrued:e.paid_leave_last_accrued||null,
-      uan:e.uan||''
+      uan:e.uan||'',
+      salaryStructure:e.salary_structure||'A'
     }));
     if(att!==null) D.attendance=att.map(a=>({_uuid:a.id,empId:a.employee_id,empName:a.employee_name,date:a.date,status:a.status,in:a.in_time,out:a.out_time}));
     if(lvs!==null) D.leaves=lvs.map(l=>({_uuid:l.id,id:l.id,emp:l.employee_name,type:l.leave_type,from:l.from_date,to:l.to_date,days:l.days,reason:l.reason,status:l.status}));
@@ -476,6 +477,7 @@ async function sbSaveEmployee(emp){
   if(emp.selfRegistered!==undefined) payload.self_registered=!!emp.selfRegistered;
   if(emp.passwordHash) payload.password_hash=emp.passwordHash;
   if(emp.empType) payload.emp_type=emp.empType;
+  if(emp.salaryStructure) payload.salary_structure=emp.salaryStructure;
 
   try{
     if(emp._uuid){
@@ -2802,33 +2804,42 @@ async function submitEmpLeave(){
 // ─── PAYROLL ENGINE ───────────────────────────────────────────────
 // Calculates payslip components from CTC using the company salary structure.
 // All amounts in INR per month.
+// Calculates payslip components from CTC using the company's unified salary structure.
+// Formula derived from real ₹25,000 and ₹55,000 payslips.
 function calcSalaryBreakdown(ctc){
   const c=parseFloat(ctc)||0;
   if(c<=0) return null;
+
   const basic = Math.round(c * 0.45);
   const hra = Math.round(basic * 0.40);
   const lta = Math.round(basic * 0.10);
-  const conveyance = 1250;
-  const travel = 1600;
+  const conveyance = 1250;  // Always present
+  const travel = 1600;       // Always present
   const deputation = 0;
-  // MPP (Monthly Performance Pay): tracked as deduction/disclosure in reference payslip
-  // Default: 6.75% of CTC, floored (matches reference ₹3,712 for ₹55,000 CTC)
-  const mpp = Math.floor(c * 0.0675);
-  // PF at 12% of PF-wage ceiling of ₹20,250 (company-specific PF base that matches reference payslip)
-  // This gives ₹2,430 which matches the reference image exactly
-  const pfWageBase = Math.min(basic, 20250);
-  const employeePf = Math.round(pfWageBase * 0.12);
-  const employerPf = Math.round(pfWageBase * 0.12);
   const professionalTax = 200;
   const esic = 0;
   const otherDeduction = 0;
-  // Special Allowance = balancer of CTC after all OTHER earnings and all deduction-column CTC components
-  // Per reference model: Special = CTC - (Basic+HRA+LTA+Conv+Travel+Deputation+MPP+EmpPF+EmrPF+PT+ESIC+Other)
-  const special = Math.max(0, c - basic - hra - lta - conveyance - travel - deputation - mpp - employeePf - employerPf - professionalTax - esic - otherDeduction);
+
+  // PF: 12% of Basic, clamped between minimum wage (₹15,000) and company ceiling (₹20,250)
+  // For low CTC: PF = 12% × ₹15,000 = ₹1,800 (minimum)
+  // For high CTC: PF = 12% × ₹20,250 = ₹2,430 (capped at company ceiling)
+  const pfBase = Math.max(15000, Math.min(basic, 20250));
+  const employeePf = Math.round(pfBase * 0.12);
+  const employerPf = Math.round(pfBase * 0.12);
+
+  // MPP (Monthly Performance Pay): only paid when Basic reaches the company's PF ceiling (₹20,250)
+  // This means CTC ≥ ₹45,000 triggers MPP at 6.75% of CTC
+  const mpp = basic >= 20250 ? Math.floor(c * 0.0675) : 0;
+
+  // Special Allowance = balancer of CTC after all other components
+  const special = Math.max(0,
+    c - basic - hra - lta - conveyance - travel - deputation
+      - mpp - employeePf - employerPf - professionalTax - esic - otherDeduction
+  );
 
   const totalEarnings = basic + hra + lta + conveyance + travel + special + deputation;
   const totalDeductions = professionalTax + employeePf + employerPf + mpp + esic + otherDeduction;
-  // Per reference: Net Pay equals Total Earnings (deduction column is a CTC-breakdown disclosure, not a reduction)
+  // Net Pay equals Total Earnings (per reference payslip convention)
   const netBeforeLop = totalEarnings;
 
   return {
@@ -2837,7 +2848,7 @@ function calcSalaryBreakdown(ctc){
     basic, hra, lta, conveyance, travel, special, deputation,
     totalEarnings,
     gross: totalEarnings,
-    // Deductions (all shown in the deductions column)
+    // Deductions
     professionalTax, employeePf, employerPf, mpp, esic, otherDeduction,
     totalDeductions,
     netBeforeLop
@@ -4183,7 +4194,7 @@ function openEmpModal(id){
   <div class="fld"><label>Employee ID</label><input type="text" id="ef-empid-val" value="${e.id||''}"></div></div>
   <div class="frow"><div class="fld"><label>Department</label><select id="ef-dept">${DEPTS.map(d=>`<option ${e.dept===d?'selected':''}>${d}</option>`).join('')}</select></div>
   <div class="fld"><label>Role</label><input type="text" id="ef-role" value="${e.role||''}"></div></div>
-  <div class="frow"><div class="fld"><label>Salary (₹/month)</label><input type="number" id="ef-sal" value="${e.salary||0}"></div>
+  <div class="frow"><div class="fld"><label>CTC (₹/month)</label><input type="number" id="ef-sal" value="${e.salary||0}"></div>
   <div class="fld"><label>Status</label><select id="ef-st"><option ${(e.status||'Active')==='Active'?'selected':''}>Active</option><option ${e.status==='Pending'?'selected':''}>Pending</option><option ${e.status==='Inactive'?'selected':''}>Inactive</option></select></div></div>
   <div class="fld"><label>Employee type</label>
     <select id="ef-type">
@@ -4979,13 +4990,13 @@ function pgPayroll(){
     <div class="stat"><div class="stat-lbl">Active employees</div><div class="stat-val">${activeCount}</div><div class="stat-sub">${monthLabel(sel)}</div></div>
   </div>
   <div class="card" style="padding:0">
-    <div class="card-hd" style="padding:1rem 1rem 0"><h3>Payroll register — ${monthLabel(sel)}</h3><span class="muted">Basic 45% · HRA 40% of Basic · PF 12% (cap ₹1,800) · PT ₹200</span></div>
+    <div class="card-hd" style="padding:1rem 1rem 0"><h3>Payroll register — ${monthLabel(sel)}</h3><span class="muted">Basic 45% · HRA 40% of Basic · Conveyance ₹1,250 · Travel ₹1,600 · PF 12% (₹1,800–₹2,430) · MPP only when Basic ≥ ₹20,250</span></div>
     <table style="margin-top:8px"><thead><tr>
       <th style="width:18%;padding-left:12px">Employee</th>
       <th style="width:12%">Dept</th>
       <th style="width:11%">CTC</th>
       <th style="width:11%">Gross</th>
-      <th style="width:10%">PF + PT</th>
+      <th style="width:10%">Deductions</th>
       <th style="width:9%">LOP</th>
       <th style="width:11%">Net pay</th>
       <th style="width:9%">CTC edit</th>
@@ -5045,6 +5056,17 @@ function viewEmployeePayslip(empIdOrUuid){
     </div>
   </div>`;
 }
+async function updateSalaryStructure(id, newStruct){
+  const e=D.employees.find(x=>x.id===id);
+  if(!e) return;
+  const old=e.salaryStructure||'A';
+  if(old===newStruct) return;
+  e.salaryStructure=newStruct;
+  await sbSaveEmployee(e);
+  save();
+  nav('payroll');
+}
+
 async function updateSalary(id,val){
   const v=parseInt(val);if(isNaN(v)||v<=0)return;
   const e=D.employees.find(x=>x.id===id);
