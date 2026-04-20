@@ -408,7 +408,9 @@ async function syncFromSupabase(){
       bankAccount:e.bank_account||'',bankIfsc:e.bank_ifsc||'',bankName:e.bank_name||'',
       address:e.address||'',
       emergencyName:e.emergency_contact_name||'',emergencyPhone:e.emergency_contact_phone||'',emergencyRelation:e.emergency_contact_relation||'',
-      kycCompleted:e.kyc_completed||false,kycCompletedAt:e.kyc_completed_at||null
+      kycCompleted:e.kyc_completed||false,kycCompletedAt:e.kyc_completed_at||null,
+      paidLeaveBalance:parseFloat(e.paid_leave_balance)||0,paidLeaveLastAccrued:e.paid_leave_last_accrued||null,
+      uan:e.uan||''
     }));
     if(att!==null) D.attendance=att.map(a=>({_uuid:a.id,empId:a.employee_id,empName:a.employee_name,date:a.date,status:a.status,in:a.in_time,out:a.out_time}));
     if(lvs!==null) D.leaves=lvs.map(l=>({_uuid:l.id,id:l.id,emp:l.employee_name,type:l.leave_type,from:l.from_date,to:l.to_date,days:l.days,reason:l.reason,status:l.status}));
@@ -2158,7 +2160,8 @@ function empDashboard(){
   const myLeaves=D.leaves.filter(l=>l.emp===emp.name);
   const approved=myLeaves.filter(l=>l.status==='Approved').reduce((s,l)=>s+(l.days||0),0);
   const todayAtt=D.attendance.find(a=>a.empName===emp.name&&a.date===todayStr()||a.empId===emp._uuid&&a.date===todayStr());
-  const pf=Math.round((emp.salary||0)*.12),tds=Math.round((emp.salary||0)*.1),net=(emp.salary||0)-pf-tds;
+  const slip=calcPayslip(emp, currentMonth());
+  const net=slip?slip.netPay:0;
   return `
   <div class="page-hd">
     <div><div class="pg-title">Hi, ${emp.name.split(' ')[0]}! 👋</div><div class="pg-sub">${dateLabel()} · ${emp.role} · ${emp.dept}</div></div>
@@ -2725,30 +2728,313 @@ async function submitEmpLeave(){
   navEmp('emp-leave');
 }
 
-function empPayslip(){
-  const emp=currentEmployee;
-  const pf=Math.round((emp.salary||0)*.12),tds=Math.round((emp.salary||0)*.1),net=(emp.salary||0)-pf-tds;
+// ─── PAYROLL ENGINE ───────────────────────────────────────────────
+// Calculates payslip components from CTC using the company salary structure.
+// All amounts in INR per month.
+function calcSalaryBreakdown(ctc){
+  const c=parseFloat(ctc)||0;
+  if(c<=0) return null;
+  const basic = Math.round(c * 0.45);
+  const hra = Math.round(basic * 0.40);
+  const lta = Math.round(basic * 0.10);
+  const conveyance = 1250;
+  const travel = 1600;
+  // MPP (Monthly Performance Pay): variable earning component tied to performance
+  // Default: 6.75% of CTC (matches reference payslip of ₹3,712 for ₹55,000 CTC)
+  const mpp = Math.round(c * 0.0675);
+  // Employer PF: 12% of Basic, capped at 1800/month (EPFO statutory cap)
+  const employerPf = Math.min(Math.round(basic * 0.12), 1800);
+  // Special Allowance = CTC - everything else - Employer PF (balancer)
+  const special = Math.max(0, c - basic - hra - lta - conveyance - travel - mpp - employerPf);
+  const deputation = 0;
+  const totalEarnings = basic + hra + lta + conveyance + travel + mpp + special + deputation;
+  const gross = totalEarnings; // Gross = Total Earnings
+
+  // Deductions (what actually reduces Net Pay)
+  const employeePf = Math.min(Math.round(basic * 0.12), 1800);
+  const professionalTax = 200; // Flat (AP/TG standard)
+  const totalDeductions = employeePf + professionalTax;
+  const netBeforeLop = gross - totalDeductions;
+
+  return {
+    ctc: c,
+    // Earnings
+    basic, hra, lta, conveyance, travel, mpp, special, deputation,
+    totalEarnings, gross,
+    // Deductions (displayed)
+    employeePf, employerPf, professionalTax,
+    totalDeductions,
+    netBeforeLop // before leave-of-pay deduction
+  };
+}
+
+// Count approved leaves for an employee in a given month (YYYY-MM)
+function countLeaveDaysInMonth(empName, yearMonth){
+  if(!D.leaves) return 0;
+  const [year, month] = yearMonth.split('-').map(Number);
+  const monthStart = new Date(year, month-1, 1);
+  const monthEnd = new Date(year, month, 0); // last day of month
+  let days=0;
+  D.leaves.forEach(lv=>{
+    if(lv.emp!==empName) return;
+    if(lv.status!=='Approved') return;
+    const from=new Date(lv.from), to=new Date(lv.to||lv.from);
+    // Intersect [from,to] with [monthStart, monthEnd]
+    const start = from < monthStart ? monthStart : from;
+    const end = to > monthEnd ? monthEnd : to;
+    if(end >= start){
+      const d = Math.floor((end - start)/86400000) + 1;
+      days += d;
+    }
+  });
+  return days;
+}
+
+// Calculate paid-leave balance available for the given month.
+// Accrues 2 days/month starting from joining date. Cumulative.
+function getPaidLeaveQuotaFor(emp, yearMonth){
+  if(!emp.joined) return 2; // fallback if unknown join date
+  const [y, m] = yearMonth.split('-').map(Number);
+  const monthStart = new Date(y, m-1, 1);
+  const joined = new Date(emp.joined);
+  if(joined > monthStart){
+    // Not yet employed during most of the month — no accrual
+    if(joined.getFullYear()===y && joined.getMonth()===m-1) return 2; // joined this month: 2 days
+    return 0;
+  }
+  // Months completed from join date through the payslip month (inclusive)
+  const joinY=joined.getFullYear(), joinM=joined.getMonth();
+  const monthsElapsed = (y - joinY)*12 + (m-1 - joinM) + 1;
+  return monthsElapsed * 2;
+}
+
+// Count paid leaves USED up to (but not including) the payslip month — i.e. those that already consumed balance
+function getPaidLeaveUsedBefore(emp, yearMonth){
+  if(!emp.joined) return 0;
+  const [y, m] = yearMonth.split('-').map(Number);
+  const monthStart = new Date(y, m-1, 1);
+  if(!D.leaves) return 0;
+  let used=0;
+  D.leaves.forEach(lv=>{
+    if(lv.emp!==emp.name) return;
+    if(lv.status!=='Approved') return;
+    const to=new Date(lv.to||lv.from);
+    if(to < monthStart) used += (lv.days||0);
+  });
+  return used;
+}
+
+// Compute the full payslip including leave adjustments
+function calcPayslip(emp, yearMonth){
+  const breakdown = calcSalaryBreakdown(emp.salary||0);
+  if(!breakdown) return null;
+  const [y, m] = yearMonth.split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+
+  const leavesThisMonth = countLeaveDaysInMonth(emp.name, yearMonth);
+  const quota = getPaidLeaveQuotaFor(emp, yearMonth);
+  const usedBefore = getPaidLeaveUsedBefore(emp, yearMonth);
+  const availablePaid = Math.max(0, quota - usedBefore);
+  const paidUsedThisMonth = Math.min(leavesThisMonth, availablePaid);
+  const lopDays = Math.max(0, leavesThisMonth - availablePaid);
+  const perDaySalary = Math.round(breakdown.gross / daysInMonth);
+  const lopDeduction = lopDays * perDaySalary;
+  const daysWorked = daysInMonth - leavesThisMonth;
+  const daysPaid = daysInMonth - lopDays;
+  const carryForward = Math.max(0, availablePaid - paidUsedThisMonth);
+
+  const netPay = breakdown.netBeforeLop - lopDeduction;
+
+  // Leave balances to show on payslip
+  // CL (Casual Leave): the "paid leave" quota — 2/month accrued
+  const clBalance = carryForward;
+  // EL (Earned Leave): typically 1-1.5/month; we'll use simple 1.5/month = 18/year as a default accrual
+  const elAccrued = Math.floor(getPaidLeaveQuotaFor(emp, yearMonth) * 0.75); // rough 1.5/month
+  const elUsedBefore = (D.leaves||[]).filter(l=>l.emp===emp.name && l.type==='Earned' && l.status==='Approved' && new Date(l.to||l.from) < new Date(y, m-1, 1)).reduce((s,l)=>s+(l.days||0),0);
+  const elUsedThis = (D.leaves||[]).filter(l=>l.emp===emp.name && l.type==='Earned' && l.status==='Approved' && (()=>{const t=new Date(l.to||l.from);return t.getFullYear()===y && t.getMonth()===m-1;})()).reduce((s,l)=>s+(l.days||0),0);
+  const elBalance = Math.max(0, elAccrued - elUsedBefore - elUsedThis);
+  const tlBalance = clBalance + elBalance;
+
+  return {
+    ...breakdown,
+    month: yearMonth,
+    daysInMonth, daysWorked, daysPaid,
+    leavesThisMonth, paidUsedThisMonth, lopDays, lopDeduction, perDaySalary, carryForward,
+    quota, availablePaid,
+    clBalance, elBalance, tlBalance,
+    netPay: Math.max(0, netPay)
+  };
+}
+
+function monthLabel(ym){
+  const [y,m]=ym.split('-').map(Number);
+  return new Date(y,m-1,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+}
+function currentMonth(){
+  const d=new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+// Generate last 12 months as options
+function last12Months(){
+  const out=[]; const d=new Date();
+  for(let i=0;i<12;i++){
+    const y=d.getFullYear(), m=d.getMonth()+1;
+    out.push(`${y}-${String(m).padStart(2,'0')}`);
+    d.setMonth(d.getMonth()-1);
+  }
+  return out;
+}
+
+function renderPayslipHTML(emp, slip){
+  const mo=monthLabel(slip.month);
   return `
-  <div class="page-hd"><div class="pg-title">My payslip</div></div>
-  <div class="card" style="max-width:520px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;padding-bottom:1rem;border-bottom:1px solid var(--border)">
-      <div><div style="font-size:16px;font-weight:700">${D.settings.company||'Kreayotoo Solutions'}</div><div style="font-size:12px;color:var(--muted)">Payslip for April 2026</div></div>
-      <div style="text-align:right"><div style="font-weight:600">${emp.name}</div><div style="font-size:12px;color:var(--muted)">${emp.id} · ${emp.role}</div></div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:0">
-      ${[['Basic salary','Earnings',fmt(emp.salary),'#166534'],['Provident Fund (12%)','Deduction',fmt(pf),'#991b1b'],['TDS (10%)','Deduction',fmt(tds),'#991b1b']].map(([l,t,v,c])=>`
-      <div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f3f4f6;font-size:13px">
-        <div>${l}<span style="font-size:11px;margin-left:6px;color:${t==='Earnings'?'#166534':'#991b1b'};background:${t==='Earnings'?'#dcfce7':'#fee2e2'};padding:1px 6px;border-radius:10px">${t}</span></div>
-        <div style="font-weight:600;color:${c}">₹${v}</div>
-      </div>`).join('')}
-      <div style="display:flex;justify-content:space-between;padding:14px 0;font-size:16px;font-weight:700">
-        <div>Net pay</div><div style="color:#0f766e">₹${fmt(net)}</div>
+  <div id="payslip-print-area" style="background:#fff;max-width:800px;margin:0 auto;font-family:Arial,sans-serif;color:#111;border:1px solid #000">
+    <!-- Header -->
+    <div style="display:flex;border-bottom:1px solid #000">
+      <div style="flex:1;padding:10px 14px;border-right:1px solid #000">
+        <div style="font-size:18px;font-weight:800">Payslip</div>
+        <div style="font-size:14px;font-weight:700;margin-top:6px">${mo}</div>
+      </div>
+      <div style="flex:1;padding:10px 14px;display:flex;align-items:center;gap:8px;background:#cfe2f3">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42 42" width="32" height="32"><polygon points="21,2 38,11 38,31 21,40 4,31 4,11" fill="#1a3a5c" stroke="#4ecdc4" stroke-width="2"/><polyline points="10,16 18,21 10,26" fill="none" stroke="#4ecdc4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="22,16 14,21 22,26" fill="none" stroke="#4ecdc4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <div style="font-size:18px;font-weight:800;color:#0066cc;letter-spacing:1px">KREAYOTOO</div>
+          <div style="font-size:9px;font-weight:600;color:#333">${D.settings.company?'':'SOLUTIONS (P) LTD · WE CREATE FOR YOU'}</div>
+        </div>
       </div>
     </div>
-    <div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;font-size:12px;color:#166534;margin-top:.5rem">
-      💳 Salary credited to your registered bank account on the last working day of the month.
+
+    <!-- Name + Designation -->
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr><td style="padding:8px 14px;border-bottom:1px solid #000;width:30%;font-weight:700;background:#f3f3f3">Employee Name</td><td style="padding:8px 14px;border-bottom:1px solid #000">${emp.name||'—'}</td></tr>
+      <tr><td style="padding:8px 14px;border-bottom:1px solid #000;font-weight:700;background:#f3f3f3">Designation</td><td style="padding:8px 14px;border-bottom:1px solid #000">${emp.role||'—'}${emp.dept?' - '+emp.dept:''}</td></tr>
+    </table>
+
+    <!-- Two-column: Employee Details | Work & Leave -->
+    <table style="width:100%;border-collapse:collapse;font-size:13px;border-bottom:1px solid #000">
+      <tr style="background:#cfe2f3">
+        <th colspan="2" style="padding:8px 14px;border-right:1px solid #000;border-bottom:1px solid #000;text-align:center">Employee Details</th>
+        <th colspan="3" style="padding:8px 14px;border-bottom:1px solid #000;text-align:center">Work &amp; Leave Details</th>
+      </tr>
+      <tr>
+        <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc;font-weight:700;background:#f3f3f3;width:18%">Employee No.</td>
+        <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc;width:32%">${emp.id||'—'}</td>
+        <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc;font-weight:700;background:#f3f3f3;width:18%">Days Worked</td>
+        <td colspan="2" style="padding:6px 14px;border-bottom:1px solid #ccc;text-align:right">${slip.daysWorked}</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc;font-weight:700;background:#f3f3f3">PAN</td>
+        <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc">${emp.pan||'—'}</td>
+        <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc;font-weight:700;background:#f3f3f3">Days Paid</td>
+        <td colspan="2" style="padding:6px 14px;border-bottom:1px solid #ccc;text-align:right">${slip.daysPaid}</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc;font-weight:700;background:#f3f3f3">UAN</td>
+        <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc">${emp.uan||'—'}</td>
+        <td rowspan="3" style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc;font-weight:700;background:#f3f3f3;vertical-align:middle">Leave<br>Balance</td>
+        <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc;font-weight:700;background:#f3f3f3;width:8%">CL</td>
+        <td style="padding:6px 14px;border-bottom:1px solid #ccc;text-align:right">${slip.clBalance}</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc;font-weight:700;background:#f3f3f3">Bank Name</td>
+        <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc">${emp.bankName||'—'}</td>
+        <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc;font-weight:700;background:#f3f3f3">EL</td>
+        <td style="padding:6px 14px;border-bottom:1px solid #ccc;text-align:right">${slip.elBalance}</td>
+      </tr>
+      <tr>
+        <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc;font-weight:700;background:#f3f3f3">Acc. No.</td>
+        <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc">${emp.bankAccount?'XXXX'+emp.bankAccount.slice(-4):'—'}</td>
+        <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc;font-weight:700;background:#f3f3f3">TL</td>
+        <td style="padding:6px 14px;border-bottom:1px solid #ccc;text-align:right">${slip.tlBalance}</td>
+      </tr>
+    </table>
+
+    <!-- Earnings + Deductions -->
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr style="background:#cfe2f3">
+        <th style="padding:8px 14px;border-right:1px solid #000;border-bottom:1px solid #000;width:30%">Earnings</th>
+        <th style="padding:8px 14px;border-right:1px solid #000;border-bottom:1px solid #000;text-align:right;width:20%">Amount (INR)</th>
+        <th style="padding:8px 14px;border-right:1px solid #000;border-bottom:1px solid #000;width:30%">Deductions</th>
+        <th style="padding:8px 14px;border-bottom:1px solid #000;text-align:right;width:20%">Amount (INR)</th>
+      </tr>
+      ${[
+        ['Basic Salary', slip.basic, 'Professional Tax', slip.professionalTax],
+        ['HRA', slip.hra, 'PF (Employees)', slip.employeePf],
+        ['LTA', slip.lta, 'PF (Employers)', slip.employerPf],
+        ['Conveyance', slip.conveyance, slip.lopDays?'Loss of Pay ('+slip.lopDays+' days)':'', slip.lopDays?slip.lopDeduction:''],
+        ['Travel Allowance', slip.travel, '', ''],
+        ['Monthly Performance Pay', slip.mpp, '', ''],
+        ['Special Allowance', slip.special, '', ''],
+        ['Deputation Allowance', slip.deputation, '', '']
+      ].map(([el,ev,dl,dv])=>`
+        <tr>
+          <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc">${el}</td>
+          <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc;text-align:right">${ev!==''?fmt(ev)+'.00':''}</td>
+          <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc">${dl}</td>
+          <td style="padding:6px 14px;border-bottom:1px solid #ccc;text-align:right">${dv!==''?fmt(dv)+'.00':''}</td>
+        </tr>
+      `).join('')}
+      <tr style="font-weight:700;background:#f3f3f3">
+        <td style="padding:8px 14px;border-right:1px solid #000;border-top:1px solid #000">Total Earnings</td>
+        <td style="padding:8px 14px;border-right:1px solid #000;border-top:1px solid #000;text-align:right">${fmt(slip.totalEarnings)}.00</td>
+        <td style="padding:8px 14px;border-right:1px solid #000;border-top:1px solid #000">Total Deductions</td>
+        <td style="padding:8px 14px;border-top:1px solid #000;text-align:right">${fmt(slip.totalDeductions + slip.lopDeduction)}.00</td>
+      </tr>
+      <tr style="font-weight:700;background:#e8f0fe">
+        <td style="padding:8px 14px;border-right:1px solid #000">CTC</td>
+        <td style="padding:8px 14px;border-right:1px solid #000;text-align:right">${fmt(slip.ctc)}.00</td>
+        <td style="padding:8px 14px;border-right:1px solid #000">Net Pay</td>
+        <td style="padding:8px 14px;text-align:right">${fmt(slip.netPay)}.00</td>
+      </tr>
+    </table>
+
+    <!-- Footer notes -->
+    <div style="padding:14px;font-size:12px;border-top:1px solid #000">
+      <div style="font-weight:700;margin-bottom:6px">* CL — Casual leave &nbsp;&nbsp; EL — Earned Leave &nbsp;&nbsp; TL — Total Leave</div>
+      <div style="font-style:italic;color:#555;margin-top:6px">*This is System Generated Copy &amp; does not require any signature.</div>
     </div>
   </div>`;
+}
+
+function empPayslip(){
+  const emp=currentEmployee;
+  const sel=window._empPayslipMonth||currentMonth();
+  const months=last12Months();
+  const slip=calcPayslip(emp, sel);
+  if(!slip){
+    return `
+    <div class="page-hd"><div class="pg-title">My payslip</div></div>
+    <div class="card"><div style="text-align:center;padding:2rem;color:var(--muted)">Your CTC hasn't been set yet. Please ask your admin to configure your salary.</div></div>`;
+  }
+  return `
+  <div class="page-hd">
+    <div><div class="pg-title">My payslip</div><div class="pg-sub">CTC ₹${fmt(slip.ctc)}/month · Net Pay ₹${fmt(slip.netPay)}</div></div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <label style="font-size:12px;color:var(--muted)">Month:</label>
+      <select onchange="window._empPayslipMonth=this.value;renderEmployeeApp()" style="padding:5px 10px;font-size:13px">
+        ${months.map(m=>`<option value="${m}" ${m===sel?'selected':''}>${monthLabel(m)}</option>`).join('')}
+      </select>
+      <button class="btn btn-sec" onclick="printPayslip()">🖨 Print / Save PDF</button>
+    </div>
+  </div>
+  ${slip.lopDays>0?`<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400e;margin-bottom:1rem;max-width:800px;margin-left:auto;margin-right:auto">
+    ⚠️ You took ${slip.leavesThisMonth} leave day${slip.leavesThisMonth>1?'s':''} this month. ${slip.paidUsedThisMonth} was paid (using accrued balance), ${slip.lopDays} resulted in Loss of Pay deduction of ₹${fmt(slip.lopDeduction)}.
+  </div>`:''}
+  ${slip.carryForward>0?`<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;font-size:12px;color:#1e40af;margin-bottom:1rem;max-width:800px;margin-left:auto;margin-right:auto">
+    💼 Paid leave balance carried forward: <strong>${slip.carryForward} day${slip.carryForward>1?'s':''}</strong>
+  </div>`:''}
+  ${renderPayslipHTML(emp, slip)}`;
+}
+
+function printPayslip(){
+  const area=document.getElementById('payslip-print-area');
+  if(!area){window.print();return;}
+  const w=window.open('','_blank','width=900,height=700');
+  if(!w){window.print();return;}
+  w.document.write(`<!DOCTYPE html><html><head><title>Payslip</title>
+    <style>body{margin:0;padding:20px;font-family:Arial,sans-serif}@media print{body{padding:0}}</style>
+    </head><body>${area.outerHTML}<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
+  w.document.close();
 }
 
 function empPerformance(){
@@ -4425,24 +4711,94 @@ async function submitLeave(){
 
 // ─── PAYROLL ─────────────────────────────────────────────────────
 function pgPayroll(){
-  const total=D.employees.reduce((s,e)=>s+(e.salary||0),0);
+  const sel=window._adminPayrollMonth||currentMonth();
+  const months=last12Months();
+  const allSlips=D.employees.filter(e=>e.salary&&e.salary>0).map(e=>({emp:e,slip:calcPayslip(e,sel)}));
+  const totalCtc=allSlips.reduce((s,x)=>s+(x.slip?.ctc||0),0);
+  const totalNet=allSlips.reduce((s,x)=>s+(x.slip?.netPay||0),0);
+  const totalLop=allSlips.reduce((s,x)=>s+(x.slip?.lopDeduction||0),0);
+  const activeCount=D.employees.filter(e=>e.status==='Active').length;
   return `
-  <div class="page-hd"><div class="pg-title">Payroll management</div></div>
+  <div class="page-hd">
+    <div><div class="pg-title">Payroll management</div><div class="pg-sub">Auto-calculated from CTC · 2 paid leaves/month accrued cumulatively</div></div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <label style="font-size:12px;color:var(--muted)">Month:</label>
+      <select onchange="window._adminPayrollMonth=this.value;nav('payroll')" style="padding:5px 10px;font-size:13px">
+        ${months.map(m=>`<option value="${m}" ${m===sel?'selected':''}>${monthLabel(m)}</option>`).join('')}
+      </select>
+    </div>
+  </div>
   <div class="stat-grid">
-    <div class="stat"><div class="stat-lbl">Monthly payroll</div><div class="stat-val">₹${fmt(total)}</div></div>
-    <div class="stat"><div class="stat-lbl">Avg salary</div><div class="stat-val">₹${fmt(D.employees.length?total/D.employees.length:0)}</div></div>
-    <div class="stat"><div class="stat-lbl">Processed</div><div class="stat-val">${D.employees.filter(e=>e.status==='Active').length}</div><div class="stat-sub">Active employees</div></div>
-    <div class="stat"><div class="stat-lbl">Period</div><div class="stat-val">Apr 2026</div></div>
+    <div class="stat"><div class="stat-lbl">Monthly CTC outflow</div><div class="stat-val">₹${fmt(totalCtc)}</div></div>
+    <div class="stat"><div class="stat-lbl">Net disbursement</div><div class="stat-val">₹${fmt(totalNet)}</div></div>
+    <div class="stat"><div class="stat-lbl">LOP deducted</div><div class="stat-val">₹${fmt(totalLop)}</div><div class="stat-sub">${allSlips.filter(x=>x.slip?.lopDays).length} employees</div></div>
+    <div class="stat"><div class="stat-lbl">Active employees</div><div class="stat-val">${activeCount}</div><div class="stat-sub">${monthLabel(sel)}</div></div>
   </div>
   <div class="card" style="padding:0">
-    <div class="card-hd" style="padding:1rem 1rem 0"><h3>Payroll register — April 2026</h3><span class="muted">PF 12% · TDS 10%</span></div>
-    <table style="margin-top:8px"><thead><tr><th style="width:19%;padding-left:12px">Employee</th><th style="width:14%">Dept</th><th style="width:13%">Gross</th><th style="width:11%">PF</th><th style="width:11%">TDS</th><th style="width:13%">Net pay</th><th style="width:10%">Status</th><th style="width:9%">Edit</th></tr></thead>
-    <tbody>${D.employees.map(e=>{const pf=Math.round((e.salary||0)*.12),tds=Math.round((e.salary||0)*.1),net=(e.salary||0)-pf-tds;return`<tr>
-      <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:8px">${av(e.name)}${e.name}</div></td>
-      <td>${e.dept}</td><td>₹${fmt(e.salary)}</td><td>₹${fmt(pf)}</td><td>₹${fmt(tds)}</td>
-      <td><strong>₹${fmt(net)}</strong></td><td>${badge(e.status==='Active'?'Approved':'Pending')}</td>
-      <td><input type="number" value="${e.salary||0}" style="width:80px" onblur="updateSalary('${e.id}',this.value)"></td>
-    </tr>`;}).join('')}</tbody></table>
+    <div class="card-hd" style="padding:1rem 1rem 0"><h3>Payroll register — ${monthLabel(sel)}</h3><span class="muted">Basic 45% · HRA 40% of Basic · PF 12% (cap ₹1,800) · PT ₹200</span></div>
+    <table style="margin-top:8px"><thead><tr>
+      <th style="width:18%;padding-left:12px">Employee</th>
+      <th style="width:12%">Dept</th>
+      <th style="width:11%">CTC</th>
+      <th style="width:11%">Gross</th>
+      <th style="width:10%">PF + PT</th>
+      <th style="width:9%">LOP</th>
+      <th style="width:11%">Net pay</th>
+      <th style="width:9%">CTC edit</th>
+      <th style="width:9%">Payslip</th>
+    </tr></thead>
+    <tbody>${D.employees.map(e=>{
+      const slip=calcPayslip(e,sel);
+      if(!slip){
+        return `<tr>
+          <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:8px">${av(e.name)}${e.name}</div></td>
+          <td>${e.dept||'—'}</td>
+          <td colspan="5" style="text-align:center;color:var(--muted);font-style:italic">CTC not set</td>
+          <td><input type="number" value="${e.salary||0}" style="width:80px" onblur="updateSalary('${e.id}',this.value)" placeholder="CTC"></td>
+          <td>—</td>
+        </tr>`;
+      }
+      return `<tr>
+        <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:8px">${av(e.name)}${e.name}</div></td>
+        <td>${e.dept||'—'}</td>
+        <td>₹${fmt(slip.ctc)}</td>
+        <td>₹${fmt(slip.gross)}</td>
+        <td>₹${fmt(slip.totalDeductions)}</td>
+        <td>${slip.lopDays?`<span style="color:#991b1b">₹${fmt(slip.lopDeduction)} <span style="font-size:11px">(${slip.lopDays}d)</span></span>`:'<span style="color:var(--muted)">—</span>'}</td>
+        <td><strong style="color:#0f766e">₹${fmt(slip.netPay)}</strong></td>
+        <td><input type="number" value="${e.salary||0}" style="width:80px" onblur="updateSalary('${e.id}',this.value)"></td>
+        <td><button class="btn-link" style="font-size:12px" onclick="viewEmployeePayslip('${e._uuid||e.id}')">View →</button></td>
+      </tr>`;
+    }).join('')}</tbody></table>
+  </div>
+  <div id="payslip-viewer-modal"></div>`;
+}
+
+// Admin viewer for an individual employee's payslip
+function viewEmployeePayslip(empIdOrUuid){
+  const e=D.employees.find(x=>x._uuid===empIdOrUuid||x.id===empIdOrUuid);
+  if(!e) return;
+  const month=window._adminPayrollMonth||currentMonth();
+  const slip=calcPayslip(e,month);
+  const wrap=$('payslip-viewer-modal');
+  if(!wrap) return;
+  if(!slip){
+    wrap.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('payslip-viewer-modal')">
+      <div class="modal" style="max-width:420px">
+        <div class="modal-hd"><h3>${e.name}</h3><button class="xbtn" onclick="closeModal('payslip-viewer-modal')">×</button></div>
+        <div style="padding:1rem;text-align:center;color:var(--muted)">CTC not set for this employee.</div>
+      </div>
+    </div>`;
+    return;
+  }
+  wrap.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('payslip-viewer-modal')" style="align-items:flex-start;padding:1rem;overflow-y:auto">
+    <div style="background:transparent;max-width:860px;width:100%">
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px">
+        <button class="btn btn-sec" onclick="printPayslip()">🖨 Print / Save PDF</button>
+        <button class="btn btn-sec" onclick="closeModal('payslip-viewer-modal')">Close</button>
+      </div>
+      ${renderPayslipHTML(e, slip)}
+    </div>
   </div>`;
 }
 async function updateSalary(id,val){
