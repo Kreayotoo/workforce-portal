@@ -63,15 +63,15 @@ tr:hover td{background:#fafafa}
 .topbar{background:var(--navy);color:#fff;padding:0 1rem;height:54px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
 .tb-logo{font-size:16px;font-weight:800;letter-spacing:.07em}
 .tb-logo span{color:#60a5fa}
-.sidebar{width:58px;background:var(--navy3);display:flex;flex-direction:column;align-items:flex-start;padding:10px 0;gap:2px;min-height:calc(100vh - 54px);position:sticky;top:54px;height:calc(100vh - 54px);transition:width .25s ease;overflow:hidden;overflow-y:auto;z-index:50;flex-shrink:0}
-.sidebar:hover{width:230px}
-.si{width:100%;height:44px;border-radius:0;display:flex;align-items:center;cursor:pointer;color:rgba(255,255,255,.5);transition:.15s;position:relative;padding:0 10px;gap:12px;white-space:nowrap}
-.si:hover{background:rgba(255,255,255,.1);color:rgba(255,255,255,.9)}
+.sidebar{width:72px;background:var(--navy3);display:flex;flex-direction:column;align-items:flex-start;padding:12px 0;gap:2px;min-height:calc(100vh - 54px);position:sticky;top:54px;height:calc(100vh - 54px);transition:width .25s ease;overflow:hidden;overflow-y:auto;z-index:50;flex-shrink:0}
+.sidebar:hover{width:240px}
+.si{width:100%;height:56px;border-radius:0;display:flex;align-items:center;cursor:pointer;color:rgba(255,255,255,.6);transition:.15s;position:relative;padding:0 14px;gap:14px;white-space:nowrap}
+.si:hover{background:rgba(255,255,255,.1);color:rgba(255,255,255,.95)}
 .si.act{background:rgba(255,255,255,.15);color:#fff;border-left:3px solid #60a5fa}
-.si-icon{width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
-.si-label{font-size:14px;font-weight:600;opacity:0;transition:opacity .2s ease;pointer-events:none}
+.si-icon{width:40px;height:40px;display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0}
+.si-label{font-size:15px;font-weight:600;opacity:0;transition:opacity .2s ease;pointer-events:none}
 .sidebar:hover .si-label{opacity:1}
-.si-dot{position:absolute;top:6px;left:30px;width:8px;height:8px;border-radius:50%;background:#ef4444}
+.si-dot{position:absolute;top:10px;left:38px;width:10px;height:10px;border-radius:50%;background:#ef4444;border:2px solid var(--navy3)}
 .main{flex:1;padding:1.25rem;min-width:0;overflow-x:hidden}
 .app{display:flex;flex-direction:column;min-height:100vh}
 .body-row{display:flex;flex:1;min-height:0}
@@ -81,15 +81,15 @@ tr:hover td{background:#fafafa}
 .alert-e{background:var(--red-bg);color:var(--red-txt)}
 .alert-s{background:var(--green-bg);color:var(--green-txt)}
 .muted{font-size:12px;color:var(--muted)}
-.modules-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:10px;margin-bottom:1rem}
-.mod-card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:.8rem;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;transition:all .2s ease;position:relative}
-.mod-card:hover{border-color:var(--navy2);transform:scale(1.15);box-shadow:0 8px 24px rgba(45,45,143,.25);background:#eef0ff;z-index:10}
-.mod-card:hover .mod-ic{background:var(--navy);font-size:22px;width:44px;height:44px}
-.mod-card:hover .mod-lb{color:var(--navy2);font-weight:700;font-size:13px}
-.mod-card:active{transform:scale(1.05)}
-.mod-ic{width:40px;height:40px;border-radius:8px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:18px;transition:all .2s ease}
-.mod-lb{font-size:12px;font-weight:600;color:var(--muted);text-align:center;transition:all .2s ease}
-.mod-dot{position:absolute;top:5px;right:5px;width:8px;height:8px;border-radius:50%;background:#ef4444}
+.modules-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:12px;margin-bottom:1rem}
+.mod-card{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:1.1rem .6rem;display:flex;flex-direction:column;align-items:center;gap:10px;cursor:pointer;transition:all .2s ease;position:relative}
+.mod-card:hover{border-color:var(--navy2);transform:scale(1.08);box-shadow:0 8px 24px rgba(45,45,143,.25);background:#eef0ff;z-index:10}
+.mod-card:hover .mod-ic{background:var(--navy);color:#fff;font-size:30px;width:60px;height:60px}
+.mod-card:hover .mod-lb{color:var(--navy2);font-weight:700;font-size:14px}
+.mod-card:active{transform:scale(1.02)}
+.mod-ic{width:56px;height:56px;border-radius:12px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:26px;transition:all .2s ease}
+.mod-lb{font-size:13px;font-weight:600;color:#334155;text-align:center;transition:all .2s ease;line-height:1.2}
+.mod-dot{position:absolute;top:8px;right:8px;width:10px;height:10px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 2px #fff}
 
 /* LOGIN */
 .login-wrap{display:flex;min-height:100vh}
@@ -173,7 +173,7 @@ tr:hover td{background:#fafafa}
   .sidebar:hover{width:100%!important}
   .si{width:auto!important;flex:1!important;flex-direction:column!important;height:54px!important;padding:0!important;justify-content:center!important;border-left:none!important;border-top:3px solid transparent}
   .si.act{border-left:none!important;border-top:3px solid #60a5fa!important}
-  .si-icon{font-size:18px!important}
+  .si-icon{font-size:22px!important;width:32px!important;height:32px!important}
   .si-label{display:none!important}
   /* Main content - add bottom padding for fixed nav */
   .main{padding:.875rem .875rem 70px .875rem!important}
@@ -182,7 +182,9 @@ tr:hover td{background:#fafafa}
   .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
   /* Modules grid */
   .modules-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}
-  .mod-card{padding:.5rem!important}
+  .mod-card{padding:.8rem .5rem!important;gap:8px!important}
+  .mod-ic{width:48px!important;height:48px!important;font-size:22px!important}
+  .mod-lb{font-size:12px!important}
   .mod-card:hover{transform:scale(1.05)!important}
   /* Two col layouts → single */
   .two-col{grid-template-columns:1fr!important}
@@ -3840,7 +3842,7 @@ function pgDashboard(){
     <button class="btn btn-primary" onclick="openEmpModal()">+ Add employee</button>
   </div>
 
-  <div class="modules-grid" style="grid-template-columns:repeat(auto-fill,minmax(90px,1fr));margin-bottom:.75rem">
+  <div class="modules-grid" style="grid-template-columns:repeat(auto-fill,minmax(120px,1fr));margin-bottom:.75rem">
     ${mods.map(([ic,lb,pg])=>`<div class="mod-card" onclick="nav('${pg}')"><div class="mod-ic">${ic}</div><div class="mod-lb">${lb}</div>${pg==='notifications'&&unreadCount()>0?'<div class="mod-dot"></div>':''}</div>`).join('')}
   </div>
 
