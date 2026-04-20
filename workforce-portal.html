@@ -2810,32 +2810,35 @@ function calcSalaryBreakdown(ctc){
   const lta = Math.round(basic * 0.10);
   const conveyance = 1250;
   const travel = 1600;
-  // MPP (Monthly Performance Pay): variable earning component tied to performance
-  // Default: 6.75% of CTC (matches reference payslip of ₹3,712 for ₹55,000 CTC)
-  const mpp = Math.round(c * 0.0675);
-  // Employer PF: 12% of Basic, capped at 1800/month (EPFO statutory cap)
-  const employerPf = Math.min(Math.round(basic * 0.12), 1800);
-  // Special Allowance = CTC - everything else - Employer PF (balancer)
-  const special = Math.max(0, c - basic - hra - lta - conveyance - travel - mpp - employerPf);
   const deputation = 0;
-  const totalEarnings = basic + hra + lta + conveyance + travel + mpp + special + deputation;
-  const gross = totalEarnings; // Gross = Total Earnings
+  // MPP (Monthly Performance Pay): tracked as deduction/disclosure in reference payslip
+  // Default: 6.75% of CTC (matches reference ₹3,712 for ₹55,000 CTC)
+  const mpp = Math.round(c * 0.0675);
+  // PF at 12% of Basic — UNCAPPED (company policy)
+  const employeePf = Math.round(basic * 0.12);
+  const employerPf = Math.round(basic * 0.12);
+  const professionalTax = 200;
+  const esic = 0;
+  const otherDeduction = 0;
+  // Special Allowance = balancer of CTC after all OTHER earnings and all deduction-column CTC components
+  // Per reference model: Special = CTC - (Basic+HRA+LTA+Conv+Travel+Deputation+MPP+EmpPF+EmrPF+PT+ESIC+Other)
+  const special = Math.max(0, c - basic - hra - lta - conveyance - travel - deputation - mpp - employeePf - employerPf - professionalTax - esic - otherDeduction);
 
-  // Deductions (what actually reduces Net Pay)
-  const employeePf = Math.min(Math.round(basic * 0.12), 1800);
-  const professionalTax = 200; // Flat (AP/TG standard)
-  const totalDeductions = employeePf + professionalTax;
-  const netBeforeLop = gross - totalDeductions;
+  const totalEarnings = basic + hra + lta + conveyance + travel + special + deputation;
+  const totalDeductions = professionalTax + employeePf + employerPf + mpp + esic + otherDeduction;
+  // Per reference: Net Pay equals Total Earnings (deduction column is a CTC-breakdown disclosure, not a reduction)
+  const netBeforeLop = totalEarnings;
 
   return {
     ctc: c,
     // Earnings
-    basic, hra, lta, conveyance, travel, mpp, special, deputation,
-    totalEarnings, gross,
-    // Deductions (displayed)
-    employeePf, employerPf, professionalTax,
+    basic, hra, lta, conveyance, travel, special, deputation,
+    totalEarnings,
+    gross: totalEarnings,
+    // Deductions (all shown in the deductions column)
+    professionalTax, employeePf, employerPf, mpp, esic, otherDeduction,
     totalDeductions,
-    netBeforeLop // before leave-of-pay deduction
+    netBeforeLop
   };
 }
 
@@ -3032,11 +3035,10 @@ function renderPayslipHTML(emp, slip){
         ['Basic Salary', slip.basic, 'Professional Tax', slip.professionalTax],
         ['HRA', slip.hra, 'PF (Employees)', slip.employeePf],
         ['LTA', slip.lta, 'PF (Employers)', slip.employerPf],
-        ['Conveyance', slip.conveyance, slip.lopDays?'Loss of Pay ('+slip.lopDays+' days)':'', slip.lopDays?slip.lopDeduction:''],
-        ['Travel Allowance', slip.travel, '', ''],
-        ['Monthly Performance Pay', slip.mpp, '', ''],
-        ['Special Allowance', slip.special, '', ''],
-        ['Deputation Allowance', slip.deputation, '', '']
+        ['Conveyance', slip.conveyance, 'Monthly P P', slip.mpp],
+        ['Travel Allowance', slip.travel, 'ESIC', slip.esic],
+        ['Special Allowance', slip.special, 'Other Deduction', slip.otherDeduction],
+        ['Deputation Allowance', slip.deputation, slip.lopDays?'Loss of Pay ('+slip.lopDays+' days)':'', slip.lopDays?slip.lopDeduction:'']
       ].map(([el,ev,dl,dv])=>`
         <tr>
           <td style="padding:6px 14px;border-right:1px solid #000;border-bottom:1px solid #ccc">${el}</td>
