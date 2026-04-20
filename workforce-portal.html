@@ -5421,7 +5421,7 @@ async function saveAtt(){
 // ─── LEAVES MODULE ───────────────────────────────────────────────
 // Default leave types — kept simple: CL and EL only
 const DEFAULT_LEAVE_TYPES = [
-  {code:'CL', name:'Casual Leave', icon:'🌿', color:'#3b82f6', annualQuota:12, accrual:'monthly', accrualRate:1, carryForward:false, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:false, allowedInNotice:true, description:'Short notice, personal reasons'},
+  {code:'CL', name:'Casual Leave', icon:'🌿', color:'#3b82f6', annualQuota:12, accrual:'monthly', accrualRate:1, carryForward:true, encash:true, weekendsCount:false, holidaysCount:false, allowedInProbation:false, allowedInNotice:true, description:'Short notice, personal reasons'},
   {code:'EL', name:'Earned Leave', icon:'🏖', color:'#10b981', annualQuota:12, accrual:'monthly', accrualRate:1, carryForward:true, encash:true, weekendsCount:false, holidaysCount:false, allowedInProbation:false, allowedInNotice:false, description:'Planned time off, carry-forward enabled'}
 ];
 
