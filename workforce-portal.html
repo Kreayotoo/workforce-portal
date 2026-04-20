@@ -3501,7 +3501,7 @@ function pgDashboard(){
   <div class="card">
       <div class="card-hd"><h3>Notifications</h3><div style="display:flex;gap:8px;align-items:center">${unreadCount()>0?`<button class="btn-link" onclick="markAllRead()">Mark all read</button>`:''}<span class="muted">${unreadCount()} unread</span></div></div>
       ${D.notifications.slice(0,5).map(n=>{
-        const nid=JSON.stringify(n.id||n._uuid||'');
+        const nid=JSON.stringify(n.id||n._uuid||'').replace(/"/g,'&#34;');
         return `<div class="notif-row" style="cursor:pointer;border-radius:6px;padding:8px;background:${n.read?'transparent':'#f8fafc'}" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='${n.read?'transparent':'#f8fafc'}'" onclick="handleNotifClick(${nid})">
           <div class="ni ni-${n.type||'info'}">${n.type==='warning'?'⚠':n.type==='success'?'✓':n.type==='danger'?'✕':'ℹ'}</div>
           <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:${n.read?400:600};line-height:1.35">${n.msg}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${n.time}</div></div>
@@ -4694,7 +4694,8 @@ function pgNotifications(){
   </div>
   <div class="card" style="padding:0">
     ${D.notifications.map(n=>{
-      const nid=JSON.stringify(n.id||n._uuid||'');
+      // Use &#39; to HTML-escape single quotes inside double-quoted attribute
+      const nid=JSON.stringify(n.id||n._uuid||'').replace(/"/g,'&#34;');
       return `<div class="notif-row" style="cursor:pointer;background:${n.read?'':'#fafbff'};margin:0;padding:12px 1rem;border-bottom:1px solid #f3f4f6;display:flex;align-items:flex-start;gap:12px" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='${n.read?'':'#fafbff'}'" onclick="handleNotifClick(${nid})">
         <div class="ni ni-${n.type||'info'}">${n.type==='warning'?'⚠':n.type==='success'?'✓':n.type==='danger'?'✕':'ℹ'}</div>
         <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:${n.read?400:600};line-height:1.4">${n.msg}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${n.time}</div></div>
