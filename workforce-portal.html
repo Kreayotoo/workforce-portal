@@ -3835,23 +3835,52 @@ function openEmpModal(id){
   <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('emp-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="saveEmp()">${id?'Save changes':'Add employee'}</button></div>
   </div></div>`;
 }
-function saveEmp(){
+async function saveEmp(){
   const data={name:$('ef-name').value,email:$('ef-email').value,phone:$('ef-ph').value,dob:$('ef-dob-birth').value,joined:$('ef-doj').value,dept:$('ef-dept').value,role:$('ef-role').value,salary:parseInt($('ef-sal').value)||0,status:$('ef-st').value,empType:$('ef-type').value||'office'};
   if(!data.name||!data.email){alert('Name and email are required');return;}
   if(editingEmpId){
     const existing=D.employees.find(e=>e.id===editingEmpId);
+    // Capture old values BEFORE mutating
+    const oldRole=existing.role, oldDept=existing.dept, oldStatus=existing.status;
     Object.assign(existing,data);
-    sbSaveEmployee(existing);
+    await sbSaveEmployee(existing);
+    // Notify employee of meaningful changes
+    if(existing.email){
+      const changes=[];
+      if(data.role!==oldRole&&data.role) changes.push(`role changed to <strong>${data.role}</strong>`);
+      if(data.dept!==oldDept&&data.dept) changes.push(`department changed to <strong>${data.dept}</strong>`);
+      if(data.status!==oldStatus&&data.status){
+        if(data.status==='Inactive') changes.push(`account <strong>deactivated</strong>`);
+        else if(oldStatus==='Inactive'&&data.status==='Active') changes.push(`account <strong>reactivated</strong>`);
+        else changes.push(`status changed to <strong>${data.status}</strong>`);
+      }
+      if(changes.length){
+        await sbSaveNotification({
+          msg:`📋 Admin updated your profile: ${changes.join(', ')}`,
+          type:'info',
+          to:existing.email
+        });
+      }
+    }
   } else {
     const newId=$('ef-empid-val').value.trim()||'EMP-'+String(D.employees.length+101).padStart(3,'0');
     data.id=newId;data.passwordHash='emp@123';
     D.employees.push(data);
-    sbSaveEmployee(data).then(r=>{if(r&&r[0])data._uuid=r[0].id;save();});
-    const notif={msg:`New employee ${data.name} added by admin.`,type:'info',read:false};
-    D.notifications.unshift({id:Date.now(),...notif,time:'Just now'});
-    sbSaveNotification(notif);
+    const r=await sbSaveEmployee(data);
+    if(r&&r[0])data._uuid=r[0].id;
+    // Admin notification (untargeted)
+    await sbSaveNotification({msg:`New employee ${data.name} added`,type:'info'});
+    // Welcome notification for the new employee themselves
+    if(data.email){
+      await sbSaveNotification({
+        msg:`👋 Welcome to ${D.settings.company||'the company'}, ${data.name.split(' ')[0]}! Log in with your email and the default password, then complete your profile details.`,
+        type:'success',
+        to:data.email
+      });
+    }
   }
-  save();nav(currentPage);
+  save();
+  nav(currentPage);
 }
 async function delEmp(id,name){
   if(!confirm(`Delete ${name}? This cannot be undone.`))return;
@@ -3863,8 +3892,19 @@ async function setEmpPw(id,name){
   const np=prompt(`Set password for ${name}:\n(Default is emp@123)`);
   if(np&&np.length>=4){
     const emp=D.employees.find(e=>e.id===id);
-    if(emp){emp.passwordHash=np;await sbSaveEmployee(emp);}
-    save();alert(`✅ Password set for ${name}`);
+    if(emp){
+      emp.passwordHash=np;
+      await sbSaveEmployee(emp);
+      if(emp.email){
+        await sbSaveNotification({
+          msg:`🔐 Your password has been reset by admin. Please log in with the new password and change it from My Profile → Password.`,
+          type:'warning',
+          to:emp.email
+        });
+      }
+    }
+    save();
+    alert(`✅ Password set for ${name}`);
   }
 }
 
@@ -4405,9 +4445,25 @@ function pgPayroll(){
     </tr>`;}).join('')}</tbody></table>
   </div>`;
 }
-function updateSalary(id,val){
+async function updateSalary(id,val){
   const v=parseInt(val);if(isNaN(v)||v<=0)return;
-  const e=D.employees.find(x=>x.id===id);if(e){e.salary=v;save();nav('payroll');}
+  const e=D.employees.find(x=>x.id===id);
+  if(!e)return;
+  const oldSalary=e.salary||0;
+  if(v===oldSalary) return;
+  e.salary=v;
+  await sbSaveEmployee(e);
+  save();
+  // Notify employee of salary change
+  if(e.email){
+    const direction=v>oldSalary?'revised upward':'revised';
+    await sbSaveNotification({
+      msg:`💰 Your salary has been ${direction} to ₹${fmt(v)} per month`,
+      type:'success',
+      to:e.email
+    });
+  }
+  nav('payroll');
 }
 
 // ─── EXPENSES ────────────────────────────────────────────────────
@@ -4495,9 +4551,25 @@ function openPerfModal(){
   <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('perf-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="submitPerf()">Save review</button></div>
   </div></div>`;
 }
-function submitPerf(){
-  D.performance.push({id:Date.now(),emp:$('pf-emp').value,quarter:$('pf-q').value,rating:parseFloat($('pf-rat').value)||3,goals:parseInt($('pf-goals').value)||4,achieved:parseInt($('pf-ach').value)||3,notes:$('pf-notes').value||'—'});
-  save();nav('performance');
+async function submitPerf(){
+  const empName=$('pf-emp').value;
+  const quarter=$('pf-q').value;
+  const rating=parseFloat($('pf-rat').value)||3;
+  const record={id:Date.now(),emp:empName,quarter,rating,goals:parseInt($('pf-goals').value)||4,achieved:parseInt($('pf-ach').value)||3,notes:$('pf-notes').value||'—'};
+  D.performance.push(record);
+  // Persist to Supabase (helper exists)
+  try{ await sbSavePerformance(record); }catch(e){}
+  // Notify the employee
+  const emp=D.employees.find(x=>x.name===empName);
+  if(emp&&emp.email){
+    await sbSaveNotification({
+      msg:`⭐ Your ${quarter} performance review has been published (rating: ${rating}/5)`,
+      type:'info',
+      to:emp.email
+    });
+  }
+  save();
+  nav('performance');
 }
 
 // ─── LOCATION LOGS ───────────────────────────────────────────────
