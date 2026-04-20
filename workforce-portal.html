@@ -381,7 +381,14 @@ async function syncFromSupabase(){
     const lvs = await sb('leaves','GET',null,`?select=*${cFilter}`).catch(()=>null);
     const exp = await sb('expenses','GET',null,`?select=*${cFilter}`).catch(()=>null);
     const perf = await sb('performance','GET',null,`?select=*${cFilter}`).catch(()=>null);
-    const notifs = await sb('notifications','GET',null,`?select=*&limit=50${cFilter}`).catch(()=>null);
+    // Notifications: employees see only theirs (recipient_email matches), admins see untargeted (recipient_email is null)
+    let notifQuery=`?select=*&order=created_at.desc&limit=50${cFilter}`;
+    if(currentRole==='employee' && currentEmployee && currentEmployee.email){
+      notifQuery=`?select=*&order=created_at.desc&limit=50&recipient_email=eq.${encodeURIComponent(currentEmployee.email)}`;
+    } else if(currentRole==='admin'){
+      notifQuery=`?select=*&order=created_at.desc&limit=50&recipient_email=is.null${cFilter}`;
+    }
+    const notifs = await sb('notifications','GET',null,notifQuery).catch(()=>null);
     const sets = await sb('settings','GET',null,'?select=*&limit=1').catch(()=>null);
     const companies = await sb('companies','GET',null,'?select=*').catch(()=>null);
     const hols = await sb('holidays','GET',null,`?select=*${cFilter}&order=date.asc`).catch(()=>null);
@@ -550,7 +557,9 @@ async function sbSavePerformance(p){
   const t=await res.text();return t?JSON.parse(t):true;
 }
 async function sbSaveNotification(n){
-  return await sb('notifications','POST',{message:n.msg,type:n.type||'info',is_read:false});
+  const payload={message:n.msg,type:n.type||'info',is_read:false};
+  if(n.to) payload.recipient_email=n.to; // Target to specific employee; null = admin-visible
+  return await sb('notifications','POST',payload);
 }
 async function sbMarkNotifRead(n){ if(n._uuid)await sb('notifications','PATCH',{is_read:true},`?id=eq.${n._uuid}`); }
 async function sbSaveSettings(){
@@ -2092,6 +2101,9 @@ function renderEmployeeApp(){
       </div>`:''}
       <div style="flex:1"></div>
       <button onclick="syncFromSupabase().then(()=>navEmp(empPage))" title="Refresh data" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600">🔄 Refresh</button>
+      <div style="position:relative;cursor:pointer;font-size:16px;color:#fff;padding:0 4px" onclick="navEmp('emp-notifications')" title="Notifications">
+        🔔${unreadCount()>0?`<div style="position:absolute;top:-2px;right:-2px;width:8px;height:8px;border-radius:50%;background:#ef4444"></div>`:''}
+      </div>
       <div style="width:30px;height:30px;border-radius:50%;background:#a7f3d0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#065f46">${initials(emp.name)}</div>
       <span style="font-size:12px;color:rgba(255,255,255,.8)">${emp.name}</span>
       <span style="font-size:10px;background:rgba(255,255,255,.15);padding:2px 8px;border-radius:20px;color:#fff">${emp.dept}</span>
@@ -2099,10 +2111,11 @@ function renderEmployeeApp(){
     </div>
     <div class="body-row">
       <div class="sidebar" style="background:#065f46">
-        ${[['⊞','emp-dashboard','Dashboard'],['📅','emp-attendance','Mark Attendance'],['🏖','emp-leave','My Leaves'],['💰','emp-payslip','My Payslip'],['📊','emp-performance','My Performance'],['📆','emp-holidays','Holiday Calendar'],['🪪','emp-idcard','My ID Card'],['🏢','emp-orgchart','Org Chart'],['👤','emp-profile','My Profile']].map(([ic,pg,tt])=>`
+        ${[['⊞','emp-dashboard','Dashboard'],['📅','emp-attendance','Mark Attendance'],['🏖','emp-leave','My Leaves'],['💰','emp-payslip','My Payslip'],['📊','emp-performance','My Performance'],['📆','emp-holidays','Holiday Calendar'],['🔔','emp-notifications','Notifications'],['🪪','emp-idcard','My ID Card'],['🏢','emp-orgchart','Org Chart'],['👤','emp-profile','My Profile']].map(([ic,pg,tt])=>`
         <div class="si ${empPage===pg?'act':''}" title="${tt}" onclick="navEmp('${pg}')">
           <div class="si-icon">${ic}</div>
           <span class="si-label">${tt}</span>
+          ${pg==='emp-notifications'&&unreadCount()>0?'<div class="si-dot"></div>':''}
         </div>`).join('')}
       </div>
       <div class="main" id="emp-main"></div>
@@ -2114,7 +2127,8 @@ function renderEmployeeApp(){
     'emp-performance':empPerformance,'emp-profile':empProfile,
     'emp-holidays':()=>pgHolidays(true),
     'emp-idcard':empIDCard,
-    'emp-orgchart':()=>pgOrgChart(true)
+    'emp-orgchart':()=>pgOrgChart(true),
+    'emp-notifications':pgNotifications
   };
   if(pages[empPage]) $('emp-main').innerHTML = pages[empPage]();
   // Auto-start face scan on attendance page
@@ -4335,7 +4349,18 @@ function pgLeave(){
 }
 async function updateLeave(id,status){
   const l=D.leaves.find(x=>x.id===id||x._uuid===id);
-  if(l){l.status=status;await sbUpdateLeaveStatus(l);save();nav('leave');}
+  if(!l) return;
+  l.status=status;
+  await sbUpdateLeaveStatus(l);
+  // Notify the employee whose leave this is
+  const emp=D.employees.find(e=>e.name===l.emp);
+  if(emp&&emp.email){
+    const icon=status==='Approved'?'✅':'❌';
+    const msg=`${icon} Your ${l.type||'leave'} request (${l.from}${l.to&&l.to!==l.from?' → '+l.to:''}) was ${status.toLowerCase()} by admin`;
+    await sbSaveNotification({msg, type:status==='Approved'?'success':'warning', to:emp.email});
+  }
+  save();
+  nav('leave');
 }
 function openLeaveModal(){
   $('leave-modal-wrap').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('leave-modal-wrap')">
@@ -4404,7 +4429,21 @@ function pgExpenses(){
   </div>
   <div id="exp-modal-wrap"></div>`;
 }
-async function updateExp(id,status){const e=D.expenses.find(x=>x.id===id||x._uuid===id);if(e){e.status=status;await sbUpdateExpStatus(e);save();nav('expenses');}}
+async function updateExp(id,status){
+  const e=D.expenses.find(x=>x.id===id||x._uuid===id);
+  if(!e) return;
+  e.status=status;
+  await sbUpdateExpStatus(e);
+  // Notify the affected employee
+  const emp=D.employees.find(x=>x.name===e.emp);
+  if(emp&&emp.email){
+    const icon=status==='Approved'?'✅':'❌';
+    const msg=`${icon} Your ₹${fmt(e.amount||0)} ${e.cat||'expense'} claim (${e.date||''}) was ${status.toLowerCase()} by admin`;
+    await sbSaveNotification({msg, type:status==='Approved'?'success':'warning', to:emp.email});
+  }
+  save();
+  nav('expenses');
+}
 function openExpModal(){
   $('exp-modal-wrap').innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('exp-modal-wrap')">
   <div class="modal"><div class="modal-hd"><h3>Add expense claim</h3><button class="xbtn" onclick="closeModal('exp-modal-wrap')">×</button></div>
@@ -4718,7 +4757,15 @@ async function clearAllNotifs(){
   currentRole==='admin' ? nav(currentPage) : renderEmployeeApp();
 }
 
-function markRead(id){const n=D.notifications.find(x=>x.id===id||x._uuid===id);if(n){n.read=true;if(n._uuid)sbMarkNotifRead(n);save();nav('notifications');}}
+function markRead(id){
+  const n=D.notifications.find(x=>x.id===id||x._uuid===id);
+  if(n){
+    n.read=true;
+    if(n._uuid) sbMarkNotifRead(n);
+    save();
+    currentRole==='admin' ? nav('notifications') : navEmp('emp-notifications');
+  }
+}
 function markAllRead(){
   D.notifications.forEach(n=>{if(!n.read){n.read=true;if(n._uuid)sbMarkNotifRead(n);}});
   save();
