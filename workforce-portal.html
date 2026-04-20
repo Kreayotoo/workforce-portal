@@ -6812,6 +6812,24 @@ function printAllCards(){
 // Employee Work Log: 3 modes (hourly/session/daily) — employees can pick any
 
 async function sbSaveWorkLog(log){
+  // Auto-calculate total hours from entries (hourly mode)
+  let totalHours=0;
+  if(log.mode==='hourly' && log.entries){
+    log.entries.forEach(e=>{
+      if(e.from && e.to){
+        const [fh,fm]=e.from.split(':').map(Number);
+        const [th,tm]=e.to.split(':').map(Number);
+        const mins=(th*60+tm)-(fh*60+fm);
+        if(mins>0) totalHours += mins/60;
+      }
+    });
+  } else if(log.mode==='session' && log.entries){
+    totalHours = log.entries.filter(e=>e.work).length * 2; // approx 2hrs per session
+  } else if(log.mode==='daily'){
+    totalHours = 8; // standard workday assumption
+  }
+  log.totalHours=Math.round(totalHours*10)/10;
+
   const payload={
     emp_uuid:log.empUuid||null,
     emp_name:log.empName,
@@ -6820,6 +6838,9 @@ async function sbSaveWorkLog(log){
     mode:log.mode,
     entries:log.entries||[],
     summary:log.summary||'',
+    tags:log.tags||[],
+    admin_comments:log.adminComments||[],
+    total_hours:log.totalHours,
     company_id:currentCompany?currentCompany.company_id:'KSPL'
   };
   try{
@@ -6827,7 +6848,6 @@ async function sbSaveWorkLog(log){
       const r=await sb('work_logs','PATCH',{...payload,updated_at:new Date().toISOString()},`?id=eq.${log._uuid}`);
       if(r!==null) return r;
     }
-    // Check if a log already exists for this emp+date
     const q=`?emp_uuid=eq.${log.empUuid}&log_date=eq.${log.date}&select=id`;
     const existing=await sb('work_logs','GET',null,q);
     if(existing&&existing[0]){
@@ -6860,6 +6880,9 @@ async function sbLoadWorkLogs(filter={}){
       mode:r.mode,
       entries:r.entries||[],
       summary:r.summary||'',
+      tags:r.tags||[],
+      adminComments:r.admin_comments||[],
+      totalHours:parseFloat(r.total_hours)||0,
       createdAt:r.created_at,
       updatedAt:r.updated_at
     }));
@@ -6932,6 +6955,16 @@ function empWorkLog(){
   <div class="card" style="margin-bottom:1rem">
     <div class="card-hd"><h3>${mode==='hourly'?'⏱ Hourly log':mode==='session'?'📍 Session log':'📋 Daily log'} — ${selDate}</h3></div>
     ${mode==='hourly'?renderHourlyForm(existing):mode==='session'?renderSessionForm(existing):renderDailyForm(existing)}
+    <div class="fld" style="margin-top:14px">
+      <label>🏷 Tags (optional, comma-separated)</label>
+      <input type="text" id="wl-tags" value="${(existing?.tags||[]).join(', ')}" placeholder="e.g. client-A, meeting, deep-work, admin">
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">Helps filter and group similar work later</div>
+    </div>
+    ${existing&&existing.adminComments&&existing.adminComments.length?`
+    <div style="margin-top:14px;padding:10px 14px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px">
+      <div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">💬 Admin comments</div>
+      ${existing.adminComments.map(c=>`<div style="font-size:12px;color:#78350f;padding:6px 0;border-bottom:1px dashed #fde68a"><strong>${c.author||'Admin'}:</strong> ${c.text} <span style="color:#92400e;font-size:10px">· ${new Date(c.at).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'})}</span></div>`).join('')}
+    </div>`:''}
     <div id="wl-save-msg" style="margin-top:10px"></div>
     <div style="display:flex;gap:8px;margin-top:1rem;justify-content:flex-end">
       ${existing?`<button class="btn btn-sec" onclick="deleteMyWorkLog('${existing._uuid}')" style="color:#dc2626;border-color:#fecaca">🗑 Delete this log</button>`:''}
@@ -7085,6 +7118,8 @@ async function saveMyWorkLog(){
   }
 
   const summary=$('wl-summary')?.value?.trim()||'';
+  const tagsRaw=$('wl-tags')?.value?.trim()||'';
+  const tags=tagsRaw?tagsRaw.split(',').map(t=>t.trim().replace(/^#/,'').toLowerCase()).filter(Boolean):[];
 
   // Update existing or create new
   const existing=(window._wlCache||[]).find(l=>l.empUuid===emp._uuid&&l.date===date);
@@ -7093,7 +7128,8 @@ async function saveMyWorkLog(){
     empUuid:emp._uuid,
     empName:emp.name,
     empEmail:emp.email,
-    date, mode, entries, summary
+    date, mode, entries, summary, tags,
+    adminComments:existing?.adminComments||[]
   };
   if(msg) msg.innerHTML=`<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">💾 Saving…</div>`;
   const r=await sbSaveWorkLog(log);
@@ -7149,25 +7185,49 @@ function pgWorkLogs(){
 
   const todayCount=logs.filter(l=>l.date===todayStr()).length;
   const weekStart=new Date(); weekStart.setDate(weekStart.getDate()-6);
-  const weekCount=logs.filter(l=>new Date(l.date)>=weekStart).length;
-  const activeEmps=new Set(logs.filter(l=>new Date(l.date)>=weekStart).map(l=>l.empName)).size;
+  const weekLogs=logs.filter(l=>new Date(l.date)>=weekStart);
+  const weekCount=weekLogs.length;
+  const activeEmps=new Set(weekLogs.map(l=>l.empName)).size;
+
+  // PRODUCTIVITY METRICS: hours logged vs attended
+  const activeEmpList=D.employees.filter(e=>e.status==='Active');
+  const totalAttendedHours=activeEmpList.length * 9 * 5; // 5 weekdays × 9hrs
+  const totalLoggedHours=weekLogs.reduce((s,l)=>s+(parseFloat(l.totalHours)||0),0);
+  const productivityPct=totalAttendedHours>0?Math.round((totalLoggedHours/totalAttendedHours)*100):0;
+
+  // Extract unique tags
+  const allTags=[...new Set(logs.flatMap(l=>l.tags||[]))].sort();
+  const tagFilter=window._wlTagFilter||'';
+  if(tagFilter) filtered=filtered.filter(l=>(l.tags||[]).includes(tagFilter));
 
   return `
   <div class="page-hd">
     <div><div class="pg-title">📝 Work Logs</div><div class="pg-sub">Daily journals submitted by employees</div></div>
-    <button class="btn btn-sec" onclick="reloadAllWorkLogs()">🔄 Refresh</button>
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-sec" onclick="exportWorkLogsCSV()">⬇ Export CSV</button>
+      <button class="btn btn-sec" onclick="reloadAllWorkLogs()">🔄 Refresh</button>
+    </div>
   </div>
 
   <div class="stat-grid">
     <div class="stat"><div class="stat-lbl">Today's logs</div><div class="stat-val">${todayCount}</div><div class="stat-sub">${dateLabel()}</div></div>
-    <div class="stat"><div class="stat-lbl">This week</div><div class="stat-val">${weekCount}</div><div class="stat-sub">Last 7 days</div></div>
-    <div class="stat"><div class="stat-lbl">Active loggers</div><div class="stat-val">${activeEmps}</div><div class="stat-sub">Employees this week</div></div>
-    <div class="stat"><div class="stat-lbl">Total entries</div><div class="stat-val">${logs.length}</div><div class="stat-sub">All time</div></div>
+    <div class="stat"><div class="stat-lbl">This week</div><div class="stat-val">${weekCount}</div><div class="stat-sub">${activeEmps} active loggers</div></div>
+    <div class="stat"><div class="stat-lbl">Hours logged</div><div class="stat-val">${totalLoggedHours.toFixed(0)}</div><div class="stat-sub">of ~${totalAttendedHours}hrs expected</div></div>
+    <div class="stat"><div class="stat-lbl">Productivity</div><div class="stat-val" style="color:${productivityPct>=80?'#16a34a':productivityPct>=50?'#f59e0b':'#ef4444'}">${productivityPct}%</div><div class="stat-sub">logged vs attended</div></div>
+  </div>
+
+  <!-- Quick export range -->
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:1rem;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:12px;color:#1e40af;font-weight:600">📥 Quick export:</span>
+    <button class="btn-link" onclick="exportWorkLogsCSV('week')" style="font-size:12px;font-weight:600">This week</button>
+    <button class="btn-link" onclick="exportWorkLogsCSV('month')" style="font-size:12px;font-weight:600">This month</button>
+    <button class="btn-link" onclick="exportWorkLogsCSV('all')" style="font-size:12px;font-weight:600">All time</button>
+    <button class="btn-link" onclick="exportProductivityCSV()" style="font-size:12px;font-weight:600;color:#0f766e">📊 Productivity report</button>
   </div>
 
   <div class="card" style="margin-bottom:1rem">
     <div class="card-hd"><h3>🔍 Filters</h3></div>
-    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:10px;align-items:end">
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr auto;gap:10px;align-items:end">
       <div class="fld" style="margin-bottom:0">
         <label>Employee</label>
         <select onchange="window._wlEmpFilter=this.value;nav('worklogs')">
@@ -7192,7 +7252,14 @@ function pgWorkLogs(){
           <option value="daily" ${modeFilter==='daily'?'selected':''}>📋 Daily</option>
         </select>
       </div>
-      <button class="btn btn-sec" onclick="window._wlEmpFilter='';window._wlDateFrom='';window._wlDateTo='';window._wlModeFilter='';nav('worklogs')" style="height:fit-content">Clear</button>
+      <div class="fld" style="margin-bottom:0">
+        <label>Tag</label>
+        <select onchange="window._wlTagFilter=this.value;nav('worklogs')">
+          <option value="">All tags</option>
+          ${allTags.map(t=>`<option ${tagFilter===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </div>
+      <button class="btn btn-sec" onclick="window._wlEmpFilter='';window._wlDateFrom='';window._wlDateTo='';window._wlModeFilter='';window._wlTagFilter='';nav('worklogs')" style="height:fit-content">Clear</button>
     </div>
   </div>
 
@@ -7203,21 +7270,25 @@ function pgWorkLogs(){
       <div style="font-size:14px;font-weight:600">No work logs match the filter</div>
     </div>`:`
     <table style="margin-top:8px"><thead><tr>
-      <th style="padding-left:12px;width:20%">Employee</th>
-      <th style="width:12%">Date</th>
-      <th style="width:10%">Style</th>
-      <th style="width:8%">Entries</th>
-      <th style="width:45%">Preview</th>
+      <th style="padding-left:12px;width:18%">Employee</th>
+      <th style="width:10%">Date</th>
+      <th style="width:9%">Style</th>
+      <th style="width:7%">Hours</th>
+      <th style="width:31%">Preview</th>
+      <th style="width:20%">Tags</th>
       <th style="width:5%">View</th>
     </tr></thead><tbody>${filtered.map(l=>{
       const emp=D.employees.find(e=>e._uuid===l.empUuid||e.name===l.empName);
       const preview=l.mode==='daily'?(l.entries[0]?.work||''):(l.entries||[]).map(e=>e.work||'').filter(w=>w).slice(0,2).join(' · ');
+      const tagChips=(l.tags||[]).slice(0,3).map(t=>`<span style="background:#eef2ff;color:#4338ca;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-right:3px">#${t}</span>`).join('');
+      const commentBadge=(l.adminComments&&l.adminComments.length)?`<span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:4px">💬 ${l.adminComments.length}</span>`:'';
       return `<tr style="cursor:pointer" onclick="viewWorkLogDetail('${l._uuid}')">
-        <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:8px">${av(l.empName,28)}<div><div style="font-weight:600">${l.empName}</div><div style="font-size:11px;color:var(--muted)">${emp?.dept||''}</div></div></div></td>
+        <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:8px">${av(l.empName,28)}<div><div style="font-weight:600">${l.empName}${commentBadge}</div><div style="font-size:11px;color:var(--muted)">${emp?.dept||''}</div></div></div></td>
         <td><strong>${l.date}</strong></td>
         <td><span style="background:#eff6ff;color:#1e40af;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${l.mode==='hourly'?'⏱':l.mode==='session'?'📍':'📋'} ${l.mode}</span></td>
-        <td style="font-size:12px"><strong>${(l.entries||[]).length}</strong></td>
-        <td style="white-space:normal;font-size:12px;color:var(--muted)">${(preview||'—').substring(0,120)}${preview&&preview.length>120?'…':''}</td>
+        <td><strong style="color:#0f766e">${(parseFloat(l.totalHours)||0).toFixed(1)}h</strong></td>
+        <td style="white-space:normal;font-size:12px;color:var(--muted)">${(preview||'—').substring(0,100)}${preview&&preview.length>100?'…':''}</td>
+        <td style="white-space:normal">${tagChips||'<span style="color:var(--muted);font-size:11px">—</span>'}</td>
         <td><button class="btn-link" onclick="event.stopPropagation();viewWorkLogDetail('${l._uuid}')" style="font-size:12px">View →</button></td>
       </tr>`;
     }).join('')}</tbody></table>`}
@@ -7232,15 +7303,17 @@ function viewWorkLogDetail(uuid){
   const wrap=$('wl-detail-modal');
   if(!wrap) return;
   wrap.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('wl-detail-modal')">
-    <div class="modal" style="max-width:680px">
+    <div class="modal" style="max-width:720px">
       <div class="modal-hd">
         <h3>📝 ${l.empName} — ${l.date}</h3>
         <button class="xbtn" onclick="closeModal('wl-detail-modal')">×</button>
       </div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:1rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="background:#eff6ff;color:#1e40af;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${l.mode==='hourly'?'⏱ Hourly log':l.mode==='session'?'📍 Session log':'📋 Daily log'}</span>
+        <span style="background:#f0fdf4;color:#0f766e;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">⏱ ${(parseFloat(l.totalHours)||0).toFixed(1)} hours</span>
+        ${(l.tags||[]).map(t=>`<span style="background:#eef2ff;color:#4338ca;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">#${t}</span>`).join('')}
       </div>
-      <div style="max-height:400px;overflow-y:auto">
+      <div style="max-height:340px;overflow-y:auto">
         ${l.mode==='hourly'?(l.entries||[]).map(e=>`
           <div style="background:#f8fafc;border-left:3px solid #3b82f6;padding:10px 14px;margin-bottom:8px;border-radius:0 8px 8px 0">
             <div style="font-weight:700;font-size:13px;color:#1e40af">⏱ ${e.from||'—'} → ${e.to||'—'}</div>
@@ -7255,18 +7328,171 @@ function viewWorkLogDetail(uuid){
             <div style="font-size:13px;white-space:pre-wrap">${(l.entries[0]?.work||'')}</div>
           </div>`}
       </div>
-      ${l.summary?`<div style="margin-top:1rem;padding:10px 14px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px">
-        <div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📝 Summary / Notes</div>
-        <div style="font-size:13px;color:#78350f;white-space:pre-wrap">${l.summary}</div>
+      ${l.summary?`<div style="margin-top:1rem;padding:10px 14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px">
+        <div style="font-size:11px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📝 Summary / Notes</div>
+        <div style="font-size:13px;color:#7c2d12;white-space:pre-wrap">${l.summary}</div>
       </div>`:''}
+
+      <!-- Admin Comments Thread -->
+      <div style="margin-top:1.25rem;padding:1rem;background:#fef3c7;border:1px solid #fde68a;border-radius:10px">
+        <div style="font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px">💬 Admin comments (${(l.adminComments||[]).length})</div>
+        ${(l.adminComments||[]).length?(l.adminComments||[]).map((c,ci)=>`
+          <div style="background:#fff;border-radius:8px;padding:8px 12px;margin-bottom:6px;border-left:3px solid #f59e0b">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+              <span style="font-size:12px;font-weight:700;color:#92400e">${c.author||'Admin'}</span>
+              <span style="font-size:10px;color:var(--muted)">${new Date(c.at).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'})}</span>
+            </div>
+            <div style="font-size:13px;color:#78350f;white-space:pre-wrap">${c.text}</div>
+          </div>`).join(''):`<div style="font-size:12px;color:#78350f;font-style:italic;margin-bottom:8px">No comments yet. Be the first.</div>`}
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input type="text" id="wl-new-comment" placeholder="Add a comment to ${l.empName}…" style="flex:1;padding:7px 11px;font-size:13px" onkeydown="if(event.key==='Enter')addWorkLogComment('${l._uuid}')">
+          <button class="btn btn-primary" style="font-size:12px;padding:7px 14px;background:#d97706" onclick="addWorkLogComment('${l._uuid}')">💬 Post</button>
+        </div>
+      </div>
+
       <div style="margin-top:1rem;font-size:11px;color:var(--muted);text-align:right">Last updated: ${l.updatedAt?new Date(l.updatedAt).toLocaleString('en-IN'):'—'}</div>
     </div>
   </div>`;
 }
 
+async function addWorkLogComment(uuid){
+  const text=$('wl-new-comment')?.value?.trim();
+  if(!text) return;
+  const log=(window._wlAllCache||[]).find(x=>x._uuid===uuid);
+  if(!log) return;
+  const newComment={
+    author:D.user?.name||'Admin',
+    text,
+    at:new Date().toISOString()
+  };
+  log.adminComments=[...(log.adminComments||[]),newComment];
+  // Save to Supabase (just update the admin_comments field)
+  try{
+    const res=await fetch(`${SB_URL}/rest/v1/work_logs?id=eq.${uuid}`,{
+      method:'PATCH',
+      headers:{...SB_HDR,'Prefer':'return=minimal'},
+      body:JSON.stringify({admin_comments:log.adminComments, updated_at:new Date().toISOString()})
+    });
+    if(!res.ok){
+      showToast('❌ Failed to post comment','info');
+      return;
+    }
+  }catch(e){
+    console.error('Comment save error:',e);
+    showToast('❌ Network error','info');
+    return;
+  }
+  // Notify the employee
+  if(log.empEmail){
+    await sbSaveNotification({
+      msg:`💬 Admin commented on your work log (${log.date}): "${text.substring(0,80)}${text.length>80?'…':''}"`,
+      type:'info',
+      to:log.empEmail
+    });
+  }
+  showToast('✅ Comment posted','success');
+  // Refresh the modal
+  viewWorkLogDetail(uuid);
+}
+
 async function reloadAllWorkLogs(){
   window._wlAllCache=await sbLoadWorkLogs();
   nav('worklogs');
+}
+
+function exportWorkLogsCSV(range){
+  const logs=window._wlAllCache||[];
+  if(!logs.length){ showToast('No logs to export','info'); return; }
+
+  let filtered=logs;
+  const today=new Date();
+  if(range==='week'){
+    const weekStart=new Date(); weekStart.setDate(weekStart.getDate()-6);
+    filtered=logs.filter(l=>new Date(l.date)>=weekStart);
+  } else if(range==='month'){
+    const monthStart=new Date(today.getFullYear(),today.getMonth(),1);
+    filtered=logs.filter(l=>new Date(l.date)>=monthStart);
+  }
+
+  if(!filtered.length){ showToast('No logs in this range','info'); return; }
+
+  const esc=s=>`"${String(s||'').replace(/"/g,'""')}"`;
+  const hdr=['Employee','Email','Date','Style','Hours','Entries','Summary','Tags','Comments','Created'];
+  const lines=[hdr.join(',')];
+
+  filtered.forEach(l=>{
+    const entriesText=l.mode==='daily'?(l.entries[0]?.work||''):
+      (l.entries||[]).map(e=>{
+        if(l.mode==='hourly') return `[${e.from||'?'}→${e.to||'?'}] ${e.work||''}`;
+        if(l.mode==='session') return `[${e.session||'?'}] ${e.work||''}`;
+        return e.work||'';
+      }).join(' | ');
+    const commentsText=(l.adminComments||[]).map(c=>`${c.author}: ${c.text}`).join(' | ');
+    lines.push([
+      esc(l.empName),
+      esc(l.empEmail),
+      l.date,
+      l.mode,
+      (parseFloat(l.totalHours)||0).toFixed(1),
+      esc(entriesText),
+      esc(l.summary),
+      esc((l.tags||[]).map(t=>'#'+t).join(', ')),
+      esc(commentsText),
+      esc(l.createdAt||'')
+    ].join(','));
+  });
+
+  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  const rangeLabel=range==='week'?'ThisWeek':range==='month'?'ThisMonth':'All';
+  a.href=url;
+  a.download=`WorkLogs_${rangeLabel}_${todayStr()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`✅ Exported ${filtered.length} logs`,'success');
+}
+
+function exportProductivityCSV(){
+  const logs=window._wlAllCache||[];
+  const weekStart=new Date(); weekStart.setDate(weekStart.getDate()-6);
+  const weekLogs=logs.filter(l=>new Date(l.date)>=weekStart);
+
+  const emps=D.employees.filter(e=>e.status==='Active');
+  if(!emps.length){ showToast('No active employees','info'); return; }
+
+  const esc=s=>`"${String(s||'').replace(/"/g,'""')}"`;
+  const hdr=['Employee','Department','Email','Logs This Week','Hours Logged','Expected Hours','Productivity %','Avg Hours/Log','Last Logged'];
+  const lines=[hdr.join(',')];
+
+  emps.forEach(e=>{
+    const myLogs=weekLogs.filter(l=>l.empName===e.name||l.empUuid===e._uuid);
+    const myHours=myLogs.reduce((s,l)=>s+(parseFloat(l.totalHours)||0),0);
+    const expected=45; // 5 days × 9 hours
+    const productivity=expected>0?Math.round((myHours/expected)*100):0;
+    const avgPerLog=myLogs.length>0?(myHours/myLogs.length).toFixed(1):'0';
+    const lastLog=myLogs.length>0?myLogs.sort((a,b)=>b.date.localeCompare(a.date))[0].date:'—';
+    lines.push([
+      esc(e.name),
+      esc(e.dept||''),
+      esc(e.email||''),
+      myLogs.length,
+      myHours.toFixed(1),
+      expected,
+      productivity+'%',
+      avgPerLog,
+      lastLog
+    ].join(','));
+  });
+
+  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`ProductivityReport_${todayStr()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`✅ Productivity report: ${emps.length} employees`,'success');
 }
 
 // Auto-load on first access
