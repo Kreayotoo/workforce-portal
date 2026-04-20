@@ -5419,18 +5419,10 @@ async function saveAtt(){
 
 // ─── LEAVE ───────────────────────────────────────────────────────
 // ─── LEAVES MODULE ───────────────────────────────────────────────
-// 10 default leave types — full Kredily-style list
+// Default leave types — kept simple: CL and EL only
 const DEFAULT_LEAVE_TYPES = [
   {code:'CL', name:'Casual Leave', icon:'🌿', color:'#3b82f6', annualQuota:12, accrual:'monthly', accrualRate:1, carryForward:false, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:false, allowedInNotice:true, description:'Short notice, personal reasons'},
-  {code:'EL', name:'Earned Leave', icon:'🏖', color:'#10b981', annualQuota:12, accrual:'monthly', accrualRate:1, carryForward:true, encash:true, weekendsCount:false, holidaysCount:false, allowedInProbation:false, allowedInNotice:false, description:'Planned time off, carry-forward enabled'},
-  {code:'SL', name:'Sick Leave', icon:'🤒', color:'#ef4444', annualQuota:10, accrual:'yearly', accrualRate:10, carryForward:false, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:true, allowedInNotice:true, description:'Medical rest with doctor certificate for 3+ days'},
-  {code:'WFH', name:'Work From Home', icon:'🏠', color:'#8b5cf6', annualQuota:0, accrual:'none', accrualRate:0, carryForward:false, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:true, allowedInNotice:true, description:'Remote working days (not deducted from leave balance)'},
-  {code:'ML', name:'Maternity Leave', icon:'👶', color:'#ec4899', annualQuota:182, accrual:'yearly', accrualRate:182, carryForward:false, encash:false, weekendsCount:true, holidaysCount:true, allowedInProbation:true, allowedInNotice:false, description:'Maternity leave as per Indian law (26 weeks)'},
-  {code:'PL', name:'Paternity Leave', icon:'🍼', color:'#06b6d4', annualQuota:15, accrual:'yearly', accrualRate:15, carryForward:false, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:true, allowedInNotice:false, description:'Paternity leave for new fathers'},
-  {code:'CO', name:'Comp Off', icon:'🔄', color:'#f59e0b', annualQuota:0, accrual:'none', accrualRate:0, carryForward:true, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:true, allowedInNotice:true, description:'Earned by working on holidays/weekends'},
-  {code:'OD', name:'On Duty', icon:'💼', color:'#0ea5e9', annualQuota:0, accrual:'none', accrualRate:0, carryForward:false, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:true, allowedInNotice:true, description:'Official work outside office (client meetings, travel)'},
-  {code:'EV', name:'Event Leave', icon:'🎉', color:'#d946ef', annualQuota:3, accrual:'yearly', accrualRate:3, carryForward:false, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:true, allowedInNotice:true, description:'For weddings, special family events'},
-  {code:'LOP', name:'Loss of Pay', icon:'⚠️', color:'#991b1b', annualQuota:0, accrual:'none', accrualRate:0, carryForward:false, encash:false, weekendsCount:true, holidaysCount:true, allowedInProbation:true, allowedInNotice:true, description:'Unpaid leave — triggered when paid balance runs out'}
+  {code:'EL', name:'Earned Leave', icon:'🏖', color:'#10b981', annualQuota:12, accrual:'monthly', accrualRate:1, carryForward:true, encash:true, weekendsCount:false, holidaysCount:false, allowedInProbation:false, allowedInNotice:false, description:'Planned time off, carry-forward enabled'}
 ];
 
 function getLeaveTypes(){
@@ -5715,7 +5707,7 @@ function pgLeaveSettings(){
 
     <div class="card" style="margin-top:1rem">
       <div class="card-hd"><h3>🔄 Restore defaults</h3></div>
-      <p style="font-size:13px;color:var(--muted);margin-bottom:1rem">Reset all 10 leave types to their default rules. Existing leave applications are preserved.</p>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:1rem">Reset CL and EL to their default rules. Existing leave applications are preserved.</p>
       <button class="btn btn-sec" style="color:#dc2626;border-color:#fecaca" onclick="resetLeaveTypesToDefault()">↻ Restore default leave types</button>
     </div>
   </div>`;
@@ -5732,7 +5724,7 @@ async function saveLeaveSettings(){
 }
 
 async function resetLeaveTypesToDefault(){
-  if(!confirm('Reset all 10 leave types to their default rules? Existing leave applications are preserved.')) return;
+  if(!confirm('Reset CL and EL leave types to their default rules? Existing leave applications are preserved.')) return;
   D.settings.leaveTypes=null;
   await sbSaveSettings();
   save();
