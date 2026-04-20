@@ -4280,18 +4280,32 @@ function pgHolidays(empView=false){
     {id:10,name:'Christmas',date:'2026-12-25',type:'National'},
   ];
   const today=todayStr();
-  const upcoming=D.holidays.filter(h=>h.date>=today).sort((a,b)=>a.date.localeCompare(b.date));
-  const past=D.holidays.filter(h=>h.date<today).sort((a,b)=>b.date.localeCompare(a.date));
+  const activeFilter=window._holidayFilter||'Festival';
+  const filtered=activeFilter==='All'?D.holidays:D.holidays.filter(h=>h.type===activeFilter);
+  const upcoming=filtered.filter(h=>h.date>=today).sort((a,b)=>a.date.localeCompare(b.date));
+  const past=filtered.filter(h=>h.date<today).sort((a,b)=>b.date.localeCompare(a.date));
   const typeColor={National:'bb',Festival:'ba',Optional:'bx',Company:'bg'};
+  const filters=[
+    {key:'Festival',label:'🎉 Festival',count:D.holidays.filter(h=>h.type==='Festival').length},
+    {key:'National',label:'🇮🇳 National',count:D.holidays.filter(h=>h.type==='National').length},
+    {key:'Company',label:'🏢 Company',count:D.holidays.filter(h=>h.type==='Company').length},
+    {key:'Optional',label:'⚪ Optional',count:D.holidays.filter(h=>h.type==='Optional').length},
+    {key:'All',label:'📋 All',count:D.holidays.length}
+  ];
   return `
   <div class="page-hd">
-    <div><div class="pg-title">Holiday Calendar 2026</div><div class="pg-sub">${D.holidays.length} holidays · ${upcoming.length} upcoming</div></div>
+    <div><div class="pg-title">Holiday Calendar 2026</div><div class="pg-sub">Showing <strong>${activeFilter}</strong> · ${upcoming.length} upcoming · Sundays are weekly offs (not listed)</div></div>
     ${!empView?`<button class="btn btn-primary" onclick="addHolidayModal()">+ Add holiday</button>`:''}
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap">
+    ${filters.map(f=>`<button onclick="setHolidayFilter('${f.key}')" style="padding:6px 14px;border-radius:20px;border:1px solid ${activeFilter===f.key?'var(--navy)':'var(--border)'};background:${activeFilter===f.key?'var(--navy)':'var(--white)'};color:${activeFilter===f.key?'#fff':'var(--text)'};font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+      ${f.label} <span style="background:${activeFilter===f.key?'rgba(255,255,255,.25)':'#f1f5f9'};padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700">${f.count}</span>
+    </button>`).join('')}
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
     <div class="card">
       <div class="card-hd"><h3>🗓 Upcoming holidays</h3><span class="muted">${upcoming.length} remaining</span></div>
-      ${upcoming.length===0?'<div style="text-align:center;color:var(--muted);padding:1rem">No upcoming holidays</div>':
+      ${upcoming.length===0?`<div style="text-align:center;color:var(--muted);padding:1.5rem;font-size:13px">No upcoming ${activeFilter==='All'?'':activeFilter+' '}holidays</div>`:
       upcoming.map(h=>{
         const d=new Date(h.date);
         const daysLeft=Math.round((d-new Date(today))/86400000);
@@ -4311,7 +4325,8 @@ function pgHolidays(empView=false){
     </div>
     <div class="card">
       <div class="card-hd"><h3>✅ Past holidays</h3><span class="muted">${past.length} done</span></div>
-      ${past.slice(0,8).map(h=>{
+      ${past.length===0?`<div style="text-align:center;color:var(--muted);padding:1.5rem;font-size:13px">No past ${activeFilter==='All'?'':activeFilter+' '}holidays</div>`:
+      past.slice(0,8).map(h=>{
         const d=new Date(h.date);
         return `<div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f3f4f6;opacity:.6">
           <div style="background:#f1f5f9;border-radius:8px;padding:6px 10px;text-align:center;min-width:48px">
@@ -4325,6 +4340,11 @@ function pgHolidays(empView=false){
     </div>
   </div>
   <div id="holiday-modal-wrap"></div>`;
+}
+function setHolidayFilter(key){
+  window._holidayFilter=key;
+  // Re-render the right page whether admin or employee
+  if(currentRole==='employee') renderEmployeeApp(); else nav(currentPage);
 }
 function addHolidayModal(){
   const wrap=$('holiday-modal-wrap');if(!wrap)return;
