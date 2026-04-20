@@ -851,7 +851,7 @@ function renderApp(){
       <div class="main" id="main-content"></div>
     </div>
   </div>`;
-  const pages = {dashboard:pgDashboard,employees:pgEmployees,attendance:pgAttendance,leave:pgLeave,payroll:pgPayroll,expenses:pgExpenses,performance:pgPerformance,notifications:pgNotifications,settings:pgSettings,locations:pgLocations,holidays:pgHolidays,orgchart:pgOrgChart,idcards:pgIDCards,companies:pgCompanies,kycrequests:pgKYCRequests};
+  const pages = {dashboard:pgDashboard,employees:pgEmployees,attendance:pgAttendance,leave:pgLeave,payroll:pgPayroll,expenses:pgExpenses,performance:pgPerformance,notifications:pgNotifications,settings:pgSettings,locations:pgLocations,holidays:pgHolidays,orgchart:pgOrgChart,idcards:pgIDCards,companies:pgCompanies,kycrequests:pgKYCRequests,'setup-wizard':pgSetupWizard};
   if(pages[currentPage]) $('main-content').innerHTML = pages[currentPage]();
   bindPage();
 }
@@ -3849,6 +3849,390 @@ function celebrationsPanel(){
   </div>`;
 }
 
+// ─── SETUP WIZARD ─────────────────────────────────────────────────
+function pgSetupWizard(){
+  const step=window._wizStep||1;
+  const steps=[
+    {num:1,title:'Add Employees'},
+    {num:2,title:'Attendance & Leave'},
+    {num:3,title:'Company Details'},
+    {num:4,title:'Setup Payroll'}
+  ];
+
+  return `
+  <div style="max-width:960px;margin:0 auto">
+    <!-- Progress bar -->
+    <div class="card" style="padding:1.5rem 2rem;margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;position:relative">
+        <!-- connecting line (bg) -->
+        <div style="position:absolute;top:20px;left:8%;right:8%;height:2px;background:var(--border);z-index:0"></div>
+        <!-- connecting line (filled based on progress) -->
+        <div style="position:absolute;top:20px;left:8%;width:${(step-1)/3*84}%;height:2px;background:var(--navy2);z-index:1;transition:width .3s"></div>
+        ${steps.map(s=>{
+          const active=s.num===step, done=s.num<step;
+          return `<div style="position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;cursor:${done||active?'pointer':'default'}" ${done||active?`onclick="window._wizStep=${s.num};nav('setup-wizard')"`:''}>
+            <div style="width:40px;height:40px;border-radius:50%;background:${active?'var(--navy2)':done?'#10b981':'#fff'};color:${active||done?'#fff':'#9ca3af'};border:2px solid ${active?'var(--navy2)':done?'#10b981':'var(--border)'};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px">${done?'✓':s.num}</div>
+            <div style="margin-top:8px;font-size:13px;font-weight:${active?700:500};color:${active?'var(--navy2)':done?'#10b981':'var(--muted)'};white-space:nowrap">${s.title}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- Step content -->
+    <div class="card" style="padding:2rem;min-height:400px">
+      ${step===1?wizStep1():step===2?wizStep2():step===3?wizStep3():wizStep4()}
+    </div>
+
+    <!-- Nav buttons -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:1rem;padding:0 .5rem">
+      <button class="btn-link" onclick="nav('dashboard')" style="font-size:14px">Skip to Dashboard</button>
+      <div style="display:flex;gap:8px">
+        ${step>1?`<button class="btn btn-sec" onclick="window._wizStep=${step-1};nav('setup-wizard')">← Back</button>`:''}
+        <button class="btn btn-primary" onclick="wizSaveAndContinue(${step})">
+          ${step<4?'Save &amp; Continue →':'✓ Finish Setup'}
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── Step 1: Add Employees ───
+function wizStep1(){
+  const count=D.employees.length;
+  return `
+  <h2 style="font-size:20px;font-weight:700;margin-bottom:6px">1. Add employees</h2>
+  <p style="color:var(--muted);font-size:14px;margin-bottom:1.5rem">Upload your employee data to continue. We recommend including a phone number or email, salary, and other employee details for a smoother setup.</p>
+
+  ${count>0?`<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 14px;margin-bottom:1.25rem;display:flex;align-items:center;gap:10px">
+    <span style="font-size:22px">✅</span>
+    <div style="flex:1">
+      <div style="font-size:14px;font-weight:700;color:#166534">${count} employee${count>1?'s':''} already added</div>
+      <div style="font-size:12px;color:#166534">You can add more or continue to the next step.</div>
+    </div>
+  </div>`:''}
+
+  <!-- Smart upload section -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+    <div style="font-size:16px;font-weight:700">📤 Smart Upload</div>
+    <button class="btn btn-sec" onclick="wizDownloadTemplate()" style="font-size:13px;padding:7px 14px">⬇ Download Template</button>
+  </div>
+
+  <!-- Drop zone -->
+  <div id="wiz-dropzone" style="border:2px dashed var(--navy2);border-radius:12px;background:#eff6ff;padding:2.5rem 1rem;text-align:center;cursor:pointer;transition:all .2s"
+       onclick="document.getElementById('wiz-csv-input').click()"
+       ondragover="event.preventDefault();this.style.background='#dbeafe';this.style.borderColor='#1e40af'"
+       ondragleave="this.style.background='#eff6ff';this.style.borderColor='var(--navy2)'"
+       ondrop="event.preventDefault();this.style.background='#eff6ff';this.style.borderColor='var(--navy2)';if(event.dataTransfer.files[0])wizHandleCSV(event.dataTransfer.files[0])">
+    <div style="font-size:34px;margin-bottom:10px">📤</div>
+    <div style="font-size:15px;color:var(--text);margin-bottom:4px">Drag &amp; Drop file here <span style="color:var(--muted)">(or)</span> <span style="color:var(--navy2);text-decoration:underline">Browse File</span></div>
+    <div style="font-size:12px;color:var(--muted)">Upload your employee master data / all employees data sheet (CSV or Excel)</div>
+    <input type="file" id="wiz-csv-input" accept=".csv,.xlsx,.xls" style="display:none" onchange="if(this.files[0])wizHandleCSV(this.files[0])">
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;margin-top:1rem">
+    <button class="btn-link" onclick="openEmpModal()" style="font-size:14px;color:#dc2626;font-weight:700">+ Add Individually</button>
+  </div>
+
+  <div id="wiz-upload-msg" style="margin-top:1rem"></div>`;
+}
+
+// ── Step 2: Attendance & Leave ───
+function wizStep2(){
+  const s=D.settings||{};
+  const cl=s.clPerMonth||2;
+  const el=s.elPerMonth||1;
+  const hours=s.hours||9;
+  return `
+  <h2 style="font-size:20px;font-weight:700;margin-bottom:6px">2. Attendance &amp; Leave</h2>
+  <p style="color:var(--muted);font-size:14px;margin-bottom:1.5rem">Set your organization's default working hours and leave policy. You can customize these per employee later.</p>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem">
+    <div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px">⏰ Working Hours</div>
+      <div class="fld">
+        <label>Standard working hours per day</label>
+        <input type="number" id="wiz-hours" value="${hours}" min="4" max="12" step="0.5">
+        <div style="font-size:12px;color:var(--muted);margin-top:4px">Typical Indian office: 8-9 hours</div>
+      </div>
+    </div>
+    <div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px">📅 Weekly Off</div>
+      <div class="fld">
+        <label>Weekly off days</label>
+        <select id="wiz-weekoff">
+          <option value="sunday" ${s.weekOff==='sunday'?'selected':''}>Sunday only</option>
+          <option value="sat-sun" ${s.weekOff==='sat-sun'?'selected':''}>Saturday + Sunday</option>
+          <option value="alternate-sat" ${!s.weekOff||s.weekOff==='alternate-sat'?'selected':''}>Sunday + 2nd/4th Saturday</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div style="font-size:15px;font-weight:700;margin:1.5rem 0 10px">🏖 Leave Policy (monthly accrual)</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div class="fld">
+      <label>Casual Leaves / month (CL)</label>
+      <input type="number" id="wiz-cl" value="${cl}" min="0" max="5" step="0.5">
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">Short notice, personal reasons</div>
+    </div>
+    <div class="fld">
+      <label>Earned Leaves / month (EL)</label>
+      <input type="number" id="wiz-el" value="${el}" min="0" max="3" step="0.5">
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">Planned time off, carry-forward</div>
+    </div>
+  </div>
+
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:13px;color:#1e40af">
+    💡 With <strong>${cl}+${el} = ${cl+el} paid leaves/month</strong>, each employee gets <strong>${(cl+el)*12} paid leaves per year</strong>. Extra leaves become Loss of Pay (LOP) deductions.
+  </div>`;
+}
+
+// ── Step 3: Company Details ───
+function wizStep3(){
+  const s=D.settings||{};
+  return `
+  <h2 style="font-size:20px;font-weight:700;margin-bottom:6px">3. Company Details</h2>
+  <p style="color:var(--muted);font-size:14px;margin-bottom:1.5rem">Enter your company information. This appears on payslips, ID cards, and official documents.</p>
+
+  <div class="fld">
+    <label>Company Name <span style="color:#ef4444">*</span></label>
+    <input type="text" id="wiz-cname" value="${s.company||''}" placeholder="Kreayotoo Solutions Pvt Ltd">
+  </div>
+
+  <div class="frow">
+    <div class="fld">
+      <label>Contact email</label>
+      <input type="email" id="wiz-cemail" value="${s.email||''}" placeholder="hr@company.com">
+    </div>
+    <div class="fld">
+      <label>Contact phone</label>
+      <input type="text" id="wiz-cphone" value="${s.phone||''}" placeholder="+91 98765 43210">
+    </div>
+  </div>
+
+  <div class="fld">
+    <label>Registered office address</label>
+    <textarea id="wiz-caddr" rows="2" placeholder="Door no, street, locality, city, state, PIN">${s.address||''}</textarea>
+  </div>
+
+  <div class="frow">
+    <div class="fld">
+      <label>GST number (optional)</label>
+      <input type="text" id="wiz-gst" value="${s.gst||''}" placeholder="22AAAAA0000A1Z5" maxlength="15" oninput="this.value=this.value.toUpperCase()">
+    </div>
+    <div class="fld">
+      <label>PAN (company)</label>
+      <input type="text" id="wiz-cpan" value="${s.pan||''}" placeholder="ABCDE1234F" maxlength="10" oninput="this.value=this.value.toUpperCase()">
+    </div>
+  </div>
+
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 14px;font-size:13px;color:#166534;margin-top:1rem">
+    🔒 This information is used only for internal documents (payslips, ID cards). It is never shared externally.
+  </div>`;
+}
+
+// ── Step 4: Setup Payroll ───
+function wizStep4(){
+  const s=D.settings||{};
+  const payDay=s.payDay||'last';
+  return `
+  <h2 style="font-size:20px;font-weight:700;margin-bottom:6px">4. Setup Payroll</h2>
+  <p style="color:var(--muted);font-size:14px;margin-bottom:1.5rem">Configure your payroll cycle and review the salary structure. Kreayotoo uses the Indian standard salary structure by default.</p>
+
+  <div style="font-size:15px;font-weight:700;margin-bottom:10px">📅 Pay Cycle</div>
+  <div class="fld">
+    <label>Salary credited on</label>
+    <select id="wiz-payday">
+      <option value="last" ${payDay==='last'?'selected':''}>Last working day of the month</option>
+      <option value="1" ${payDay==='1'?'selected':''}>1st of next month</option>
+      <option value="5" ${payDay==='5'?'selected':''}>5th of next month</option>
+      <option value="7" ${payDay==='7'?'selected':''}>7th of next month</option>
+      <option value="10" ${payDay==='10'?'selected':''}>10th of next month</option>
+    </select>
+  </div>
+
+  <div style="font-size:15px;font-weight:700;margin:1.5rem 0 10px">💰 Salary Structure (auto-applied based on CTC)</div>
+  <div style="background:#f8fafc;border-radius:10px;padding:14px;font-size:13px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div>
+        <div style="font-weight:700;color:var(--text);margin-bottom:8px">Earnings</div>
+        <div style="color:var(--muted);line-height:1.8">
+          • Basic: <strong>45% of CTC</strong><br>
+          • HRA: <strong>40% of Basic</strong><br>
+          • LTA: <strong>10% of Basic</strong><br>
+          • Conveyance: <strong>₹1,250</strong><br>
+          • Travel Allowance: <strong>₹1,600</strong><br>
+          • Special: <strong>Balancer</strong>
+        </div>
+      </div>
+      <div>
+        <div style="font-weight:700;color:var(--text);margin-bottom:8px">Deductions</div>
+        <div style="color:var(--muted);line-height:1.8">
+          • Professional Tax: <strong>₹200</strong><br>
+          • PF (12%): <strong>₹1,800 – ₹2,430</strong><br>
+          • MPP (6.75%): <strong>If Basic ≥ ₹20,250</strong><br>
+          • ESIC: <strong>₹0</strong>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:13px;color:#92400e;margin-top:1rem">
+    ⚡ <strong>Formula is locked.</strong> To change the salary structure, contact your admin. All payslips auto-generate using this formula.
+  </div>
+
+  <div style="background:#dcfce7;border:1px solid #bbf7d0;border-radius:10px;padding:14px;font-size:14px;color:#166534;margin-top:1.5rem;text-align:center">
+    🎉 <strong>You're all set!</strong> Click "Finish Setup" to complete onboarding and start using the portal.
+  </div>`;
+}
+
+// ── Wizard handlers ───
+async function wizSaveAndContinue(step){
+  if(step===1){
+    // Step 1: Data already saved per-upload or per-add; just advance
+    window._wizStep=2;
+    nav('setup-wizard');
+    return;
+  }
+  if(step===2){
+    const hours=parseFloat($('wiz-hours')?.value)||9;
+    const weekOff=$('wiz-weekoff')?.value||'alternate-sat';
+    const cl=parseFloat($('wiz-cl')?.value)||2;
+    const el=parseFloat($('wiz-el')?.value)||1;
+    D.settings.hours=hours;
+    D.settings.weekOff=weekOff;
+    D.settings.clPerMonth=cl;
+    D.settings.elPerMonth=el;
+    await sbSaveSettings();
+    save();
+    showToast('✅ Leave policy saved','success');
+    window._wizStep=3;
+    nav('setup-wizard');
+    return;
+  }
+  if(step===3){
+    const company=$('wiz-cname')?.value?.trim()||'';
+    if(!company){alert('Company name is required');return;}
+    D.settings.company=company;
+    D.settings.email=$('wiz-cemail')?.value?.trim()||'';
+    D.settings.phone=$('wiz-cphone')?.value?.trim()||'';
+    D.settings.address=$('wiz-caddr')?.value?.trim()||'';
+    D.settings.gst=$('wiz-gst')?.value?.trim()||'';
+    D.settings.pan=$('wiz-cpan')?.value?.trim()||'';
+    await sbSaveSettings();
+    save();
+    showToast('✅ Company details saved','success');
+    window._wizStep=4;
+    nav('setup-wizard');
+    return;
+  }
+  if(step===4){
+    D.settings.payDay=$('wiz-payday')?.value||'last';
+    D.settings.setupWizardCompleted=true;
+    D.settings.setupWizardCompletedAt=new Date().toISOString();
+    await sbSaveSettings();
+    save();
+    showToast('🎉 Setup complete! Welcome aboard.','success');
+    window._wizStep=1;
+    nav('dashboard');
+  }
+}
+
+function wizDownloadTemplate(){
+  const csvHeader='Name,Email,Phone,Date of Birth (YYYY-MM-DD),Department,Role,CTC per month,Date of Joining (YYYY-MM-DD),Employee Type';
+  const sample='John Doe,john@company.com,9876543210,1990-05-15,Engineering,Software Engineer,55000,2024-01-15,office';
+  const csv=csvHeader+'\n'+sample;
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='Employee_Template.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('✅ Template downloaded','success');
+}
+
+async function wizHandleCSV(file){
+  const msg=$('wiz-upload-msg');
+  if(!file){return;}
+  const ext=file.name.split('.').pop().toLowerCase();
+  if(!['csv','xlsx','xls'].includes(ext)){
+    if(msg)msg.innerHTML=`<div class="alert alert-e">Unsupported file type. Please upload CSV or Excel (.xlsx/.xls).</div>`;
+    return;
+  }
+  if(file.size>5*1024*1024){
+    if(msg)msg.innerHTML=`<div class="alert alert-e">File too large (max 5 MB).</div>`;
+    return;
+  }
+  if(msg)msg.innerHTML=`<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">📤 Reading ${file.name}…</div>`;
+
+  try{
+    const text=await file.text();
+    const lines=text.split(/\r?\n/).filter(l=>l.trim());
+    if(lines.length<2){
+      if(msg)msg.innerHTML=`<div class="alert alert-e">File has no data rows. Please include at least one employee.</div>`;
+      return;
+    }
+    const header=lines[0].split(',').map(h=>h.trim().toLowerCase());
+    const col=(name)=>header.findIndex(h=>h.includes(name));
+    const idxName=col('name'), idxEmail=col('email'), idxPhone=col('phone'), idxDob=col('birth')>=0?col('birth'):col('dob');
+    const idxDept=col('department')>=0?col('department'):col('dept'), idxRole=col('role'), idxSalary=col('ctc')>=0?col('ctc'):col('salary');
+    const idxJoined=col('joining')>=0?col('joining'):col('joined'), idxType=col('type');
+
+    if(idxName<0||idxEmail<0){
+      if(msg)msg.innerHTML=`<div class="alert alert-e">Missing required columns. Need at least <strong>Name</strong> and <strong>Email</strong>. Download the template for reference.</div>`;
+      return;
+    }
+
+    const newEmployees=[], errors=[];
+    for(let i=1;i<lines.length;i++){
+      const cells=lines[i].split(',').map(c=>c.trim().replace(/^"|"$/g,''));
+      const name=cells[idxName]||'';
+      const email=cells[idxEmail]||'';
+      if(!name||!email){ errors.push(`Row ${i+1}: missing name or email`); continue; }
+      newEmployees.push({
+        name, email,
+        phone:idxPhone>=0?cells[idxPhone]:'',
+        dob:idxDob>=0?cells[idxDob]:'',
+        dept:idxDept>=0?cells[idxDept]||'Engineering':'Engineering',
+        role:idxRole>=0?cells[idxRole]||'Employee':'Employee',
+        salary:idxSalary>=0?parseInt(cells[idxSalary])||0:0,
+        joined:idxJoined>=0?cells[idxJoined]||todayStr():todayStr(),
+        empType:idxType>=0?(cells[idxType]||'office').toLowerCase():'office',
+        status:'Active',
+        passwordHash:'emp@123'
+      });
+    }
+
+    if(!newEmployees.length){
+      if(msg)msg.innerHTML=`<div class="alert alert-e">No valid rows found. ${errors.length?'Errors: '+errors.slice(0,3).join('; '):''}</div>`;
+      return;
+    }
+
+    // Save each to Supabase
+    let saved=0, skipped=0;
+    for(const e of newEmployees){
+      // Check duplicate by email
+      const existing=D.employees.find(x=>x.email.toLowerCase()===e.email.toLowerCase());
+      if(existing){ skipped++; continue; }
+      const newId='EMP-'+String(D.employees.length+saved+101).padStart(3,'0');
+      e.id=newId;
+      D.employees.push(e);
+      const r=await sbSaveEmployee(e);
+      if(r&&r[0])e._uuid=r[0].id;
+      saved++;
+    }
+    save();
+
+    if(msg)msg.innerHTML=`<div class="alert alert-s">✅ Bulk import: <strong>${saved} employees added</strong>${skipped?`, ${skipped} skipped (duplicate email)`:''}${errors.length?`, ${errors.length} skipped (errors)`:''}</div>`;
+    showToast(`✅ Imported ${saved} employees`,'success');
+    await sbSaveNotification({msg:`📥 Bulk import: ${saved} employees added${skipped?`, ${skipped} skipped`:''}`,type:'success'});
+  }catch(e){
+    console.error('CSV parse error:',e);
+    if(msg)msg.innerHTML=`<div class="alert alert-e">Could not read file: ${e.message}. Check the format and try again.</div>`;
+  }
+}
+
 function pgDashboard(){
   const active=D.employees.filter(e=>e.status==='Active').length;
   const pLeaves=D.leaves.filter(l=>l.status==='Pending').length;
@@ -3858,7 +4242,10 @@ function pgDashboard(){
   return `
   <div class="page-hd">
     <div><div class="pg-title">Hi, ${currentCompany?currentCompany.name.split(' ')[0]:D.user.name.split(' ')[0]}! 👋</div><div class="pg-sub">${dateLabel()}${currentCompany?` · ${currentCompany.name}`:' · Super Admin'}</div></div>
-    <button class="btn btn-primary" onclick="openEmpModal()">+ Add employee</button>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-sec" onclick="nav('setup-wizard')" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;color:#1e40af;font-weight:700">⚡ Setup Wizard</button>
+      <button class="btn btn-primary" onclick="openEmpModal()">+ Add employee</button>
+    </div>
   </div>
 
   <div class="modules-grid" style="grid-template-columns:repeat(auto-fill,minmax(120px,1fr));margin-bottom:.75rem">
