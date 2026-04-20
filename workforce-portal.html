@@ -2725,10 +2725,16 @@ function renderProfileTab(tab, emp){
 
   if(tab==='kyc'){
     const pending=(D.changeRequests||[]).find(r=>r.empUuid===emp._uuid&&(r.field==='aadhaar'||r.field==='pan')&&r.status==='Pending');
+    const hasAadhaar=!!emp.aadhaar, hasPan=!!emp.pan;
+    const isFirstTime = !hasAadhaar || !hasPan;
     return `
+    ${isFirstTime?`
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;font-size:12px;color:#1e40af;margin-bottom:1rem">
+      💡 <strong>First-time entry saves directly.</strong> You can add your ${!hasAadhaar?'Aadhaar':''}${!hasAadhaar&&!hasPan?' and ':''}${!hasPan?'PAN':''} without approval. Once saved, any future changes will require admin approval to prevent unauthorised edits.
+    </div>`:`
     <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;font-size:12px;color:#92400e;margin-bottom:1rem">
-      🔒 <strong>Admin approval required.</strong> Aadhaar and PAN changes are reviewed by an administrator before taking effect — this prevents unauthorised changes and keeps your records accurate.
-    </div>
+      🔒 <strong>Admin approval required for changes.</strong> Aadhaar and PAN are already on file. Updates are reviewed by an administrator before taking effect.
+    </div>`}
     ${pending?`
     <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px 14px;margin-bottom:1rem">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
@@ -2740,15 +2746,15 @@ function renderProfileTab(tab, emp){
       <button class="btn btn-sec" style="margin-top:10px;font-size:12px;padding:6px 14px" onclick="cancelChangeRequest('${pending._uuid}')">Cancel request</button>
     </div>`:''}
     <div id="kyc-edit-msg"></div>
-    <div class="fld"><label>Aadhaar number</label>
-      <input type="text" id="pf-aadhaar" value="${emp.aadhaar?emp.aadhaar.replace(/(\d{4})(?=\d)/g,'$1 ').trim():''}" maxlength="14" inputmode="numeric" placeholder="1234 5678 9012" oninput="fmtAadhaar(this)" ${pending?'disabled':''}>
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">Current: ${emp.aadhaar?'XXXX XXXX '+emp.aadhaar.slice(-4):'Not set'}</div>
+    <div class="fld"><label>Aadhaar number ${!hasAadhaar?'<span style="color:#ef4444">*</span>':''}</label>
+      <input type="text" id="pf-aadhaar" value="${emp.aadhaar?emp.aadhaar.replace(/(\d{4})(?=\d)/g,'$1 ').trim():''}" maxlength="14" inputmode="numeric" placeholder="1234 5678 9012" oninput="fmtAadhaar(this)">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">${hasAadhaar?`Current: XXXX XXXX ${emp.aadhaar.slice(-4)} — <span style="color:#92400e">change requires approval</span>`:'<span style="color:#0f766e;font-weight:600">Not yet set — you can save this directly</span>'}</div>
     </div>
-    <div class="fld"><label>PAN number</label>
-      <input type="text" id="pf-pan" value="${emp.pan||''}" maxlength="10" placeholder="ABCDE1234F" oninput="this.value=this.value.toUpperCase()" ${pending?'disabled':''}>
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">Current: ${emp.pan?emp.pan.slice(0,3)+'XX'+emp.pan.slice(-3):'Not set'}</div>
+    <div class="fld"><label>PAN number ${!hasPan?'<span style="color:#ef4444">*</span>':''}</label>
+      <input type="text" id="pf-pan" value="${emp.pan||''}" maxlength="10" placeholder="ABCDE1234F" oninput="this.value=this.value.toUpperCase()">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">${hasPan?`Current: ${emp.pan.slice(0,3)}XX${emp.pan.slice(-3)} — <span style="color:#92400e">change requires approval</span>`:'<span style="color:#0f766e;font-weight:600">Not yet set — you can save this directly</span>'}</div>
     </div>
-    <button class="btn btn-primary" style="background:#7c3aed;${pending?'opacity:.5;cursor:not-allowed':''}" onclick="${pending?'return':'submitKYCRequest()'}" ${pending?'disabled':''}>${pending?'Request already pending':'Submit for admin approval'}</button>
+    <button class="btn btn-primary" style="background:#7c3aed" onclick="submitKYCRequest()">${isFirstTime?(hasAadhaar||hasPan?'Save &amp; request change':'💾 Save details'):'Submit for admin approval'}</button>
     `;
   }
 
@@ -2856,43 +2862,68 @@ async function submitKYCRequest(){
     if(dup&&dup.length){if(msg)msg.innerHTML=`<div class="alert alert-e">This PAN is already registered to another employee</div>`;return;}
   }
 
-  if(msg)msg.innerHTML=`<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">Submitting request…</div>`;
-
-  const requests=[];
+  // Split into two buckets: first-time entries (save directly) vs changes (need approval)
+  const directSave={};         // fields where current value is empty
+  const needApproval=[];       // fields where current value exists and is being changed
   const cid=currentCompany?currentCompany.company_id:(emp.companyId||'KSPL');
 
-  if(aadhaar&&aadhaar!==emp.aadhaar){
-    requests.push({
+  if(aadhaar && aadhaar!==emp.aadhaar){
+    if(!emp.aadhaar) directSave.aadhaar_number=aadhaar; // first-time
+    else needApproval.push({field:'aadhaar', old:emp.aadhaar, new:aadhaar});
+  }
+  if(pan && pan!==emp.pan){
+    if(!emp.pan) directSave.pan_number=pan; // first-time
+    else needApproval.push({field:'pan', old:emp.pan, new:pan});
+  }
+
+  if(msg)msg.innerHTML=`<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">Saving…</div>`;
+
+  // 1) Apply first-time entries directly
+  let directSaved=false;
+  if(Object.keys(directSave).length){
+    const r=await sb('employees','PATCH',directSave,`?id=eq.${emp._uuid}`);
+    if(r){
+      if(directSave.aadhaar_number) emp.aadhaar=directSave.aadhaar_number;
+      if(directSave.pan_number) emp.pan=directSave.pan_number;
+      const idx=D.employees.findIndex(e=>e._uuid===emp._uuid); if(idx>=0) D.employees[idx]=emp;
+      save();
+      directSaved=true;
+      await sbSaveNotification({msg:`🪪 ${emp.name} added ${Object.keys(directSave).map(k=>k==='aadhaar_number'?'Aadhaar':'PAN').join(' & ')} to their profile`,type:'info'});
+    }
+  }
+
+  // 2) Submit changes-to-existing as approval requests
+  let requestsSubmitted=0;
+  for(const item of needApproval){
+    const res=await sb('change_requests','POST',{
       employee_id:emp._uuid, employee_name:emp.name, employee_email:emp.email,
-      field_name:'aadhaar', old_value:emp.aadhaar||'', new_value:aadhaar,
+      field_name:item.field, old_value:item.old, new_value:item.new,
       status:'Pending', company_id:cid
     });
+    if(res) requestsSubmitted++;
   }
-  if(pan&&pan!==emp.pan){
-    requests.push({
-      employee_id:emp._uuid, employee_name:emp.name, employee_email:emp.email,
-      field_name:'pan', old_value:emp.pan||'', new_value:pan,
-      status:'Pending', company_id:cid
-    });
+  if(requestsSubmitted){
+    const fields=needApproval.map(i=>i.field.toUpperCase()).join(' & ');
+    await sbSaveNotification({msg:`🪪 ${emp.name} requested ${fields} update — review required`,type:'warning'});
   }
 
-  let successCount=0;
-  for(const r of requests){
-    const res=await sb('change_requests','POST',r);
-    if(res) successCount++;
-  }
-
-  if(!successCount){if(msg)msg.innerHTML=`<div class="alert alert-e">Failed to submit. Try again.</div>`;return;}
-
-  // Notify admins
-  const fields=requests.map(r=>r.field_name).join(' & ');
-  await sbSaveNotification({msg:`🪪 ${emp.name} requested ${fields.toUpperCase()} update — review required`,type:'warning'});
-
-  // Refresh change_requests in memory
   await syncChangeRequests();
 
-  showToast('✅ Request sent — awaiting admin approval','success');
-  setTimeout(()=>renderEmployeeApp(),800);
+  // Feedback depending on what happened
+  if(directSaved && requestsSubmitted){
+    if(msg)msg.innerHTML=`<div class="alert alert-s">✅ Saved directly (first-time) &amp; ${requestsSubmitted} change${requestsSubmitted>1?'s':''} sent for admin approval</div>`;
+    showToast('✅ Saved — some changes awaiting approval','success');
+  } else if(directSaved){
+    if(msg)msg.innerHTML=`<div class="alert alert-s">✅ Details saved to your profile</div>`;
+    showToast('✅ KYC saved','success');
+  } else if(requestsSubmitted){
+    if(msg)msg.innerHTML=`<div class="alert alert-s">✅ Request sent — awaiting admin approval</div>`;
+    showToast('✅ Sent for admin approval','success');
+  } else {
+    if(msg)msg.innerHTML=`<div class="alert alert-e">Failed to save. Try again.</div>`;
+    return;
+  }
+  setTimeout(()=>renderEmployeeApp(),1000);
 }
 
 async function cancelChangeRequest(uuid){
