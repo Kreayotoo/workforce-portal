@@ -1088,12 +1088,23 @@ function renderLogin(){
   </div>
   <div class="login-right" style="flex:1;background:#f8fafc;overflow-y:auto;display:flex;align-items:center;justify-content:center;padding:2rem;min-height:100vh">
     <div class="login-card" style="max-width:400px;width:100%;background:#fff;border-radius:14px;padding:2rem;border:1px solid #e2e5ea">
-      <h2 style="font-size:22px;font-weight:700;margin-bottom:.25rem;color:#111">Welcome back</h2>
-      <p class="login-sub" style="margin-bottom:1.5rem">Select your role to sign in</p>
-      <div style="display:flex;gap:0;margin-bottom:1.25rem;border:1px solid var(--border);border-radius:8px;overflow:hidden">
-        <button id="tab-admin" onclick="switchLoginTab('admin')" style="display:none;flex:1;padding:9px;border:none;background:var(--navy);color:#fff;font-weight:700;font-size:12px;cursor:pointer">👑 Super Admin</button>
-        <button id="tab-company" onclick="switchLoginTab('company')" style="flex:1;padding:9px;border:none;background:var(--white);color:var(--muted);font-weight:600;font-size:12px;cursor:pointer">🏢 Admin</button>
-        <button id="tab-emp" onclick="switchLoginTab('emp')" style="flex:1;padding:9px;border:none;background:var(--navy);color:#fff;font-weight:700;font-size:12px;cursor:pointer">👤 Employee</button>
+      <div id="public-login-header">
+        <h2 style="font-size:22px;font-weight:700;margin-bottom:.25rem;color:#111">Welcome back</h2>
+        <p class="login-sub" style="margin-bottom:1.5rem">Select your role to sign in</p>
+        <div style="display:flex;gap:0;margin-bottom:1.25rem;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+          <button id="tab-company" onclick="switchLoginTab('company')" style="flex:1;padding:9px;border:none;background:var(--white);color:var(--muted);font-weight:600;font-size:12px;cursor:pointer">🏢 Admin</button>
+          <button id="tab-emp" onclick="switchLoginTab('emp')" style="flex:1;padding:9px;border:none;background:var(--navy);color:#fff;font-weight:700;font-size:12px;cursor:pointer">👤 Employee</button>
+        </div>
+      </div>
+
+      <div id="admin-login-header" class="hidden">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem">
+          <button onclick="hideSuperAdmin()" style="background:#f1f5f9;border:none;color:#475569;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center" title="Back to main login">←</button>
+          <div>
+            <h2 style="font-size:20px;font-weight:700;color:#111;line-height:1.2">👑 Super Admin</h2>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">Kreayotoo Solutions internal access</div>
+          </div>
+        </div>
       </div>
 
       <div id="admin-login-tab" class="hidden">
@@ -1143,7 +1154,7 @@ function renderLogin(){
         <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--muted)">
           New here? <span style="color:#0f766e;cursor:pointer;font-weight:700" onclick="showRegister()">Create your account →</span>
         </div>
-        <div style="margin-top:8px;text-align:center;font-size:11px;color:var(--muted)">Default password is <strong>emp@123</strong> · <span style="color:#0f766e;cursor:pointer;font-weight:600" onclick="showForgotPassword()">Forgot password?</span></div>
+        <div style="margin-top:8px;text-align:center;font-size:11px;color:var(--muted)"><span style="color:#0f766e;cursor:pointer;font-weight:600" onclick="showForgotPassword()">Forgot password?</span></div>
       </div>
     </div>
   </div>
@@ -1154,8 +1165,8 @@ function switchLoginTab(tab){
     const el=$(t==='emp'?'emp-login-tab':t==='company'?'company-login-tab':'admin-login-tab');
     if(el) el.classList.toggle('hidden',t!==tab);
   });
-  const colors={admin:'var(--navy)',company:'#7c3aed',emp:'#0f766e'};
-  ['admin','company','emp'].forEach(t=>{
+  const colors={company:'#7c3aed',emp:'#0f766e'};
+  ['company','emp'].forEach(t=>{
     const btn=$(`tab-${t}`);
     if(btn) btn.style.cssText=`flex:1;padding:9px;border:none;background:${t===tab?colors[t]:'var(--white)'};color:${t===tab?'#fff':'var(--muted)'};font-weight:${t===tab?700:600};font-size:12px;cursor:pointer`;
   });
@@ -1196,9 +1207,27 @@ function bindLogin(){
   setTimeout(captureGeo,200);
 }
 function revealSuperAdmin(){
-  const tabBtn=$('tab-admin'); if(tabBtn) tabBtn.style.display='';
+  // Hide public login UI (Welcome back + Admin/Employee tabs + their panels)
+  const pubHeader=$('public-login-header'); if(pubHeader) pubHeader.classList.add('hidden');
+  const empTab=$('emp-login-tab'); if(empTab) empTab.classList.add('hidden');
+  const coTab=$('company-login-tab'); if(coTab) coTab.classList.add('hidden');
+  // Show Super Admin header + panel
+  const adHeader=$('admin-login-header'); if(adHeader) adHeader.classList.remove('hidden');
+  const adTab=$('admin-login-tab'); if(adTab) adTab.classList.remove('hidden');
+  // Hide the top-right entry button
   const link=$('super-admin-link'); if(link) link.style.display='none';
-  switchLoginTab('admin');
+  frStopCamera();
+}
+function hideSuperAdmin(){
+  // Reverse of revealSuperAdmin
+  const adHeader=$('admin-login-header'); if(adHeader) adHeader.classList.add('hidden');
+  const adTab=$('admin-login-tab'); if(adTab) adTab.classList.add('hidden');
+  const pubHeader=$('public-login-header'); if(pubHeader) pubHeader.classList.remove('hidden');
+  const empTab=$('emp-login-tab'); if(empTab) empTab.classList.remove('hidden');
+  const link=$('super-admin-link'); if(link) link.style.display='';
+  // Make sure Employee tab is the active one
+  const coTab=$('company-login-tab'); if(coTab) coTab.classList.add('hidden');
+  if(empTab) empTab.classList.remove('hidden');
 }
 function doLogin(){
   const em=$('l-email').value.trim(),pw=$('l-pass').value;
