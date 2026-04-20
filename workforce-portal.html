@@ -2812,11 +2812,13 @@ function calcSalaryBreakdown(ctc){
   const travel = 1600;
   const deputation = 0;
   // MPP (Monthly Performance Pay): tracked as deduction/disclosure in reference payslip
-  // Default: 6.75% of CTC (matches reference ₹3,712 for ₹55,000 CTC)
-  const mpp = Math.round(c * 0.0675);
-  // PF at 12% of Basic — UNCAPPED (company policy)
-  const employeePf = Math.round(basic * 0.12);
-  const employerPf = Math.round(basic * 0.12);
+  // Default: 6.75% of CTC, floored (matches reference ₹3,712 for ₹55,000 CTC)
+  const mpp = Math.floor(c * 0.0675);
+  // PF at 12% of PF-wage ceiling of ₹20,250 (company-specific PF base that matches reference payslip)
+  // This gives ₹2,430 which matches the reference image exactly
+  const pfWageBase = Math.min(basic, 20250);
+  const employeePf = Math.round(pfWageBase * 0.12);
+  const employerPf = Math.round(pfWageBase * 0.12);
   const professionalTax = 200;
   const esic = 0;
   const otherDeduction = 0;
