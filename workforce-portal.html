@@ -396,6 +396,8 @@ async function syncFromSupabase(){
       passwordHash:e.password_hash||'emp@123',empType:e.emp_type||'office',
       companyId:e.company_id||'KSPL',
       aadhaar:e.aadhaar_number||'',pan:e.pan_number||'',
+      aadhaarFilePath:e.aadhaar_file_path||'',aadhaarFileName:e.aadhaar_file_name||'',aadhaarUploadedAt:e.aadhaar_uploaded_at||null,
+      panFilePath:e.pan_file_path||'',panFileName:e.pan_file_name||'',panUploadedAt:e.pan_uploaded_at||null,
       bankAccount:e.bank_account||'',bankIfsc:e.bank_ifsc||'',bankName:e.bank_name||'',
       address:e.address||'',
       emergencyName:e.emergency_contact_name||'',emergencyPhone:e.emergency_contact_phone||'',emergencyRelation:e.emergency_contact_relation||'',
@@ -565,6 +567,95 @@ async function sbLoginLog(log){
   try{
     await sb('login_logs','POST',{user_name:log.user,user_email:log.email,latitude:log.lat||null,longitude:log.lng||null,accuracy:log.accuracy||null,address:log.address||null,in_office:log.inOffice||null,method:log.method||'password'});
   }catch(e){/* non-critical, ignore */}
+}
+
+// ─── KYC DOCUMENT STORAGE (Supabase Storage) ──────────────────────
+const KYC_BUCKET='kyc-documents';
+
+// Upload file to private bucket. Returns storage path on success, null on failure.
+async function uploadKYCFile(file, empUuid, docType){
+  if(!file) return null;
+  const allowed=['image/jpeg','image/jpg','image/png','application/pdf'];
+  if(!allowed.includes(file.type)){ showToast('Only JPG, PNG, or PDF allowed','info'); return null; }
+  if(file.size > 5*1024*1024){ showToast('File too large (max 5 MB)','info'); return null; }
+
+  const ext = file.name.split('.').pop().toLowerCase();
+  const timestamp = Date.now();
+  const path = `${empUuid}/${docType}_${timestamp}.${ext}`;
+
+  try{
+    const res = await fetch(`${SB_URL}/storage/v1/object/${KYC_BUCKET}/${path}`,{
+      method:'POST',
+      headers:{
+        'apikey':SB_KEY,
+        'Authorization':'Bearer '+SB_KEY,
+        'Content-Type':file.type,
+        'x-upsert':'true'
+      },
+      body:file
+    });
+    if(!res.ok){
+      const errText=await res.text();
+      console.error('❌ Upload failed:', res.status, errText);
+      return null;
+    }
+    return path;
+  }catch(e){
+    console.error('❌ Upload error:', e);
+    return null;
+  }
+}
+
+// Get a signed URL that expires in 60 minutes (for secure admin viewing/download)
+async function getKYCSignedUrl(path){
+  if(!path) return null;
+  try{
+    const res = await fetch(`${SB_URL}/storage/v1/object/sign/${KYC_BUCKET}/${path}`,{
+      method:'POST',
+      headers:{
+        'apikey':SB_KEY,
+        'Authorization':'Bearer '+SB_KEY,
+        'Content-Type':'application/json'
+      },
+      body:JSON.stringify({expiresIn:3600})
+    });
+    if(!res.ok){
+      console.error('❌ Signed URL failed:', await res.text());
+      return null;
+    }
+    const data = await res.json();
+    return `${SB_URL}/storage/v1${data.signedURL||data.signedUrl}`;
+  }catch(e){
+    console.error('❌ Signed URL error:', e);
+    return null;
+  }
+}
+
+// Delete file from bucket (when employee replaces or admin removes)
+async function deleteKYCFile(path){
+  if(!path) return false;
+  try{
+    const res = await fetch(`${SB_URL}/storage/v1/object/${KYC_BUCKET}/${path}`,{
+      method:'DELETE',
+      headers:{
+        'apikey':SB_KEY,
+        'Authorization':'Bearer '+SB_KEY
+      }
+    });
+    return res.ok;
+  }catch(e){
+    console.error('❌ Delete error:', e);
+    return false;
+  }
+}
+
+// Open signed URL in new tab (for viewing)
+async function viewKYCDocument(path, docLabel){
+  if(!path){ showToast('No file uploaded','info'); return; }
+  showToast(`Opening ${docLabel}…`,'info');
+  const url = await getKYCSignedUrl(path);
+  if(!url){ showToast('Could not generate link','info'); return; }
+  window.open(url, '_blank', 'noopener');
 }
 
 // ─── ROUTER ────────────────────────────────────────────────────────
@@ -2755,6 +2846,14 @@ function renderProfileTab(tab, emp){
       <div style="font-size:11px;color:var(--muted);margin-top:4px">${hasPan?`Current: ${emp.pan.slice(0,3)}XX${emp.pan.slice(-3)} — <span style="color:#92400e">change requires approval</span>`:'<span style="color:#0f766e;font-weight:600">Not yet set — you can save this directly</span>'}</div>
     </div>
     <button class="btn btn-primary" style="background:#7c3aed" onclick="submitKYCRequest()">${isFirstTime?(hasAadhaar||hasPan?'Save &amp; request change':'💾 Save details'):'Submit for admin approval'}</button>
+
+    <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border)">
+      <div style="font-size:13px;font-weight:700;margin-bottom:10px">📎 Document uploads</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">Upload clear photos or scans of your Aadhaar card and PAN card. Accepted: JPG, PNG, PDF (max 5 MB each).</div>
+      <div id="kyc-upload-msg"></div>
+      ${renderKYCFileSlot('aadhaar', emp, 'Aadhaar card')}
+      ${renderKYCFileSlot('pan', emp, 'PAN card')}
+    </div>
     `;
   }
 
@@ -2841,6 +2940,119 @@ async function saveEmergency(){
 }
 
 // OTP-gated update for Aadhaar/PAN removed — replaced with admin-approval flow
+// ─── KYC DOCUMENT UI ──────────────────────────────────────────────
+function renderKYCFileSlot(docType, emp, label){
+  const path = emp[docType+'FilePath'];
+  const fileName = emp[docType+'FileName'];
+  const uploadedAt = emp[docType+'UploadedAt'];
+  const inputId=`kyc-file-${docType}`;
+  const icon=docType==='aadhaar'?'🪪':'💳';
+
+  if(path){
+    // File already uploaded — show info + view/replace/remove
+    const ago=uploadedAt?new Date(uploadedAt).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'';
+    return `
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="font-size:22px">${icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:#166534">${label} uploaded ✓</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fileName||'Document'}${ago?' · '+ago:''}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-sec" style="font-size:12px;padding:6px 12px;flex:1;min-width:100px" onclick="viewKYCDocument('${path}','${label}')">👁 View</button>
+        <label class="btn btn-sec" style="font-size:12px;padding:6px 12px;flex:1;min-width:100px;cursor:pointer;margin:0;display:inline-flex;align-items:center;justify-content:center">
+          🔄 Replace
+          <input type="file" id="${inputId}" accept="image/jpeg,image/png,image/jpg,application/pdf" style="display:none" onchange="handleKYCFileUpload(this,'${docType}')">
+        </label>
+        <button class="btn btn-sec" style="font-size:12px;padding:6px 12px;color:#991b1b" onclick="removeKYCFile('${docType}')">🗑 Remove</button>
+      </div>
+    </div>`;
+  }
+
+  // No file yet — show dropzone / upload button
+  return `
+  <div style="background:#f8fafc;border:2px dashed var(--border);border-radius:10px;padding:16px;margin-bottom:10px;text-align:center">
+    <div style="font-size:26px;margin-bottom:4px">${icon}</div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:2px">${label}</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:10px">No file uploaded yet</div>
+    <label class="btn btn-primary" style="background:#7c3aed;font-size:12px;padding:7px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+      📤 Upload ${label}
+      <input type="file" id="${inputId}" accept="image/jpeg,image/png,image/jpg,application/pdf" style="display:none" onchange="handleKYCFileUpload(this,'${docType}')">
+    </label>
+  </div>`;
+}
+
+async function handleKYCFileUpload(input, docType){
+  const emp=currentEmployee;
+  const msg=$('kyc-upload-msg');
+  const file=input.files&&input.files[0];
+  if(!file) return;
+
+  // Show inline progress
+  if(msg) msg.innerHTML=`<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">📤 Uploading ${file.name}… (${(file.size/1024).toFixed(0)} KB)</div>`;
+
+  // Delete old file if replacing
+  const oldPath=emp[docType+'FilePath'];
+  if(oldPath) await deleteKYCFile(oldPath);
+
+  const newPath=await uploadKYCFile(file, emp._uuid, docType);
+  if(!newPath){
+    if(msg) msg.innerHTML=`<div class="alert alert-e">Upload failed. Check file size (max 5 MB) and type (JPG/PNG/PDF).</div>`;
+    input.value='';
+    return;
+  }
+
+  // Update employee row with new path
+  const patchCol=docType==='aadhaar'
+    ? {aadhaar_file_path:newPath, aadhaar_file_name:file.name, aadhaar_uploaded_at:new Date().toISOString()}
+    : {pan_file_path:newPath, pan_file_name:file.name, pan_uploaded_at:new Date().toISOString()};
+  const r=await sb('employees','PATCH',patchCol,`?id=eq.${emp._uuid}`);
+  if(!r){
+    if(msg) msg.innerHTML=`<div class="alert alert-e">File uploaded but failed to save reference. Contact admin.</div>`;
+    return;
+  }
+
+  // Update local
+  emp[docType+'FilePath']=newPath;
+  emp[docType+'FileName']=file.name;
+  emp[docType+'UploadedAt']=new Date().toISOString();
+  const idx=D.employees.findIndex(e=>e._uuid===emp._uuid); if(idx>=0) D.employees[idx]=emp;
+  save();
+
+  // Notify admin
+  const docLabel=docType==='aadhaar'?'Aadhaar':'PAN';
+  await sbSaveNotification({msg:`📎 ${emp.name} uploaded ${docLabel} document`,type:'info'});
+
+  showToast(`✅ ${docLabel} uploaded`,'success');
+  if(msg) msg.innerHTML=`<div class="alert alert-s">✅ ${docLabel} document uploaded successfully</div>`;
+  setTimeout(()=>renderEmployeeApp(),800);
+}
+
+async function removeKYCFile(docType){
+  const emp=currentEmployee;
+  const docLabel=docType==='aadhaar'?'Aadhaar':'PAN';
+  if(!confirm(`Remove the uploaded ${docLabel} document?\n\nThe file will be deleted permanently. You can upload a new one anytime.`)) return;
+
+  const path=emp[docType+'FilePath'];
+  if(path) await deleteKYCFile(path);
+
+  const patchCol=docType==='aadhaar'
+    ? {aadhaar_file_path:null, aadhaar_file_name:null, aadhaar_uploaded_at:null}
+    : {pan_file_path:null, pan_file_name:null, pan_uploaded_at:null};
+  await sb('employees','PATCH',patchCol,`?id=eq.${emp._uuid}`);
+
+  emp[docType+'FilePath']='';
+  emp[docType+'FileName']='';
+  emp[docType+'UploadedAt']=null;
+  const idx=D.employees.findIndex(e=>e._uuid===emp._uuid); if(idx>=0) D.employees[idx]=emp;
+  save();
+
+  showToast(`${docLabel} removed`,'info');
+  renderEmployeeApp();
+}
+
 async function submitKYCRequest(){
   const emp=currentEmployee;
   const msg=$('kyc-edit-msg');
@@ -3294,8 +3506,16 @@ function pgDashboard(){
       <tbody>${D.employees.slice(0,6).map(e=>`<tr><td><div style="display:flex;align-items:center;gap:8px">${av(e.name)}${e.name}</div></td><td>${e.dept}</td><td>${e.role}</td><td>${badge(e.status)}</td></tr>`).join('')}</tbody></table>
     </div>
     <div class="card">
-      <div class="card-hd"><h3>Notifications</h3><span class="muted">${unreadCount()} unread</span></div>
-      ${D.notifications.slice(0,5).map(n=>`<div class="notif-row"><div class="ni ni-${n.type}">${n.type==='warning'?'⚠':n.type==='success'?'✓':'ℹ'}</div><div><div style="font-size:12px;font-weight:${n.read?400:600}">${n.msg}</div><div style="font-size:11px;color:var(--muted)">${n.time}</div></div></div>`).join('')}
+      <div class="card-hd"><h3>Notifications</h3><div style="display:flex;gap:8px;align-items:center">${unreadCount()>0?`<button class="btn-link" onclick="markAllRead()">Mark all read</button>`:''}<span class="muted">${unreadCount()} unread</span></div></div>
+      ${D.notifications.slice(0,5).map(n=>{
+        const nid=JSON.stringify(n.id||n._uuid||'');
+        return `<div class="notif-row" style="cursor:pointer;border-radius:6px;padding:8px;background:${n.read?'transparent':'#f8fafc'}" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='${n.read?'transparent':'#f8fafc'}'" onclick="handleNotifClick(${nid})">
+          <div class="ni ni-${n.type||'info'}">${n.type==='warning'?'⚠':n.type==='success'?'✓':n.type==='danger'?'✕':'ℹ'}</div>
+          <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:${n.read?400:600};line-height:1.35">${n.msg}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${n.time}</div></div>
+          <button title="Dismiss" onclick="event.stopPropagation();dismissNotif(${nid})" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:16px;padding:2px 6px;border-radius:4px;flex-shrink:0" onmouseover="this.style.background='#fee2e2';this.style.color='#991b1b'" onmouseout="this.style.background='none';this.style.color='#94a3b8'">×</button>
+        </div>`;
+      }).join('')||'<div style="text-align:center;color:var(--muted);padding:1.5rem;font-size:13px">No notifications</div>'}
+      ${D.notifications.length>5?`<div style="text-align:center;margin-top:8px"><button class="btn-link" onclick="nav('notifications')">View all ${D.notifications.length} →</button></div>`:''}
     </div>
   </div>
   <div id="emp-modal-wrap"></div>`;
@@ -3764,9 +3984,13 @@ function showEmployeeDetail(empIdOrUuid){
         <span>🪪 Identity documents</span>
         <button onclick="toggleRevealIdentity(this)" data-revealed="0" style="background:#f1f5f9;border:none;color:#475569;padding:3px 10px;border-radius:12px;cursor:pointer;font-size:10px;font-weight:700">👁 Reveal</button>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
         ${infoCardMasked('Aadhaar', e.aadhaar||'', maskAadhaar(e.aadhaar), e.aadhaar?e.aadhaar.replace(/(\d{4})(?=\d)/g,'$1 ').trim():'—')}
         ${infoCardMasked('PAN', e.pan||'', maskPAN(e.pan), e.pan||'—')}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem">
+        ${renderAdminKYCDocBadge('aadhaar', e, 'Aadhaar document')}
+        ${renderAdminKYCDocBadge('pan', e, 'PAN document')}
       </div>
 
       <!-- Bank -->
@@ -3809,6 +4033,31 @@ function infoCard(label,value){
 function infoCardMasked(label, rawValue, masked, full){
   const safeFull=(full||'').replace(/'/g,"&#39;");
   return `<div class="masked-card" data-full="${safeFull}" data-masked="${masked}" style="background:#f8fafc;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">${label}</div><div class="masked-val" style="font-size:13px;font-weight:600;margin-top:2px;word-break:break-word;font-family:monospace">${masked}</div></div>`;
+}
+function renderAdminKYCDocBadge(docType, e, label){
+  const path=e[docType+'FilePath'];
+  const fileName=e[docType+'FileName'];
+  const uploadedAt=e[docType+'UploadedAt'];
+  if(!path){
+    return `<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:8px">
+      <span style="font-size:18px">⚠️</span>
+      <div style="flex:1">
+        <div style="font-size:11px;color:#92400e;font-weight:700">${label}</div>
+        <div style="font-size:11px;color:#92400e;margin-top:1px">Not uploaded</div>
+      </div>
+    </div>`;
+  }
+  const ago=uploadedAt?new Date(uploadedAt).toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'';
+  const safePath=path.replace(/'/g,"&#39;");
+  const safeLabel=label.replace(/'/g,"&#39;");
+  return `<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;cursor:pointer;display:flex;align-items:center;gap:8px" onclick="viewKYCDocument('${safePath}','${safeLabel}')" onmouseover="this.style.background='#dcfce7'" onmouseout="this.style.background='#f0fdf4'" title="Click to view/download">
+    <span style="font-size:18px">📎</span>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:11px;color:#166534;font-weight:700">${label}</div>
+      <div style="font-size:11px;color:#166534;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fileName||'Document'}${ago?' · '+ago:''}</div>
+    </div>
+    <span style="font-size:11px;color:#166534;font-weight:700">View ↗</span>
+  </div>`;
 }
 function toggleRevealIdentity(btn){
   const revealed=btn.getAttribute('data-revealed')==='1';
@@ -4419,18 +4668,84 @@ function viewFieldTrail(id,name){
 function pgNotifications(){
   const uc=unreadCount();
   return `
-  <div class="page-hd"><div><div class="pg-title">Notifications</div><div class="pg-sub">${uc} unread</div></div>
-  ${uc>0?`<button class="btn btn-sec" onclick="markAllRead()">Mark all read</button>`:''}</div>
-  <div class="card">
-    ${D.notifications.map(n=>`<div class="notif-row" style="cursor:pointer;background:${n.read?'':'#fafbff'};margin:0 -1rem;padding:9px 1rem" onclick="markRead(${n.id})">
-      <div class="ni ni-${n.type}">${n.type==='warning'?'⚠':n.type==='success'?'✓':'ℹ'}</div>
-      <div style="flex:1"><div style="font-size:13px;font-weight:${n.read?400:600}">${n.msg}</div><div style="font-size:11px;color:var(--muted)">${n.time}</div></div>
-      ${!n.read?'<div style="width:8px;height:8px;border-radius:50%;background:#3b82f6;flex-shrink:0;margin-top:4px"></div>':''}
-    </div>`).join('')||'<div style="text-align:center;color:var(--muted);padding:2rem">No notifications</div>'}
+  <div class="page-hd">
+    <div><div class="pg-title">Notifications</div><div class="pg-sub">${uc} unread · ${D.notifications.length} total</div></div>
+    <div style="display:flex;gap:6px">
+      ${uc>0?`<button class="btn btn-sec" onclick="markAllRead()">Mark all read</button>`:''}
+      ${D.notifications.length>0?`<button class="btn btn-sec" style="color:#991b1b" onclick="clearAllNotifs()">🗑 Clear all</button>`:''}
+    </div>
+  </div>
+  <div class="card" style="padding:0">
+    ${D.notifications.map(n=>{
+      const nid=JSON.stringify(n.id||n._uuid||'');
+      return `<div class="notif-row" style="cursor:pointer;background:${n.read?'':'#fafbff'};margin:0;padding:12px 1rem;border-bottom:1px solid #f3f4f6;display:flex;align-items:flex-start;gap:12px" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='${n.read?'':'#fafbff'}'" onclick="handleNotifClick(${nid})">
+        <div class="ni ni-${n.type||'info'}">${n.type==='warning'?'⚠':n.type==='success'?'✓':n.type==='danger'?'✕':'ℹ'}</div>
+        <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:${n.read?400:600};line-height:1.4">${n.msg}</div><div style="font-size:11px;color:var(--muted);margin-top:3px">${n.time}</div></div>
+        ${!n.read?'<div style="width:8px;height:8px;border-radius:50%;background:#3b82f6;flex-shrink:0;margin-top:6px" title="Unread"></div>':''}
+        <button title="Dismiss" onclick="event.stopPropagation();dismissNotif(${nid})" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:18px;padding:2px 8px;border-radius:4px;flex-shrink:0" onmouseover="this.style.background='#fee2e2';this.style.color='#991b1b'" onmouseout="this.style.background='none';this.style.color='#94a3b8'">×</button>
+      </div>`;
+    }).join('')||'<div style="text-align:center;color:var(--muted);padding:3rem 1rem"><div style="font-size:40px;margin-bottom:8px">🔔</div><div style="font-size:14px;font-weight:600">No notifications</div><div style="font-size:12px;margin-top:4px">You&#39;re all caught up!</div></div>'}
   </div>`;
 }
-function markRead(id){const n=D.notifications.find(x=>x.id===id);if(n){n.read=true;save();nav('notifications');}}
-function markAllRead(){D.notifications.forEach(n=>n.read=true);save();nav('notifications');}
+
+// Unified handler: marks read + routes to relevant page based on content
+function handleNotifClick(id){
+  if(!id) return;
+  const n=D.notifications.find(x=>x.id===id||x._uuid===id);
+  if(!n) return;
+  if(!n.read){
+    n.read=true;
+    if(n._uuid) sbMarkNotifRead(n);
+    save();
+  }
+  // Smart routing based on notification content
+  const msg=(n.msg||'').toLowerCase();
+  if(msg.includes('kyc')||msg.includes('aadhaar')||msg.includes('pan')){
+    if(currentRole==='admin') nav('kycrequests'); else navEmp('emp-profile');
+    return;
+  }
+  if(msg.includes('leave')){ currentRole==='admin' ? nav('leave') : navEmp('emp-leave'); return; }
+  if(msg.includes('expense')){ currentRole==='admin' ? nav('expenses') : navEmp('emp-dashboard'); return; }
+  if(msg.includes('check-in')||msg.includes('attendance')){ currentRole==='admin' ? nav('attendance') : navEmp('emp-attendance'); return; }
+  if(msg.includes('employee')||msg.includes('joined')){ currentRole==='admin' ? nav('employees') : null; return; }
+  if(msg.includes('bank')){ currentRole==='admin' ? nav('employees') : navEmp('emp-profile'); return; }
+  // Fallback — just re-render current page so the read state updates
+  currentRole==='admin' ? nav(currentPage) : renderEmployeeApp();
+}
+
+async function dismissNotif(id){
+  if(!id) return;
+  const n=D.notifications.find(x=>x.id===id||x._uuid===id);
+  if(!n) return;
+  // Delete from Supabase if it came from there
+  if(n._uuid){
+    await sb('notifications','DELETE',null,`?id=eq.${n._uuid}`);
+  }
+  D.notifications=D.notifications.filter(x=>x!==n);
+  save();
+  currentRole==='admin' ? nav(currentPage) : renderEmployeeApp();
+}
+
+async function clearAllNotifs(){
+  if(!confirm(`Clear all ${D.notifications.length} notifications? This cannot be undone.`)) return;
+  // Delete the Supabase-backed ones in parallel
+  const uuids=D.notifications.filter(n=>n._uuid).map(n=>n._uuid);
+  if(uuids.length){
+    const inList=uuids.map(u=>`"${u}"`).join(',');
+    await sb('notifications','DELETE',null,`?id=in.(${inList})`);
+  }
+  D.notifications=[];
+  save();
+  showToast('All notifications cleared','info');
+  currentRole==='admin' ? nav(currentPage) : renderEmployeeApp();
+}
+
+function markRead(id){const n=D.notifications.find(x=>x.id===id||x._uuid===id);if(n){n.read=true;if(n._uuid)sbMarkNotifRead(n);save();nav('notifications');}}
+function markAllRead(){
+  D.notifications.forEach(n=>{if(!n.read){n.read=true;if(n._uuid)sbMarkNotifRead(n);}});
+  save();
+  currentRole==='admin' ? nav(currentPage) : renderEmployeeApp();
+}
 
 // ─── SETTINGS ────────────────────────────────────────────────────
 function pgSettings(){
