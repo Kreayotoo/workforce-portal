@@ -2079,15 +2079,8 @@ let empPage = 'emp-dashboard';
 function renderEmployeeApp(){
   const emp = currentEmployee;
   if(!emp){ logout(); return; }
-  // Start employee auto-refresh every 30 seconds
-  if(!window._empRefreshTimer){
-    window._empRefreshTimer = setInterval(async()=>{
-      if(!D.loggedIn||currentRole!=='employee'){clearInterval(window._empRefreshTimer);window._empRefreshTimer=null;return;}
-      await syncFromSupabase();
-      // Re-render only non-camera pages to avoid disrupting face scan
-      if(empPage!=='emp-attendance') navEmp(empPage);
-    }, 30000);
-  }
+  // Kill any stray auto-refresh timer that existed from previous versions
+  if(window._empRefreshTimer){clearInterval(window._empRefreshTimer);window._empRefreshTimer=null;}
   $('root').innerHTML = `
   <div class="app">
     <div class="topbar" style="background:#0f766e">
@@ -2098,6 +2091,7 @@ function renderEmployeeApp(){
         <button onclick="navEmp('emp-dashboard')" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:13px">🏠 Home</button>
       </div>`:''}
       <div style="flex:1"></div>
+      <button onclick="syncFromSupabase().then(()=>navEmp(empPage))" title="Refresh data" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600">🔄 Refresh</button>
       <div style="width:30px;height:30px;border-radius:50%;background:#a7f3d0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#065f46">${initials(emp.name)}</div>
       <span style="font-size:12px;color:rgba(255,255,255,.8)">${emp.name}</span>
       <span style="font-size:10px;background:rgba(255,255,255,.15);padding:2px 8px;border-radius:20px;color:#fff">${emp.dept}</span>
@@ -3490,13 +3484,7 @@ function pgDashboard(){
     <div class="stat" style="padding:.6rem .875rem"><div class="stat-lbl">Open tasks</div><div class="stat-val" style="font-size:20px">${pLeaves+pExp}</div><div class="stat-sub">Leaves + expenses</div></div>
   </div>
 
-  <div class="two-col">
-    <div class="card">
-      <div class="card-hd"><h3>Recent employees</h3><button class="btn-link" onclick="nav('employees')">View all →</button></div>
-      <table><thead><tr><th style="width:32%">Name</th><th style="width:24%">Dept</th><th style="width:28%">Role</th><th style="width:16%">Status</th></tr></thead>
-      <tbody>${D.employees.slice(0,6).map(e=>`<tr><td><div style="display:flex;align-items:center;gap:8px">${av(e.name)}${e.name}</div></td><td>${e.dept}</td><td>${e.role}</td><td>${badge(e.status)}</td></tr>`).join('')}</tbody></table>
-    </div>
-    <div class="card">
+  <div class="card">
       <div class="card-hd"><h3>Notifications</h3><div style="display:flex;gap:8px;align-items:center">${unreadCount()>0?`<button class="btn-link" onclick="markAllRead()">Mark all read</button>`:''}<span class="muted">${unreadCount()} unread</span></div></div>
       ${D.notifications.slice(0,5).map(n=>{
         const nid=JSON.stringify(n.id||n._uuid||'');
@@ -3508,7 +3496,6 @@ function pgDashboard(){
       }).join('')||'<div style="text-align:center;color:var(--muted);padding:1.5rem;font-size:13px">No notifications</div>'}
       ${D.notifications.length>5?`<div style="text-align:center;margin-top:8px"><button class="btn-link" onclick="nav('notifications')">View all ${D.notifications.length} →</button></div>`:''}
     </div>
-  </div>
   <div id="emp-modal-wrap"></div>`;
 }
 
