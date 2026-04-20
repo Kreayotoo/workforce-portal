@@ -852,7 +852,7 @@ function renderApp(){
       <div class="main" id="main-content"></div>
     </div>
   </div>`;
-  const pages = {dashboard:pgDashboard,employees:pgEmployees,attendance:pgAttendance,leave:pgLeave,payroll:pgPayroll,expenses:pgExpenses,performance:pgPerformance,notifications:pgNotifications,settings:pgSettings,locations:pgLocations,holidays:pgHolidays,orgchart:pgOrgChart,idcards:pgIDCards,companies:pgCompanies,kycrequests:pgKYCRequests,'setup-wizard':pgSetupWizard};
+  const pages = {dashboard:pgDashboard,employees:pgEmployees,attendance:pgAttendance,leave:pgLeave,payroll:pgPayroll,expenses:pgExpenses,performance:pgPerformance,notifications:pgNotifications,settings:pgSettings,locations:pgLocations,holidays:pgHolidays,orgchart:pgOrgChart,idcards:pgIDCards,companies:pgCompanies,kycrequests:pgKYCRequests,'setup-wizard':pgSetupWizard,worklogs:pgWorkLogs};
   if(pages[currentPage]) $('main-content').innerHTML = pages[currentPage]();
   bindPage();
 }
@@ -2191,7 +2191,7 @@ function renderEmployeeApp(){
     </div>
     <div class="body-row">
       <div class="sidebar" style="background:#065f46">
-        ${[['⊞','emp-dashboard','Dashboard'],['📅','emp-attendance','Mark Attendance'],['🏖','emp-leave','My Leaves'],['💰','emp-payslip','My Payslip'],['📊','emp-performance','My Performance'],['📆','emp-holidays','Holiday Calendar'],['🔔','emp-notifications','Notifications'],['🪪','emp-idcard','My ID Card'],['🏢','emp-orgchart','Org Chart'],['👤','emp-profile','My Profile']].map(([ic,pg,tt])=>`
+        ${[['⊞','emp-dashboard','Dashboard'],['📅','emp-attendance','Mark Attendance'],['📝','emp-worklog','Work Log'],['🏖','emp-leave','My Leaves'],['💰','emp-payslip','My Payslip'],['📊','emp-performance','My Performance'],['📆','emp-holidays','Holiday Calendar'],['🔔','emp-notifications','Notifications'],['🪪','emp-idcard','My ID Card'],['🏢','emp-orgchart','Org Chart'],['👤','emp-profile','My Profile']].map(([ic,pg,tt])=>`
         <div class="si ${empPage===pg?'act':''}" title="${tt}" onclick="navEmp('${pg}')">
           <div class="si-icon">${ic}</div>
           <span class="si-label">${tt}</span>
@@ -2208,7 +2208,8 @@ function renderEmployeeApp(){
     'emp-holidays':()=>pgHolidays(true),
     'emp-idcard':empIDCard,
     'emp-orgchart':()=>pgOrgChart(true),
-    'emp-notifications':pgNotifications
+    'emp-notifications':pgNotifications,
+    'emp-worklog':empWorkLog
   };
   if(pages[empPage]) $('emp-main').innerHTML = pages[empPage]();
   // Auto-start face scan on attendance page
@@ -4324,7 +4325,7 @@ function pgDashboard(){
   const active=D.employees.filter(e=>e.status==='Active').length;
   const pLeaves=D.leaves.filter(l=>l.status==='Pending').length;
   const pExp=D.expenses.filter(e=>e.status==='Pending').length;
-  const mods=[['👥','Directory','employees'],['📅','Attendance','attendance'],['🏖','Leave','leave'],['💰','Payroll','payroll'],['🧾','Expenses','expenses'],['⭐','Performance','performance'],['📆','Holidays','holidays'],['🏢','Org Chart','orgchart'],['🪪','ID Cards','idcards'],['🗺','Locations','locations'],['🔔','Notifications','notifications'],['⚙','Settings','settings'],...(!currentCompany?[['🏭','Companies','companies']]:[])];
+  const mods=[['👥','Directory','employees'],['📅','Attendance','attendance'],['📝','Work Logs','worklogs'],['🏖','Leave','leave'],['💰','Payroll','payroll'],['🧾','Expenses','expenses'],['⭐','Performance','performance'],['📆','Holidays','holidays'],['🏢','Org Chart','orgchart'],['🪪','ID Cards','idcards'],['🗺','Locations','locations'],['🔔','Notifications','notifications'],['⚙','Settings','settings'],...(!currentCompany?[['🏭','Companies','companies']]:[])];
 
   return `
   <div class="page-hd">
@@ -6807,6 +6808,473 @@ function printAllCards(){
 
 // ─── COMPANIES MANAGEMENT (Super Admin only) ─────────────────────
 // ─── KYC / CHANGE REQUESTS (Admin review) ─────────────────────────
+// ─── WORK LOG MODULE ─────────────────────────────────────────────
+// Employee Work Log: 3 modes (hourly/session/daily) — employees can pick any
+
+async function sbSaveWorkLog(log){
+  const payload={
+    emp_uuid:log.empUuid||null,
+    emp_name:log.empName,
+    emp_email:log.empEmail||null,
+    log_date:log.date,
+    mode:log.mode,
+    entries:log.entries||[],
+    summary:log.summary||'',
+    company_id:currentCompany?currentCompany.company_id:'KSPL'
+  };
+  try{
+    if(log._uuid){
+      const r=await sb('work_logs','PATCH',{...payload,updated_at:new Date().toISOString()},`?id=eq.${log._uuid}`);
+      if(r!==null) return r;
+    }
+    // Check if a log already exists for this emp+date
+    const q=`?emp_uuid=eq.${log.empUuid}&log_date=eq.${log.date}&select=id`;
+    const existing=await sb('work_logs','GET',null,q);
+    if(existing&&existing[0]){
+      log._uuid=existing[0].id;
+      const r=await sb('work_logs','PATCH',{...payload,updated_at:new Date().toISOString()},`?id=eq.${log._uuid}`);
+      return r;
+    }
+    const r=await sb('work_logs','POST',payload);
+    if(r&&r[0]) log._uuid=r[0].id;
+    return r;
+  }catch(e){
+    console.error('sbSaveWorkLog error:',e);
+    return null;
+  }
+}
+
+async function sbLoadWorkLogs(filter={}){
+  let q='?order=log_date.desc&limit=500';
+  if(filter.empUuid) q=`?emp_uuid=eq.${filter.empUuid}&order=log_date.desc&limit=500`;
+  else if(filter.empName) q=`?emp_name=eq.${encodeURIComponent(filter.empName)}&order=log_date.desc&limit=500`;
+  try{
+    const rows=await sb('work_logs','GET',null,q);
+    if(!rows) return [];
+    return rows.map(r=>({
+      _uuid:r.id,
+      empUuid:r.emp_uuid,
+      empName:r.emp_name,
+      empEmail:r.emp_email,
+      date:r.log_date,
+      mode:r.mode,
+      entries:r.entries||[],
+      summary:r.summary||'',
+      createdAt:r.created_at,
+      updatedAt:r.updated_at
+    }));
+  }catch(e){
+    console.error('sbLoadWorkLogs error:',e);
+    return [];
+  }
+}
+
+async function sbDeleteWorkLog(uuid){
+  try{
+    await sb('work_logs','DELETE',null,`?id=eq.${uuid}`);
+    return true;
+  }catch(e){
+    console.error('sbDeleteWorkLog error:',e);
+    return false;
+  }
+}
+
+// ── EMPLOYEE VIEW: Write work log ───
+function empWorkLog(){
+  const emp=currentEmployee;
+  // Auto-load on first access
+  if(!window._wlCache){
+    window._wlCache=[];
+    sbLoadWorkLogs({empUuid:emp._uuid}).then(r=>{window._wlCache=r;navEmp('emp-worklog');});
+  }
+  const today=todayStr();
+  const selDate=window._wlSelectedDate||today;
+  const selMode=window._wlMode||'daily';
+
+  // Load existing log for this date (from cache)
+  const existing=(window._wlCache||[]).find(l=>l.empUuid===emp._uuid&&l.date===selDate);
+  if(existing&&existing.mode) window._wlMode=existing.mode;
+  const mode=existing?existing.mode:selMode;
+
+  // Recent logs for this employee
+  const recent=(window._wlCache||[]).filter(l=>l.empUuid===emp._uuid).slice(0,7);
+
+  return `
+  <div class="page-hd">
+    <div><div class="pg-title">📝 Work Log</div><div class="pg-sub">Record what you worked on — pick any of the three styles</div></div>
+    <button class="btn btn-sec" onclick="reloadMyWorkLogs()">🔄 Refresh</button>
+  </div>
+
+  <!-- Date picker + Mode selector -->
+  <div class="card" style="margin-bottom:1rem">
+    <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap">
+      <div class="fld" style="margin-bottom:0;flex:0 0 180px">
+        <label>📅 Date</label>
+        <input type="date" id="wl-date" value="${selDate}" max="${today}" onchange="window._wlSelectedDate=this.value;navEmp('emp-worklog')">
+      </div>
+      <div style="flex:1;min-width:280px">
+        <label style="font-size:13px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">Log style (pick one)</label>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${[
+            ['hourly','⏱ Hourly','Log work by hour (time slots)'],
+            ['session','📍 Session','Log work by session (morning/afternoon/etc)'],
+            ['daily','📋 Daily','Single summary of the whole day']
+          ].map(([m,lbl,tooltip])=>`
+            <button onclick="window._wlMode='${m}';navEmp('emp-worklog')" title="${tooltip}" style="padding:9px 14px;border-radius:10px;border:2px solid ${mode===m?'#0f766e':'var(--border)'};background:${mode===m?'#f0fdf4':'#fff'};color:${mode===m?'#0f766e':'var(--text)'};cursor:pointer;font-size:13px;font-weight:700;transition:.15s">
+              ${lbl}
+            </button>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Entry form -->
+  <div class="card" style="margin-bottom:1rem">
+    <div class="card-hd"><h3>${mode==='hourly'?'⏱ Hourly log':mode==='session'?'📍 Session log':'📋 Daily log'} — ${selDate}</h3></div>
+    ${mode==='hourly'?renderHourlyForm(existing):mode==='session'?renderSessionForm(existing):renderDailyForm(existing)}
+    <div id="wl-save-msg" style="margin-top:10px"></div>
+    <div style="display:flex;gap:8px;margin-top:1rem;justify-content:flex-end">
+      ${existing?`<button class="btn btn-sec" onclick="deleteMyWorkLog('${existing._uuid}')" style="color:#dc2626;border-color:#fecaca">🗑 Delete this log</button>`:''}
+      <button class="btn btn-primary" style="background:#0f766e" onclick="saveMyWorkLog()">💾 Save work log</button>
+    </div>
+  </div>
+
+  <!-- Recent logs -->
+  <div class="card">
+    <div class="card-hd"><h3>📚 My recent logs</h3></div>
+    ${recent.length===0?`<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px">No work logs yet. Start logging today's work above ↑</div>`:`
+    <table style="margin-top:8px"><thead><tr>
+      <th style="padding-left:12px">Date</th>
+      <th>Style</th>
+      <th>Entries</th>
+      <th>Summary</th>
+      <th>Action</th>
+    </tr></thead><tbody>${recent.map(l=>`
+      <tr>
+        <td style="padding-left:12px"><strong>${l.date}</strong></td>
+        <td><span style="background:#eff6ff;color:#1e40af;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${l.mode==='hourly'?'⏱':l.mode==='session'?'📍':'📋'} ${l.mode}</span></td>
+        <td style="font-size:12px">${(l.entries||[]).length} ${(l.entries||[]).length===1?'entry':'entries'}</td>
+        <td style="white-space:normal;font-size:12px;color:var(--muted)">${(l.summary||(l.entries||[]).map(e=>e.work||e.text||'').join(' · ')).substring(0,80)}${(l.summary||'').length>80?'…':''}</td>
+        <td><button class="btn-link" style="font-size:12px" onclick="window._wlSelectedDate='${l.date}';navEmp('emp-worklog')">View / Edit</button></td>
+      </tr>`).join('')}</tbody></table>`}
+  </div>`;
+}
+
+function renderHourlyForm(existing){
+  const entries=existing&&existing.mode==='hourly'?existing.entries:[
+    {from:'09:00',to:'10:00',work:''},
+    {from:'10:00',to:'11:00',work:''},
+    {from:'11:00',to:'12:00',work:''}
+  ];
+  return `
+  <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Add time blocks showing what you worked on each hour.</div>
+  <div id="wl-hourly-list">
+    ${entries.map((e,i)=>hourlyRow(e,i)).join('')}
+  </div>
+  <button class="btn btn-sec" style="margin-top:8px" onclick="addHourlyRow()">+ Add hour block</button>
+  <div class="fld" style="margin-top:14px">
+    <label>📝 End-of-day summary (optional)</label>
+    <textarea id="wl-summary" rows="2" placeholder="Overall thoughts, blockers, tomorrow's plan…">${existing?.summary||''}</textarea>
+  </div>`;
+}
+
+function hourlyRow(e,i){
+  return `<div class="wl-hrow" style="display:grid;grid-template-columns:110px 110px 1fr 40px;gap:8px;margin-bottom:6px;align-items:center">
+    <input type="time" value="${e.from||''}" data-k="from">
+    <input type="time" value="${e.to||''}" data-k="to">
+    <input type="text" value="${(e.work||'').replace(/"/g,'&quot;')}" data-k="work" placeholder="What did you do in this hour?">
+    <button onclick="this.parentElement.remove()" style="background:#fee2e2;color:#991b1b;border:none;padding:8px;border-radius:6px;cursor:pointer;font-size:14px">×</button>
+  </div>`;
+}
+
+function addHourlyRow(){
+  const list=$('wl-hourly-list');
+  if(!list) return;
+  const rows=list.querySelectorAll('.wl-hrow');
+  const last=rows[rows.length-1];
+  const lastTo=last?last.querySelector('[data-k="to"]').value:'10:00';
+  const [h,m]=(lastTo||'10:00').split(':').map(Number);
+  const nextH=Math.min(23,h+1);
+  const div=document.createElement('div');
+  div.innerHTML=hourlyRow({from:lastTo,to:`${String(nextH).padStart(2,'0')}:${String(m).padStart(2,'0')}`,work:''});
+  list.appendChild(div.firstElementChild);
+}
+
+function renderSessionForm(existing){
+  const entries=existing&&existing.mode==='session'?existing.entries:[
+    {session:'Morning',work:''},
+    {session:'Afternoon',work:''},
+    {session:'Evening',work:''}
+  ];
+  return `
+  <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Break your day into sessions (morning, afternoon, evening, etc.)</div>
+  <div id="wl-session-list">
+    ${entries.map((e,i)=>sessionRow(e,i)).join('')}
+  </div>
+  <button class="btn btn-sec" style="margin-top:8px" onclick="addSessionRow()">+ Add session</button>
+  <div class="fld" style="margin-top:14px">
+    <label>📝 End-of-day summary (optional)</label>
+    <textarea id="wl-summary" rows="2" placeholder="Overall thoughts, blockers, tomorrow's plan…">${existing?.summary||''}</textarea>
+  </div>`;
+}
+
+function sessionRow(e,i){
+  return `<div class="wl-srow" style="display:grid;grid-template-columns:180px 1fr 40px;gap:8px;margin-bottom:6px;align-items:center">
+    <input type="text" value="${(e.session||'').replace(/"/g,'&quot;')}" data-k="session" placeholder="e.g. Morning, Client call, Deep work">
+    <input type="text" value="${(e.work||'').replace(/"/g,'&quot;')}" data-k="work" placeholder="What did you accomplish in this session?">
+    <button onclick="this.parentElement.remove()" style="background:#fee2e2;color:#991b1b;border:none;padding:8px;border-radius:6px;cursor:pointer;font-size:14px">×</button>
+  </div>`;
+}
+
+function addSessionRow(){
+  const list=$('wl-session-list');
+  if(!list) return;
+  const div=document.createElement('div');
+  div.innerHTML=sessionRow({session:'',work:''});
+  list.appendChild(div.firstElementChild);
+}
+
+function renderDailyForm(existing){
+  const work=existing&&existing.mode==='daily'&&existing.entries[0]?existing.entries[0].work:'';
+  return `
+  <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Quick one-shot log of the whole day's work.</div>
+  <div class="fld">
+    <label>🎯 What did you accomplish today? <span style="color:#ef4444">*</span></label>
+    <textarea id="wl-daily-work" rows="5" placeholder="Describe your key tasks, wins, challenges, what you completed…">${work}</textarea>
+  </div>
+  <div class="fld">
+    <label>📝 Additional notes (optional)</label>
+    <textarea id="wl-summary" rows="2" placeholder="Blockers, tomorrow's plan, reflections…">${existing?.summary||''}</textarea>
+  </div>`;
+}
+
+async function saveMyWorkLog(){
+  const emp=currentEmployee;
+  const date=$('wl-date')?.value||todayStr();
+  const mode=window._wlMode||'daily';
+  const msg=$('wl-save-msg');
+
+  let entries=[];
+  if(mode==='hourly'){
+    entries=Array.from(document.querySelectorAll('.wl-hrow')).map(row=>{
+      const out={};
+      row.querySelectorAll('[data-k]').forEach(el=>{out[el.dataset.k]=el.value.trim();});
+      return out;
+    }).filter(e=>e.work); // only keep rows with actual work entered
+    if(!entries.length){
+      if(msg) msg.innerHTML=`<div class="alert alert-e">Please fill at least one hour block with work description</div>`;
+      return;
+    }
+  } else if(mode==='session'){
+    entries=Array.from(document.querySelectorAll('.wl-srow')).map(row=>{
+      const out={};
+      row.querySelectorAll('[data-k]').forEach(el=>{out[el.dataset.k]=el.value.trim();});
+      return out;
+    }).filter(e=>e.work&&e.session);
+    if(!entries.length){
+      if(msg) msg.innerHTML=`<div class="alert alert-e">Please fill at least one session with a name and work description</div>`;
+      return;
+    }
+  } else {
+    const work=$('wl-daily-work')?.value?.trim()||'';
+    if(!work){
+      if(msg) msg.innerHTML=`<div class="alert alert-e">Please describe today's work</div>`;
+      return;
+    }
+    entries=[{work}];
+  }
+
+  const summary=$('wl-summary')?.value?.trim()||'';
+
+  // Update existing or create new
+  const existing=(window._wlCache||[]).find(l=>l.empUuid===emp._uuid&&l.date===date);
+  const log={
+    _uuid:existing?._uuid,
+    empUuid:emp._uuid,
+    empName:emp.name,
+    empEmail:emp.email,
+    date, mode, entries, summary
+  };
+  if(msg) msg.innerHTML=`<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">💾 Saving…</div>`;
+  const r=await sbSaveWorkLog(log);
+  if(!r){
+    if(msg) msg.innerHTML=`<div class="alert alert-e">❌ Save failed. Make sure the work_logs table exists in Supabase.</div>`;
+    return;
+  }
+  if(r&&r[0]) log._uuid=r[0].id;
+
+  // Update cache
+  if(!window._wlCache) window._wlCache=[];
+  const idx=window._wlCache.findIndex(l=>l.empUuid===emp._uuid&&l.date===date);
+  if(idx>=0) window._wlCache[idx]=log;
+  else window._wlCache.unshift(log);
+
+  if(msg) msg.innerHTML=`<div class="alert alert-s">✅ Work log saved for ${date}</div>`;
+  showToast(`✅ Work log saved for ${date}`,'success');
+}
+
+async function deleteMyWorkLog(uuid){
+  if(!confirm('Delete this work log? This cannot be undone.')) return;
+  const ok=await sbDeleteWorkLog(uuid);
+  if(!ok){ showToast('❌ Delete failed','info'); return; }
+  window._wlCache=(window._wlCache||[]).filter(l=>l._uuid!==uuid);
+  showToast('🗑 Work log deleted','success');
+  navEmp('emp-worklog');
+}
+
+async function reloadMyWorkLogs(){
+  const emp=currentEmployee;
+  window._wlCache=await sbLoadWorkLogs({empUuid:emp._uuid});
+  navEmp('emp-worklog');
+}
+
+// ── ADMIN VIEW: All work logs (filterable) ───
+function pgWorkLogs(){
+  // Auto-load on first access
+  if(!window._wlAllCache){
+    window._wlAllCache=[];
+    sbLoadWorkLogs().then(r=>{window._wlAllCache=r;nav('worklogs');});
+  }
+  const logs=window._wlAllCache||[];
+  const empFilter=window._wlEmpFilter||'';
+  const dateFrom=window._wlDateFrom||'';
+  const dateTo=window._wlDateTo||'';
+  const modeFilter=window._wlModeFilter||'';
+
+  let filtered=logs;
+  if(empFilter) filtered=filtered.filter(l=>l.empName===empFilter);
+  if(dateFrom) filtered=filtered.filter(l=>l.date>=dateFrom);
+  if(dateTo) filtered=filtered.filter(l=>l.date<=dateTo);
+  if(modeFilter) filtered=filtered.filter(l=>l.mode===modeFilter);
+
+  const todayCount=logs.filter(l=>l.date===todayStr()).length;
+  const weekStart=new Date(); weekStart.setDate(weekStart.getDate()-6);
+  const weekCount=logs.filter(l=>new Date(l.date)>=weekStart).length;
+  const activeEmps=new Set(logs.filter(l=>new Date(l.date)>=weekStart).map(l=>l.empName)).size;
+
+  return `
+  <div class="page-hd">
+    <div><div class="pg-title">📝 Work Logs</div><div class="pg-sub">Daily journals submitted by employees</div></div>
+    <button class="btn btn-sec" onclick="reloadAllWorkLogs()">🔄 Refresh</button>
+  </div>
+
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-lbl">Today's logs</div><div class="stat-val">${todayCount}</div><div class="stat-sub">${dateLabel()}</div></div>
+    <div class="stat"><div class="stat-lbl">This week</div><div class="stat-val">${weekCount}</div><div class="stat-sub">Last 7 days</div></div>
+    <div class="stat"><div class="stat-lbl">Active loggers</div><div class="stat-val">${activeEmps}</div><div class="stat-sub">Employees this week</div></div>
+    <div class="stat"><div class="stat-lbl">Total entries</div><div class="stat-val">${logs.length}</div><div class="stat-sub">All time</div></div>
+  </div>
+
+  <div class="card" style="margin-bottom:1rem">
+    <div class="card-hd"><h3>🔍 Filters</h3></div>
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:10px;align-items:end">
+      <div class="fld" style="margin-bottom:0">
+        <label>Employee</label>
+        <select onchange="window._wlEmpFilter=this.value;nav('worklogs')">
+          <option value="">All employees</option>
+          ${D.employees.map(e=>`<option ${empFilter===e.name?'selected':''}>${e.name}</option>`).join('')}
+        </select>
+      </div>
+      <div class="fld" style="margin-bottom:0">
+        <label>From date</label>
+        <input type="date" value="${dateFrom}" onchange="window._wlDateFrom=this.value;nav('worklogs')">
+      </div>
+      <div class="fld" style="margin-bottom:0">
+        <label>To date</label>
+        <input type="date" value="${dateTo}" onchange="window._wlDateTo=this.value;nav('worklogs')">
+      </div>
+      <div class="fld" style="margin-bottom:0">
+        <label>Style</label>
+        <select onchange="window._wlModeFilter=this.value;nav('worklogs')">
+          <option value="">All styles</option>
+          <option value="hourly" ${modeFilter==='hourly'?'selected':''}>⏱ Hourly</option>
+          <option value="session" ${modeFilter==='session'?'selected':''}>📍 Session</option>
+          <option value="daily" ${modeFilter==='daily'?'selected':''}>📋 Daily</option>
+        </select>
+      </div>
+      <button class="btn btn-sec" onclick="window._wlEmpFilter='';window._wlDateFrom='';window._wlDateTo='';window._wlModeFilter='';nav('worklogs')" style="height:fit-content">Clear</button>
+    </div>
+  </div>
+
+  <div class="card" style="padding:0">
+    <div class="card-hd" style="padding:1rem 1rem 0"><h3>${filtered.length} work log${filtered.length!==1?'s':''}</h3></div>
+    ${filtered.length===0?`<div style="padding:3rem 1rem;text-align:center;color:var(--muted)">
+      <div style="font-size:40px;margin-bottom:8px">📭</div>
+      <div style="font-size:14px;font-weight:600">No work logs match the filter</div>
+    </div>`:`
+    <table style="margin-top:8px"><thead><tr>
+      <th style="padding-left:12px;width:20%">Employee</th>
+      <th style="width:12%">Date</th>
+      <th style="width:10%">Style</th>
+      <th style="width:8%">Entries</th>
+      <th style="width:45%">Preview</th>
+      <th style="width:5%">View</th>
+    </tr></thead><tbody>${filtered.map(l=>{
+      const emp=D.employees.find(e=>e._uuid===l.empUuid||e.name===l.empName);
+      const preview=l.mode==='daily'?(l.entries[0]?.work||''):(l.entries||[]).map(e=>e.work||'').filter(w=>w).slice(0,2).join(' · ');
+      return `<tr style="cursor:pointer" onclick="viewWorkLogDetail('${l._uuid}')">
+        <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:8px">${av(l.empName,28)}<div><div style="font-weight:600">${l.empName}</div><div style="font-size:11px;color:var(--muted)">${emp?.dept||''}</div></div></div></td>
+        <td><strong>${l.date}</strong></td>
+        <td><span style="background:#eff6ff;color:#1e40af;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${l.mode==='hourly'?'⏱':l.mode==='session'?'📍':'📋'} ${l.mode}</span></td>
+        <td style="font-size:12px"><strong>${(l.entries||[]).length}</strong></td>
+        <td style="white-space:normal;font-size:12px;color:var(--muted)">${(preview||'—').substring(0,120)}${preview&&preview.length>120?'…':''}</td>
+        <td><button class="btn-link" onclick="event.stopPropagation();viewWorkLogDetail('${l._uuid}')" style="font-size:12px">View →</button></td>
+      </tr>`;
+    }).join('')}</tbody></table>`}
+  </div>
+
+  <div id="wl-detail-modal"></div>`;
+}
+
+function viewWorkLogDetail(uuid){
+  const l=(window._wlAllCache||[]).find(x=>x._uuid===uuid);
+  if(!l) return;
+  const wrap=$('wl-detail-modal');
+  if(!wrap) return;
+  wrap.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('wl-detail-modal')">
+    <div class="modal" style="max-width:680px">
+      <div class="modal-hd">
+        <h3>📝 ${l.empName} — ${l.date}</h3>
+        <button class="xbtn" onclick="closeModal('wl-detail-modal')">×</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:1rem">
+        <span style="background:#eff6ff;color:#1e40af;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${l.mode==='hourly'?'⏱ Hourly log':l.mode==='session'?'📍 Session log':'📋 Daily log'}</span>
+      </div>
+      <div style="max-height:400px;overflow-y:auto">
+        ${l.mode==='hourly'?(l.entries||[]).map(e=>`
+          <div style="background:#f8fafc;border-left:3px solid #3b82f6;padding:10px 14px;margin-bottom:8px;border-radius:0 8px 8px 0">
+            <div style="font-weight:700;font-size:13px;color:#1e40af">⏱ ${e.from||'—'} → ${e.to||'—'}</div>
+            <div style="font-size:13px;margin-top:4px">${e.work||'<em style="color:var(--muted)">No description</em>'}</div>
+          </div>`).join(''):
+          l.mode==='session'?(l.entries||[]).map(e=>`
+          <div style="background:#f8fafc;border-left:3px solid #10b981;padding:10px 14px;margin-bottom:8px;border-radius:0 8px 8px 0">
+            <div style="font-weight:700;font-size:13px;color:#166534">📍 ${e.session||'Session'}</div>
+            <div style="font-size:13px;margin-top:4px">${e.work||'<em style="color:var(--muted)">No description</em>'}</div>
+          </div>`).join(''):
+          `<div style="background:#f8fafc;border-left:3px solid #f59e0b;padding:14px;margin-bottom:8px;border-radius:0 8px 8px 0">
+            <div style="font-size:13px;white-space:pre-wrap">${(l.entries[0]?.work||'')}</div>
+          </div>`}
+      </div>
+      ${l.summary?`<div style="margin-top:1rem;padding:10px 14px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px">
+        <div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📝 Summary / Notes</div>
+        <div style="font-size:13px;color:#78350f;white-space:pre-wrap">${l.summary}</div>
+      </div>`:''}
+      <div style="margin-top:1rem;font-size:11px;color:var(--muted);text-align:right">Last updated: ${l.updatedAt?new Date(l.updatedAt).toLocaleString('en-IN'):'—'}</div>
+    </div>
+  </div>`;
+}
+
+async function reloadAllWorkLogs(){
+  window._wlAllCache=await sbLoadWorkLogs();
+  nav('worklogs');
+}
+
+// Auto-load on first access
+(function(){
+  const origNav=window.nav;
+  // Do nothing here; loading is triggered explicitly by reloadAllWorkLogs and reloadMyWorkLogs
+})();
+
 function pgKYCRequests(){
   const all=D.changeRequests||[];
   const filter=window._kycFilter||'Pending';
