@@ -1061,7 +1061,12 @@ function faceSignIn(name){
   D.loggedIn=true;frStopCamera();save();renderApp();
 }
 function renderLogin(){
-  return `<div class="login-wrap">
+  return `<div class="login-wrap" style="position:relative">
+  <div id="super-admin-link" style="position:absolute;top:16px;right:20px;z-index:10">
+    <button onclick="revealSuperAdmin()" style="background:rgba(255,255,255,0.9);border:1px solid #e2e5ea;color:#64748b;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;box-shadow:0 1px 3px rgba(0,0,0,0.04)" onmouseover="this.style.background='#1a1a4e';this.style.color='#fff';this.style.borderColor='#1a1a4e'" onmouseout="this.style.background='rgba(255,255,255,0.9)';this.style.color='#64748b';this.style.borderColor='#e2e5ea'" title="Kreayotoo Solutions internal access">
+      <span>👑</span><span>Super Admin</span>
+    </button>
+  </div>
   <div class="login-left" style="flex:1.1;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3rem 2.5rem;color:#fff;min-height:100vh">
     <div style="max-width:340px;width:100%">
       <div style="display:flex;align-items:center;gap:16px;margin-bottom:2.5rem">
@@ -1086,12 +1091,12 @@ function renderLogin(){
       <h2 style="font-size:22px;font-weight:700;margin-bottom:.25rem;color:#111">Welcome back</h2>
       <p class="login-sub" style="margin-bottom:1.5rem">Select your role to sign in</p>
       <div style="display:flex;gap:0;margin-bottom:1.25rem;border:1px solid var(--border);border-radius:8px;overflow:hidden">
-        <button id="tab-admin" onclick="switchLoginTab('admin')" style="flex:1;padding:9px;border:none;background:var(--navy);color:#fff;font-weight:700;font-size:12px;cursor:pointer">👑 Super Admin</button>
-        <button id="tab-company" onclick="switchLoginTab('company')" style="flex:1;padding:9px;border:none;background:var(--white);color:var(--muted);font-weight:600;font-size:12px;cursor:pointer">🏢 Company</button>
-        <button id="tab-emp" onclick="switchLoginTab('emp')" style="flex:1;padding:9px;border:none;background:var(--white);color:var(--muted);font-weight:600;font-size:12px;cursor:pointer">👤 Employee</button>
+        <button id="tab-admin" onclick="switchLoginTab('admin')" style="display:none;flex:1;padding:9px;border:none;background:var(--navy);color:#fff;font-weight:700;font-size:12px;cursor:pointer">👑 Super Admin</button>
+        <button id="tab-company" onclick="switchLoginTab('company')" style="flex:1;padding:9px;border:none;background:var(--white);color:var(--muted);font-weight:600;font-size:12px;cursor:pointer">🏢 Admin</button>
+        <button id="tab-emp" onclick="switchLoginTab('emp')" style="flex:1;padding:9px;border:none;background:var(--navy);color:#fff;font-weight:700;font-size:12px;cursor:pointer">👤 Employee</button>
       </div>
 
-      <div id="admin-login-tab">
+      <div id="admin-login-tab" class="hidden">
         <div class="login-methods">
           <button class="method-btn active" id="meth-face" onclick="setLoginMethod('face')">
             <div class="method-ic" style="background:#0f172a">🎭</div>
@@ -1115,16 +1120,15 @@ function renderLogin(){
 
       <div id="company-login-tab" class="hidden">
         <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;font-size:12px;color:#1e40af;margin-bottom:1rem">
-          🏢 Company admins — log in with credentials provided by Kreayotoo Solutions
+          🏢 Admins — log in with your administrator credentials
         </div>
         <div id="company-login-err"></div>
-        <div class="fld"><label>Company admin email</label><input type="email" id="co-email" placeholder="admin@yourcompany.com" onkeydown="if(event.key==='Enter')doCompanyLogin()"></div>
+        <div class="fld"><label>Admin email</label><input type="email" id="co-email" placeholder="admin@yourcompany.com" onkeydown="if(event.key==='Enter')doCompanyLogin()"></div>
         <div class="fld"><label>Password</label><input type="password" id="co-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doCompanyLogin()"></div>
-        <button class="btn btn-primary" style="width:100%;padding:10px;background:#7c3aed" onclick="doCompanyLogin()">Sign in as Company Admin</button>
+        <button class="btn btn-primary" style="width:100%;padding:10px;background:#7c3aed" onclick="doCompanyLogin()">Sign in as Admin</button>
       </div>
 
-      <div id="emp-login-tab" class="hidden">
-        <div id="geo-box-wrap-emp">${geoBoxHTML()}</div>
+      <div id="emp-login-tab">
         <div id="emp-login-err"></div>
         <div id="emp-login-form">
           <div class="fld"><label>Your work email</label><input type="email" id="emp-email" placeholder="yourname@company.com" autocomplete="username"></div>
@@ -1204,7 +1208,13 @@ function setLoginMethod(method){
 }
 function bindLogin(){
   document.querySelectorAll('#l-email,#l-pass').forEach(el=>el.addEventListener('keydown',e=>e.key==='Enter'&&doLogin()));
-  setTimeout(()=>{frLoadModels();startFaceScan();captureGeo();},200);
+  setTimeout(captureGeo,200);
+}
+function revealSuperAdmin(){
+  const tabBtn=$('tab-admin'); if(tabBtn) tabBtn.style.display='';
+  const link=$('super-admin-link'); if(link) link.style.display='none';
+  switchLoginTab('admin');
+  setTimeout(()=>{frLoadModels();startFaceScan();},200);
 }
 function doLogin(){
   const em=$('l-email').value.trim(),pw=$('l-pass').value;
