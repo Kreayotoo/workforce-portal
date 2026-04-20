@@ -394,7 +394,12 @@ async function syncFromSupabase(){
       role:e.role||'',status:e.status||'Active',salary:e.salary||0,
       joined:e.date_of_joining||'',selfRegistered:e.self_registered||false,
       passwordHash:e.password_hash||'emp@123',empType:e.emp_type||'office',
-      companyId:e.company_id||'KSPL'
+      companyId:e.company_id||'KSPL',
+      aadhaar:e.aadhaar_number||'',pan:e.pan_number||'',
+      bankAccount:e.bank_account||'',bankIfsc:e.bank_ifsc||'',bankName:e.bank_name||'',
+      address:e.address||'',
+      emergencyName:e.emergency_contact_name||'',emergencyPhone:e.emergency_contact_phone||'',emergencyRelation:e.emergency_contact_relation||'',
+      kycCompleted:e.kyc_completed||false,kycCompletedAt:e.kyc_completed_at||null
     }));
     if(att!==null) D.attendance=att.map(a=>({_uuid:a.id,empId:a.employee_id,empName:a.employee_name,date:a.date,status:a.status,in:a.in_time,out:a.out_time}));
     if(lvs!==null) D.leaves=lvs.map(l=>({_uuid:l.id,id:l.id,emp:l.employee_name,type:l.leave_type,from:l.from_date,to:l.to_date,days:l.days,reason:l.reason,status:l.status}));
@@ -702,7 +707,16 @@ function renderApp(){
         <button onclick="navBack()" title="Go back" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:13px">← Back</button>
         <button onclick="nav('dashboard')" title="Go to home" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:13px">🏠 Home</button>
       </div>`:''}
-      <div style="flex:1"></div>
+      <div style="flex:1;display:flex;justify-content:center;padding:0 1rem;max-width:500px;margin:0 auto">
+        <div style="position:relative;width:100%;max-width:380px">
+          <input type="text" id="universal-search" placeholder="🔍 Search employee — name, ID, Aadhaar, PAN, email…" autocomplete="off"
+            oninput="runUniversalSearch(this.value)"
+            onfocus="runUniversalSearch(this.value)"
+            onblur="setTimeout(()=>{const r=document.getElementById('univ-search-results');if(r)r.style.display='none'},200)"
+            style="width:100%;padding:6px 12px;border-radius:20px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:#fff;font-size:12px;outline:none" />
+          <div id="univ-search-results" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.2);max-height:400px;overflow-y:auto;z-index:200"></div>
+        </div>
+      </div>
       <button onclick="syncFromSupabase().then(()=>{nav(currentPage);})" title="Sync latest data from database" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600">🔄 Refresh</button>
       ${currentCompany?`<div style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">🏢 ${currentCompany.name}</div>`:`<div style="background:rgba(96,165,250,.2);border:1px solid rgba(96,165,250,.4);color:#93c5fd;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">👑 Super Admin</div>`}
       <div style="position:relative;cursor:pointer;font-size:16px;color:#fff" onclick="nav('notifications')">
@@ -1514,6 +1528,155 @@ function loginAsEmployee(emp){
   currentRole='employee';currentEmployee=emp;D.loggedIn=true;
   empPage='emp-dashboard';
   save();
+  // KYC gate: block portal if KYC is incomplete
+  if(!emp.kycCompleted){ renderKYCGate(); return; }
+  renderEmployeeApp();
+}
+
+// ─── KYC GATE ─────────────────────────────────────────────────────
+function renderKYCGate(){
+  const emp=currentEmployee;
+  $('root').innerHTML=`
+  <div style="min-height:100vh;background:#f0f2f5;display:flex;align-items:flex-start;justify-content:center;padding:2rem 1rem">
+    <div style="width:100%;max-width:640px;background:#fff;border-radius:14px;padding:2rem;border:1px solid #e2e5ea;box-shadow:0 2px 8px rgba(0,0,0,.04)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <div>
+          <div style="font-size:22px;font-weight:800;color:#111">🪪 Complete your KYC</div>
+          <div style="font-size:13px;color:var(--muted);margin-top:4px">Hi ${emp.name.split(' ')[0]}, a few mandatory details before you access the portal.</div>
+        </div>
+        <button onclick="kycLogout()" style="background:#f1f5f9;border:none;color:#475569;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">Log out</button>
+      </div>
+
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;font-size:12px;color:#1e40af;margin-bottom:1.5rem">
+        🔒 <strong>Your data is confidential.</strong> Aadhaar &amp; PAN are stored securely and used only for employment records. These details are only visible to authorised administrators.
+      </div>
+
+      <div id="kyc-err"></div>
+
+      <!-- Identity -->
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:.5rem;letter-spacing:.02em">🪪 Identity documents</div>
+      <div class="frow">
+        <div class="fld"><label>Aadhaar number *</label>
+          <input type="text" id="kyc-aadhaar" maxlength="14" inputmode="numeric" placeholder="1234 5678 9012" oninput="fmtAadhaar(this);clearKycErr()">
+        </div>
+        <div class="fld"><label>PAN number *</label>
+          <input type="text" id="kyc-pan" maxlength="10" placeholder="ABCDE1234F" oninput="this.value=this.value.toUpperCase();clearKycErr()">
+        </div>
+      </div>
+
+      <!-- DOB + Address -->
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin:1rem 0 .5rem;letter-spacing:.02em">📍 Personal</div>
+      <div class="fld"><label>Date of birth *</label><input type="date" id="kyc-dob" value="${emp.dob||''}" oninput="clearKycErr()"></div>
+      <div class="fld"><label>Current address *</label><textarea id="kyc-address" rows="2" placeholder="House/Flat no, street, locality, city, state, PIN" oninput="clearKycErr()"></textarea></div>
+
+      <!-- Bank -->
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin:1rem 0 .5rem;letter-spacing:.02em">🏦 Bank details (for salary)</div>
+      <div class="fld"><label>Bank account number *</label>
+        <input type="text" id="kyc-bank-account" inputmode="numeric" placeholder="Enter account number" oninput="this.value=this.value.replace(/\\D/g,'');clearKycErr()">
+      </div>
+      <div class="frow">
+        <div class="fld"><label>IFSC code *</label>
+          <input type="text" id="kyc-bank-ifsc" maxlength="11" placeholder="SBIN0001234" oninput="this.value=this.value.toUpperCase();clearKycErr()">
+        </div>
+        <div class="fld"><label>Bank name *</label>
+          <input type="text" id="kyc-bank-name" placeholder="e.g. State Bank of India" oninput="clearKycErr()">
+        </div>
+      </div>
+
+      <!-- Emergency -->
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin:1rem 0 .5rem;letter-spacing:.02em">🚨 Emergency contact</div>
+      <div class="frow">
+        <div class="fld"><label>Contact name *</label>
+          <input type="text" id="kyc-em-name" placeholder="e.g. Ramesh Kumar" oninput="clearKycErr()">
+        </div>
+        <div class="fld"><label>Relationship *</label>
+          <select id="kyc-em-relation" onchange="clearKycErr()">
+            <option value="">Select relationship</option>
+            <option>Spouse</option><option>Father</option><option>Mother</option>
+            <option>Brother</option><option>Sister</option><option>Son</option>
+            <option>Daughter</option><option>Guardian</option><option>Friend</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="fld"><label>Contact phone *</label>
+        <input type="text" id="kyc-em-phone" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" oninput="this.value=this.value.replace(/\\D/g,'');clearKycErr()">
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:1.25rem">
+        <button class="btn btn-primary" style="flex:1;background:#0f766e;padding:12px;font-weight:700" onclick="submitKYC()">✅ Submit &amp; access portal</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px">All fields marked * are mandatory under company policy</div>
+    </div>
+  </div>`;
+}
+function clearKycErr(){const el=$('kyc-err');if(el)el.innerHTML='';}
+function fmtAadhaar(el){
+  let v=el.value.replace(/\D/g,'').slice(0,12);
+  el.value=v.replace(/(\d{4})(?=\d)/g,'$1 ').trim();
+}
+function kycLogout(){ D.loggedIn=false; currentEmployee=null; currentRole='admin'; save(); renderApp(); }
+async function submitKYC(){
+  const emp=currentEmployee;
+  const err=$('kyc-err');
+  const aadhaar=($('kyc-aadhaar')||{}).value?.replace(/\s/g,'')||'';
+  const pan=($('kyc-pan')||{}).value?.trim()||'';
+  const dob=($('kyc-dob')||{}).value||'';
+  const address=($('kyc-address')||{}).value?.trim()||'';
+  const bankAccount=($('kyc-bank-account')||{}).value?.trim()||'';
+  const bankIfsc=($('kyc-bank-ifsc')||{}).value?.trim()||'';
+  const bankName=($('kyc-bank-name')||{}).value?.trim()||'';
+  const emName=($('kyc-em-name')||{}).value?.trim()||'';
+  const emPhone=($('kyc-em-phone')||{}).value?.trim()||'';
+  const emRelation=($('kyc-em-relation')||{}).value||'';
+
+  // Validation
+  if(!aadhaar||!pan||!dob||!address||!bankAccount||!bankIfsc||!bankName||!emName||!emPhone||!emRelation){
+    if(err)err.innerHTML=`<div class="alert alert-e">Please fill in all mandatory fields</div>`;return;
+  }
+  if(!/^\d{12}$/.test(aadhaar)){
+    if(err)err.innerHTML=`<div class="alert alert-e">Aadhaar must be exactly 12 digits</div>`;return;
+  }
+  if(!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)){
+    if(err)err.innerHTML=`<div class="alert alert-e">PAN format invalid (should be like ABCDE1234F)</div>`;return;
+  }
+  if(!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(bankIfsc)){
+    if(err)err.innerHTML=`<div class="alert alert-e">IFSC format invalid (11 chars, e.g. SBIN0001234)</div>`;return;
+  }
+  if(!/^\d{10}$/.test(emPhone)){
+    if(err)err.innerHTML=`<div class="alert alert-e">Emergency contact phone must be 10 digits</div>`;return;
+  }
+  // Duplicate Aadhaar check
+  const dupAadhaar=await sb('employees','GET',null,`?aadhaar_number=eq.${aadhaar}&select=id,name${emp._uuid?`&id=neq.${emp._uuid}`:''}`);
+  if(dupAadhaar&&dupAadhaar.length){
+    if(err)err.innerHTML=`<div class="alert alert-e">This Aadhaar is already registered to another employee. Contact admin if this is an error.</div>`;return;
+  }
+  const dupPan=await sb('employees','GET',null,`?pan_number=eq.${pan}&select=id,name${emp._uuid?`&id=neq.${emp._uuid}`:''}`);
+  if(dupPan&&dupPan.length){
+    if(err)err.innerHTML=`<div class="alert alert-e">This PAN is already registered to another employee. Contact admin if this is an error.</div>`;return;
+  }
+
+  if(err)err.innerHTML=`<div class="alert alert-e" style="color:#0f766e;background:#f0fdf4;border-color:#bbf7d0">Saving your details…</div>`;
+
+  const payload={
+    aadhaar_number:aadhaar, pan_number:pan, dob,
+    address, bank_account:bankAccount, bank_ifsc:bankIfsc, bank_name:bankName,
+    emergency_contact_name:emName, emergency_contact_phone:emPhone, emergency_contact_relation:emRelation,
+    kyc_completed:true, kyc_completed_at:new Date().toISOString()
+  };
+  const r=await sb('employees','PATCH',payload,`?id=eq.${emp._uuid}`);
+  if(!r){if(err)err.innerHTML=`<div class="alert alert-e">Failed to save. Check your connection and try again.</div>`;return;}
+
+  // Update local
+  Object.assign(emp,{aadhaar,pan,dob,address,bankAccount,bankIfsc,bankName,emergencyName:emName,emergencyPhone:emPhone,emergencyRelation:emRelation,kycCompleted:true});
+  const idx=D.employees.findIndex(e=>e._uuid===emp._uuid);
+  if(idx>=0) D.employees[idx]=emp;
+  save();
+
+  // Notify admin(s)
+  await sbSaveNotification({msg:`🪪 ${emp.name} has completed KYC details`,type:'success'});
+
+  showToast('✅ KYC completed. Welcome to the portal!', 'success');
   renderEmployeeApp();
 }
 function showSignup(){
@@ -3172,6 +3335,171 @@ async function setEmpPw(id,name){
 }
 
 // ─── ATTENDANCE ──────────────────────────────────────────────────
+// ─── UNIVERSAL EMPLOYEE SEARCH ────────────────────────────────────
+function maskAadhaar(a){ if(!a) return '—'; const s=a.replace(/\s/g,''); return s.length===12?`XXXX XXXX ${s.slice(-4)}`:'XXXX XXXX XXXX'; }
+function maskPAN(p){ if(!p) return '—'; return p.length===10?`${p.slice(0,3)}XX${p.slice(-3)}`:'XXXXXXXXXX'; }
+function maskAccount(a){ if(!a) return '—'; if(a.length<=4) return 'XX'+a; return 'XXXX'+a.slice(-4); }
+
+let _searchDebounce=null;
+function runUniversalSearch(query){
+  clearTimeout(_searchDebounce);
+  _searchDebounce=setTimeout(()=>_doUniversalSearch(query), 200);
+}
+function _doUniversalSearch(query){
+  const box=$('univ-search-results');
+  if(!box) return;
+  const q=(query||'').trim().toLowerCase();
+  if(!q){ box.style.display='none'; box.innerHTML=''; return; }
+  const qDigits=q.replace(/\D/g,'');
+  const matches=(D.employees||[]).filter(e=>{
+    if(e.name && e.name.toLowerCase().includes(q)) return true;
+    if(e.id && e.id.toLowerCase().includes(q)) return true;
+    if(e.email && e.email.toLowerCase().includes(q)) return true;
+    if(e.pan && e.pan.toLowerCase().includes(q)) return true;
+    if(qDigits.length>=3){
+      if(e.aadhaar && e.aadhaar.includes(qDigits)) return true;
+      if(e.phone && e.phone.replace(/\D/g,'').includes(qDigits)) return true;
+    }
+    return false;
+  }).slice(0,8);
+  if(!matches.length){
+    box.innerHTML=`<div style="padding:14px;color:var(--muted);font-size:13px;text-align:center">No employees match "${query}"</div>`;
+    box.style.display='block';return;
+  }
+  box.innerHTML=matches.map(e=>{
+    const kycBadge=e.kycCompleted?'<span style="font-size:10px;background:#dcfce7;color:#166534;padding:2px 6px;border-radius:10px;font-weight:600">KYC ✓</span>':'<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:10px;font-weight:600">KYC pending</span>';
+    return `<div onclick="showEmployeeDetail('${e._uuid||e.id}')" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;align-items:center;gap:10px" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+      ${av(e.name,32)}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:700;color:#111;display:flex;align-items:center;gap:6px">${e.name} ${kycBadge}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:1px">${e.id||'—'} · ${e.dept||'—'} · ${e.email||''}</div>
+      </div>
+      <div style="font-size:14px;color:var(--muted)">→</div>
+    </div>`;
+  }).join('');
+  box.style.display='block';
+}
+
+// Detailed employee view with full KYC (admin-only access enforced via UI)
+function showEmployeeDetail(empIdOrUuid){
+  const e=D.employees.find(x=>x._uuid===empIdOrUuid||x.id===empIdOrUuid);
+  if(!e) return;
+  const box=$('univ-search-results'); if(box){box.style.display='none';}
+  const inp=$('universal-search'); if(inp) inp.value='';
+  const today=todayStr();
+  const empSessions=(D.attSessions||[]).filter(s=>s.empName===e.name&&s.date===today);
+  const activeSession=empSessions.find(s=>!s.checkOut);
+  const attRec=D.attendance.find(a=>a.empName===e.name&&a.date===today);
+  const myLeaves=(D.leaves||[]).filter(l=>l.emp===e.name);
+  const pendingLeaves=myLeaves.filter(l=>l.status==='Pending').length;
+  const approvedLeaves=myLeaves.filter(l=>l.status==='Approved').reduce((s,l)=>s+(l.days||0),0);
+
+  const overlay=document.createElement('div');
+  overlay.id='emp-detail-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow-y:auto';
+  overlay.innerHTML=`
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:720px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,var(--navy),var(--navy2));padding:20px;display:flex;align-items:center;gap:14px;position:relative;color:#fff">
+      <button onclick="document.getElementById('emp-detail-overlay').remove()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:18px">×</button>
+      <div style="width:72px;height:72px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:#fff;flex-shrink:0">${initials(e.name)}</div>
+      <div style="flex:1">
+        <div style="font-size:20px;font-weight:700">${e.name}</div>
+        <div style="font-size:13px;opacity:.85;margin-top:2px">${e.role||'—'} · ${e.dept||'—'}</div>
+        <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+          <span style="background:rgba(255,255,255,.2);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600">${e.id||'—'}</span>
+          <span style="background:${e.kycCompleted?'#22c55e':'#f59e0b'};padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">${e.kycCompleted?'KYC ✓ Verified':'⚠ KYC Pending'}</span>
+          ${activeSession?`<span style="background:#22c55e;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">🟢 Active now</span>`:''}
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:1.25rem">
+      <!-- Today's status -->
+      ${activeSession||attRec?`
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px;margin-bottom:1rem">
+        <div style="font-size:11px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📅 Today</div>
+        ${activeSession?`
+          <div style="font-size:13px"><strong>Active since:</strong> ${new Date(activeSession.checkIn).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
+          ${activeSession.location?(activeSession.lat?`<div style="font-size:12px;margin-top:2px"><a href="https://www.google.com/maps?q=${activeSession.lat},${activeSession.lng}" target="_blank" style="color:#2563eb;text-decoration:none">📍 ${activeSession.location} ↗</a></div>`:`<div style="font-size:12px;margin-top:2px">📍 ${activeSession.location}</div>`):''}
+        `:`<div style="font-size:13px">Status: <strong>${attRec?.status||'Not marked'}</strong> · ${attRec?.in||'—'} → ${attRec?.out||'—'}</div>`}
+      </div>`:''}
+
+      <!-- Basic info grid -->
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">👤 Personal</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:1rem">
+        ${infoCard('Email',e.email||'—')}
+        ${infoCard('Phone',e.phone||'—')}
+        ${infoCard('Date of birth',e.dob||'—')}
+        ${infoCard('Joined',e.joined||'—')}
+        ${infoCard('Status',e.status||'Active')}
+        ${infoCard('Salary','₹'+fmt(e.salary||0))}
+      </div>
+      ${e.address?`<div style="background:#f8fafc;border-radius:8px;padding:10px 12px;margin-bottom:1rem"><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">📍 Address</div><div style="font-size:13px;margin-top:2px">${e.address}</div></div>`:''}
+
+      <!-- Identity (sensitive — masked) -->
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
+        <span>🪪 Identity documents</span>
+        <button onclick="toggleRevealIdentity(this)" data-revealed="0" style="background:#f1f5f9;border:none;color:#475569;padding:3px 10px;border-radius:12px;cursor:pointer;font-size:10px;font-weight:700">👁 Reveal</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:1rem">
+        ${infoCardMasked('Aadhaar', e.aadhaar||'', maskAadhaar(e.aadhaar), e.aadhaar?e.aadhaar.replace(/(\d{4})(?=\d)/g,'$1 ').trim():'—')}
+        ${infoCardMasked('PAN', e.pan||'', maskPAN(e.pan), e.pan||'—')}
+      </div>
+
+      <!-- Bank -->
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🏦 Bank details</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:1rem">
+        ${infoCardMasked('Account', e.bankAccount||'', maskAccount(e.bankAccount), e.bankAccount||'—')}
+        ${infoCard('IFSC',e.bankIfsc||'—')}
+        ${infoCard('Bank',e.bankName||'—')}
+      </div>
+
+      <!-- Emergency -->
+      ${e.emergencyName?`
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🚨 Emergency contact</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:1rem">
+        ${infoCard('Name',e.emergencyName)}
+        ${infoCard('Phone',e.emergencyPhone||'—')}
+        ${infoCard('Relation',e.emergencyRelation||'—')}
+      </div>`:''}
+
+      <!-- Leave summary -->
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🏖 Leaves</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1rem">
+        ${infoCard('Total',myLeaves.length)}
+        ${infoCard('Approved days',approvedLeaves)}
+        ${infoCard('Pending',pendingLeaves)}
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:1rem">
+        <button class="btn btn-sec" style="flex:1" onclick="document.getElementById('emp-detail-overlay').remove()">Close</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click',ev=>{if(ev.target===overlay)overlay.remove();});
+}
+
+function infoCard(label,value){
+  return `<div style="background:#f8fafc;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">${label}</div><div style="font-size:13px;font-weight:600;margin-top:2px;word-break:break-word">${value}</div></div>`;
+}
+function infoCardMasked(label, rawValue, masked, full){
+  const safeFull=(full||'').replace(/'/g,"&#39;");
+  return `<div class="masked-card" data-full="${safeFull}" data-masked="${masked}" style="background:#f8fafc;border-radius:8px;padding:10px 12px"><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">${label}</div><div class="masked-val" style="font-size:13px;font-weight:600;margin-top:2px;word-break:break-word;font-family:monospace">${masked}</div></div>`;
+}
+function toggleRevealIdentity(btn){
+  const revealed=btn.getAttribute('data-revealed')==='1';
+  const cards=document.querySelectorAll('.masked-card');
+  cards.forEach(c=>{
+    const val=c.querySelector('.masked-val');
+    if(!val) return;
+    val.textContent = revealed ? c.getAttribute('data-masked') : c.getAttribute('data-full');
+  });
+  btn.setAttribute('data-revealed', revealed?'0':'1');
+  btn.textContent = revealed ? '👁 Reveal' : '🔒 Hide';
+}
+
 function showEmpPopup(empId){
   const e=D.employees.find(x=>x.id===empId||x._uuid===empId);
   if(!e) return;
