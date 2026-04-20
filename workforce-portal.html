@@ -7036,15 +7036,13 @@ function addHourlyRow(){
 function renderSessionForm(existing){
   const entries=existing&&existing.mode==='session'?existing.entries:[
     {session:'Morning',work:''},
-    {session:'Afternoon',work:''},
     {session:'Evening',work:''}
   ];
   return `
-  <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Break your day into sessions (morning, afternoon, evening, etc.)</div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Log work in two sessions: morning and evening.</div>
   <div id="wl-session-list">
     ${entries.map((e,i)=>sessionRow(e,i)).join('')}
   </div>
-  <button class="btn btn-sec" style="margin-top:8px" onclick="addSessionRow()">+ Add session</button>
   <div class="fld" style="margin-top:14px">
     <label>📝 End-of-day summary (optional)</label>
     <textarea id="wl-summary" rows="2" placeholder="Overall thoughts, blockers, tomorrow's plan…">${existing?.summary||''}</textarea>
@@ -7052,19 +7050,10 @@ function renderSessionForm(existing){
 }
 
 function sessionRow(e,i){
-  return `<div class="wl-srow" style="display:grid;grid-template-columns:180px 1fr 40px;gap:8px;margin-bottom:6px;align-items:center">
-    <input type="text" value="${(e.session||'').replace(/"/g,'&quot;')}" data-k="session" placeholder="e.g. Morning, Client call, Deep work">
+  return `<div class="wl-srow" style="display:grid;grid-template-columns:180px 1fr;gap:8px;margin-bottom:6px;align-items:center">
+    <input type="text" value="${(e.session||'').replace(/"/g,'&quot;')}" data-k="session" placeholder="Morning / Evening" readonly style="background:#f8fafc;font-weight:600;color:var(--navy)">
     <input type="text" value="${(e.work||'').replace(/"/g,'&quot;')}" data-k="work" placeholder="What did you accomplish in this session?">
-    <button onclick="this.parentElement.remove()" style="background:#fee2e2;color:#991b1b;border:none;padding:8px;border-radius:6px;cursor:pointer;font-size:14px">×</button>
   </div>`;
-}
-
-function addSessionRow(){
-  const list=$('wl-session-list');
-  if(!list) return;
-  const div=document.createElement('div');
-  div.innerHTML=sessionRow({session:'',work:''});
-  list.appendChild(div.firstElementChild);
 }
 
 function renderDailyForm(existing){
