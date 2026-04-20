@@ -417,7 +417,8 @@ async function syncFromSupabase(){
       kycCompleted:e.kyc_completed||false,kycCompletedAt:e.kyc_completed_at||null,
       paidLeaveBalance:parseFloat(e.paid_leave_balance)||0,paidLeaveLastAccrued:e.paid_leave_last_accrued||null,
       uan:e.uan||'',
-      salaryStructure:e.salary_structure||'A'
+      salaryStructure:e.salary_structure||'A',
+      bloodGroup:e.blood_group||''
     }));
     if(att!==null) D.attendance=att.map(a=>({_uuid:a.id,empId:a.employee_id,empName:a.employee_name,date:a.date,status:a.status,in:a.in_time,out:a.out_time}));
     if(lvs!==null) D.leaves=lvs.map(l=>({_uuid:l.id,id:l.id,emp:l.employee_name,type:l.leave_type,from:l.from_date,to:l.to_date,days:l.days,reason:l.reason,status:l.status}));
@@ -481,6 +482,7 @@ async function sbSaveEmployee(emp){
   if(emp.selfRegistered!==undefined) payload.self_registered=!!emp.selfRegistered;
   if(emp.passwordHash) payload.password_hash=emp.passwordHash;
   if(emp.empType) payload.emp_type=emp.empType;
+  if(emp.bloodGroup) payload.blood_group=emp.bloodGroup;
 
   try{
     if(emp._uuid){
@@ -3230,7 +3232,15 @@ function renderProfileTab(tab, emp){
       <div class="fld"><label>Phone</label><input type="text" id="pf-phone" value="${emp.phone||''}" maxlength="10" inputmode="numeric"></div>
     </div>
     <div class="fld"><label>Email <span style="color:var(--muted);font-weight:400">(contact admin to change)</span></label><input type="email" value="${emp.email||''}" disabled style="background:#f8fafc;color:var(--muted);cursor:not-allowed"></div>
-    <div class="fld"><label>Date of birth</label><input type="date" id="pf-dob" value="${emp.dob||''}"></div>
+    <div class="frow">
+      <div class="fld"><label>Date of birth</label><input type="date" id="pf-dob" value="${emp.dob||''}"></div>
+      <div class="fld"><label>🩸 Blood group</label>
+        <select id="pf-bg">
+          <option value="" ${!emp.bloodGroup?'selected':''}>— Not specified —</option>
+          ${['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bg=>`<option value="${bg}" ${emp.bloodGroup===bg?'selected':''}>${bg}</option>`).join('')}
+        </select>
+      </div>
+    </div>
     <div class="fld"><label>Address</label><textarea id="pf-address" rows="2">${emp.address||''}</textarea></div>
     <button class="btn btn-primary" style="background:#0f766e" onclick="saveProfilePersonal()">Save changes</button>
   `;
@@ -3311,12 +3321,13 @@ async function saveProfilePersonal(){
   const phone=($('pf-phone')||{}).value?.trim();
   const dob=($('pf-dob')||{}).value;
   const address=($('pf-address')||{}).value?.trim();
+  const bloodGroup=($('pf-bg')||{}).value||'';
   if(!name){if(msg)msg.innerHTML=`<div class="alert alert-e">Name cannot be empty</div>`;return;}
   if(phone&&!/^\d{10}$/.test(phone)){if(msg)msg.innerHTML=`<div class="alert alert-e">Phone must be 10 digits</div>`;return;}
   if(msg)msg.innerHTML=`<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">Saving…</div>`;
-  const r=await sb('employees','PATCH',{name,phone,dob:dob||null,address},`?id=eq.${emp._uuid}`);
+  const r=await sb('employees','PATCH',{name,phone,dob:dob||null,address,blood_group:bloodGroup||null},`?id=eq.${emp._uuid}`);
   if(!r){if(msg)msg.innerHTML=`<div class="alert alert-e">Save failed. Try again.</div>`;return;}
-  Object.assign(emp,{name,phone,dob,address});
+  Object.assign(emp,{name,phone,dob,address,bloodGroup});
   const idx=D.employees.findIndex(e=>e._uuid===emp._uuid); if(idx>=0) D.employees[idx]=emp;
   save();
   if(msg)msg.innerHTML=`<div class="alert alert-s">✅ Personal details updated</div>`;
@@ -4625,7 +4636,7 @@ function openEmpModal(id){
   <div class="fld"><label>Role</label><input type="text" id="ef-role" value="${e.role||''}"></div></div>
   <div class="frow"><div class="fld"><label>CTC (₹/month)</label><input type="number" id="ef-sal" value="${e.salary||0}"></div>
   <div class="fld"><label>Status</label><select id="ef-st"><option ${(e.status||'Active')==='Active'?'selected':''}>Active</option><option ${e.status==='Pending'?'selected':''}>Pending</option><option ${e.status==='Inactive'?'selected':''}>Inactive</option></select></div></div>
-  <div class="fld"><label>Employee type</label>
+  <div class="frow"><div class="fld"><label>Employee type</label>
     <select id="ef-type">
       <option value="office" ${(e.empType||'office')==='office'?'selected':''}>🏢 Office employee</option>
       <option value="field" ${e.empType==='field'?'selected':''}>🚧 Field employee (moves daily)</option>
@@ -4633,11 +4644,17 @@ function openEmpModal(id){
       <option value="hybrid" ${e.empType==='hybrid'?'selected':''}>🔄 Hybrid employee</option>
     </select>
   </div>
+  <div class="fld"><label>Blood group</label>
+    <select id="ef-bg">
+      <option value="" ${!e.bloodGroup?'selected':''}>— Not specified —</option>
+      ${['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bg=>`<option value="${bg}" ${e.bloodGroup===bg?'selected':''}>${bg}</option>`).join('')}
+    </select>
+  </div></div>
   <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('emp-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="saveEmp()">${id?'Save changes':'Add employee'}</button></div>
   </div></div>`;
 }
 async function saveEmp(){
-  const data={name:$('ef-name').value,email:$('ef-email').value,phone:$('ef-ph').value,dob:$('ef-dob-birth').value,joined:$('ef-doj').value,dept:$('ef-dept').value,role:$('ef-role').value,salary:parseInt($('ef-sal').value)||0,status:$('ef-st').value,empType:$('ef-type').value||'office'};
+  const data={name:$('ef-name').value,email:$('ef-email').value,phone:$('ef-ph').value,dob:$('ef-dob-birth').value,joined:$('ef-doj').value,dept:$('ef-dept').value,role:$('ef-role').value,salary:parseInt($('ef-sal').value)||0,status:$('ef-st').value,empType:$('ef-type').value||'office',bloodGroup:$('ef-bg')?.value||''};
   if(!data.name||!data.email){alert('Name and email are required');return;}
   if(editingEmpId){
     const existing=D.employees.find(e=>e.id===editingEmpId);
@@ -4976,6 +4993,7 @@ function showEmployeeDetail(empIdOrUuid){
         ${infoCard('Phone',e.phone||'—')}
         ${infoCard('Date of birth',e.dob||'—')}
         ${infoCard('Joined',e.joined||'—')}
+        ${infoCard('🩸 Blood group',e.bloodGroup||'—')}
         ${infoCard('Status',e.status||'Active')}
         ${infoCard('Salary','₹'+fmt(e.salary||0))}
       </div>
@@ -6281,7 +6299,8 @@ function pgIDCards(){
 function idCardHTML(e,mini=false){
   const color=e.empType==='field'?'#f59e0b':e.empType==='remote'?'#10b981':'#1a1a4e';
   return `<div style="background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)${mini?';max-width:260px':''}">
-    <div style="background:${color};color:#fff;padding:12px;text-align:center">
+    <div style="background:${color};color:#fff;padding:12px;text-align:center;position:relative">
+      ${e.bloodGroup?`<div style="position:absolute;top:8px;right:8px;background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:800;letter-spacing:.5px">🩸 ${e.bloodGroup}</div>`:''}
       <div style="font-size:9px;letter-spacing:2px;opacity:.8;margin-bottom:4px">${D.settings.company||'KREAYOTOO SOLUTIONS'}</div>
       <div style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,.2);border:2px solid rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;margin:0 auto 6px;font-size:20px;font-weight:800">${initials(e.name)}</div>
     </div>
