@@ -813,7 +813,7 @@ function renderApp(){
       </div>`:''}
       <div style="flex:1;display:flex;justify-content:center;padding:0 1rem;max-width:500px;margin:0 auto">
         <div style="position:relative;width:100%;max-width:380px">
-          <input type="text" id="universal-search" placeholder="🔍 Search employee — name, ID, Aadhaar, PAN, email…" autocomplete="off"
+          <input type="text" id="universal-search" placeholder="🔍 Search anything — employees, leaves, expenses, pages…" autocomplete="off"
             oninput="runUniversalSearch(this.value)"
             onfocus="runUniversalSearch(this.value)"
             onblur="setTimeout(()=>{const r=document.getElementById('univ-search-results');if(r)r.style.display='none'},200)"
@@ -3855,17 +3855,17 @@ function getFilteredEmps(){
 function empRows(list, start, end){
   const typeMap={field:'🚧 Field',remote:'🏠 Remote',hybrid:'🔄 Hybrid',office:'🏢 Office'};
   const typeBadge={field:'ba',remote:'bb',hybrid:'bp',office:'bg'};
-  return list.slice(start,end).map((e,i)=>`<tr>
+  return list.slice(start,end).map((e,i)=>`<tr style="cursor:pointer" onclick="showEmployeeDetail('${e._uuid||e.id}')" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
     <td style="padding-left:10px;color:var(--muted);font-size:11px">${start+i+1}</td>
-    <td><div style="display:flex;align-items:center;gap:7px">${av(e.name,26)}<div><div style="font-size:12px;font-weight:600">${e.name}</div>${e.selfRegistered?'<div style="font-size:10px;color:#0f766e;font-weight:600">Self-registered</div>':''}</div></div></td>
+    <td><div style="display:flex;align-items:center;gap:7px">${av(e.name,26)}<div><div style="font-size:12px;font-weight:600;color:var(--navy)">${e.name}</div>${e.selfRegistered?'<div style="font-size:10px;color:#0f766e;font-weight:600">Self-registered</div>':''}</div></div></td>
     <td style="font-size:12px">${e.dept||'—'}</td>
     <td style="font-size:12px">${e.role||'—'}</td>
     <td style="color:var(--muted);font-size:11px">${e.email}</td>
     <td style="font-size:12px">${e.phone||'—'}</td>
     <td style="font-size:11px;color:var(--muted)">${e.dob||'—'}</td>
     <td><span class="badge ${typeBadge[e.empType||'office']}">${typeMap[e.empType||'office']}</span></td>
-    <td>${e.empType==='field'?`<button class="btn-link" style="font-size:11px" onclick="viewFieldTrail('${e.id}','${e.name}')">📍 Trail</button>`:badge(e.status||'Active')}</td>
-    <td><div style="display:flex;gap:2px">
+    <td>${e.empType==='field'?`<button class="btn-link" style="font-size:11px" onclick="event.stopPropagation();viewFieldTrail('${e.id}','${e.name}')">📍 Trail</button>`:badge(e.status||'Active')}</td>
+    <td><div style="display:flex;gap:2px" onclick="event.stopPropagation()">
       <button class="btn-icon" title="Edit" onclick="openEmpModal('${e.id}')">✏</button>
       <button class="btn-icon btn-del" title="Delete" onclick="delEmp('${e.id}','${e.name}')">🗑</button>
       <button class="btn-icon" title="Set password" onclick="setEmpPw('${e.id}','${e.name}')">🔑</button>
@@ -4211,33 +4211,202 @@ function _doUniversalSearch(query){
   const q=(query||'').trim().toLowerCase();
   if(!q){ box.style.display='none'; box.innerHTML=''; return; }
   const qDigits=q.replace(/\D/g,'');
-  const matches=(D.employees||[]).filter(e=>{
-    if(e.name && e.name.toLowerCase().includes(q)) return true;
-    if(e.id && e.id.toLowerCase().includes(q)) return true;
-    if(e.email && e.email.toLowerCase().includes(q)) return true;
-    if(e.pan && e.pan.toLowerCase().includes(q)) return true;
-    if(qDigits.length>=3){
-      if(e.aadhaar && e.aadhaar.includes(qDigits)) return true;
-      if(e.phone && e.phone.replace(/\D/g,'').includes(qDigits)) return true;
-    }
-    return false;
-  }).slice(0,8);
-  if(!matches.length){
-    box.innerHTML=`<div style="padding:14px;color:var(--muted);font-size:13px;text-align:center">No employees match "${query}"</div>`;
+
+  const results={employees:[],leaves:[],expenses:[],performance:[],attendance:[],holidays:[],pages:[],departments:[]};
+
+  // 1. Employees (full profile search)
+  (D.employees||[]).forEach(e=>{
+    const hit = (e.name && e.name.toLowerCase().includes(q)) ||
+                (e.id && e.id.toLowerCase().includes(q)) ||
+                (e.email && e.email.toLowerCase().includes(q)) ||
+                (e.pan && e.pan.toLowerCase().includes(q)) ||
+                (e.role && e.role.toLowerCase().includes(q)) ||
+                (e.dept && e.dept.toLowerCase().includes(q)) ||
+                (e.bankName && e.bankName.toLowerCase().includes(q)) ||
+                (qDigits.length>=3 && (
+                  (e.aadhaar && e.aadhaar.includes(qDigits)) ||
+                  (e.phone && e.phone.replace(/\D/g,'').includes(qDigits)) ||
+                  (e.bankAccount && e.bankAccount.includes(qDigits)) ||
+                  (e.uan && e.uan.includes(qDigits))
+                ));
+    if(hit) results.employees.push(e);
+  });
+
+  // 2. Leaves (by employee name, type, status, reason, date)
+  (D.leaves||[]).forEach(l=>{
+    const blob=`${l.emp||''} ${l.type||''} ${l.status||''} ${l.reason||''} ${l.from||''} ${l.to||''}`.toLowerCase();
+    if(blob.includes(q)) results.leaves.push(l);
+  });
+
+  // 3. Expenses (by employee name, category, description, status, amount)
+  (D.expenses||[]).forEach(ex=>{
+    const blob=`${ex.emp||''} ${ex.cat||''} ${ex.desc||''} ${ex.status||''} ${ex.amount||''} ${ex.date||''}`.toLowerCase();
+    if(blob.includes(q)) results.expenses.push(ex);
+  });
+
+  // 4. Performance reviews
+  (D.performance||[]).forEach(p=>{
+    const blob=`${p.emp||''} ${p.quarter||''} ${p.rating||''} ${p.notes||''}`.toLowerCase();
+    if(blob.includes(q)) results.performance.push(p);
+  });
+
+  // 5. Attendance (by employee name, date, status)
+  (D.attendance||[]).forEach(a=>{
+    const blob=`${a.empName||''} ${a.date||''} ${a.status||''}`.toLowerCase();
+    if(blob.includes(q)) results.attendance.push(a);
+  });
+
+  // 6. Holidays
+  (D.holidays||[]).forEach(h=>{
+    const blob=`${h.name||''} ${h.date||''} ${h.type||''}`.toLowerCase();
+    if(blob.includes(q)) results.holidays.push(h);
+  });
+
+  // 7. Departments
+  const deptList=[...new Set((D.employees||[]).map(e=>e.dept).filter(Boolean))];
+  deptList.forEach(d=>{ if(d.toLowerCase().includes(q)) results.departments.push(d); });
+
+  // 8. Navigation / pages
+  const pages=[
+    {name:'Dashboard',emoji:'⊞',page:'dashboard',keywords:'home overview stats'},
+    {name:'Employees',emoji:'👥',page:'employees',keywords:'directory staff people'},
+    {name:'Attendance',emoji:'📅',page:'attendance',keywords:'check-in check-out present absent'},
+    {name:'Leave',emoji:'🏖',page:'leave',keywords:'vacation off sick'},
+    {name:'Payroll',emoji:'💰',page:'payroll',keywords:'salary payslip ctc pay'},
+    {name:'Expenses',emoji:'🧾',page:'expenses',keywords:'claim reimbursement travel food'},
+    {name:'Performance',emoji:'⭐',page:'performance',keywords:'review rating appraisal'},
+    {name:'Holidays',emoji:'📆',page:'holidays',keywords:'festival national company calendar'},
+    {name:'Org Chart',emoji:'🏢',page:'orgchart',keywords:'hierarchy reporting structure'},
+    {name:'ID Cards',emoji:'🪪',page:'idcards',keywords:'badge identity'},
+    {name:'Locations',emoji:'🗺',page:'locations',keywords:'office map login'},
+    {name:'Notifications',emoji:'🔔',page:'notifications',keywords:'alerts updates'},
+    {name:'Settings',emoji:'⚙',page:'settings',keywords:'preferences config'},
+    {name:'Companies',emoji:'🏭',page:'companies',keywords:'tenant organization'}
+  ];
+  pages.forEach(p=>{
+    if(p.name.toLowerCase().includes(q)||p.keywords.includes(q)) results.pages.push(p);
+  });
+
+  // Count totals
+  const totalHits = results.employees.length+results.leaves.length+results.expenses.length+results.performance.length+results.attendance.length+results.holidays.length+results.pages.length+results.departments.length;
+  if(!totalHits){
+    box.innerHTML=`<div style="padding:14px;color:var(--muted);font-size:13px;text-align:center">No results for "${query}"</div>`;
     box.style.display='block';return;
   }
-  box.innerHTML=matches.map(e=>{
-    const kycBadge=e.kycCompleted?'<span style="font-size:10px;background:#dcfce7;color:#166534;padding:2px 6px;border-radius:10px;font-weight:600">KYC ✓</span>':'<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:10px;font-weight:600">KYC pending</span>';
-    return `<div onclick="showEmployeeDetail('${e._uuid||e.id}')" style="padding:10px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;align-items:center;gap:10px" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
-      ${av(e.name,32)}
-      <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:700;color:#111;display:flex;align-items:center;gap:6px">${e.name} ${kycBadge}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:1px">${e.id||'—'} · ${e.dept||'—'} · ${e.email||''}</div>
-      </div>
-      <div style="font-size:14px;color:var(--muted)">→</div>
-    </div>`;
-  }).join('');
+
+  // Build HTML with sections
+  let html='';
+
+  // Section renderer
+  const section=(label,count,rows)=>{
+    if(!rows.length) return '';
+    return `<div style="padding:6px 12px;background:#f8fafc;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid #f1f5f9">${label} <span style="background:#e2e8f0;color:#475569;padding:1px 6px;border-radius:8px;margin-left:4px">${count}</span></div>${rows.join('')}`;
+  };
+
+  // Pages (top, for quick nav)
+  if(results.pages.length){
+    const pageRows=results.pages.slice(0,5).map(p=>`
+      <div onclick="closeSearch();nav('${p.page}')" style="padding:8px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;align-items:center;gap:10px" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+        <div style="font-size:18px">${p.emoji}</div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:600">${p.name}</div><div style="font-size:11px;color:var(--muted)">Navigate to page</div></div>
+        <div style="font-size:12px;color:var(--muted)">Open →</div>
+      </div>`);
+    html+=section('Pages',results.pages.length,pageRows);
+  }
+
+  // Employees
+  if(results.employees.length){
+    const rows=results.employees.slice(0,6).map(e=>{
+      const kycBadge=e.kycCompleted?'<span style="font-size:10px;background:#dcfce7;color:#166534;padding:2px 6px;border-radius:10px;font-weight:600">KYC ✓</span>':'<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:10px;font-weight:600">KYC pending</span>';
+      return `<div onclick="closeSearch();showEmployeeDetail('${e._uuid||e.id}')" style="padding:8px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;align-items:center;gap:10px" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+        ${av(e.name,28)}
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px">${e.name} ${kycBadge}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:1px">${e.id||'—'} · ${e.dept||'—'} · ${e.role||''}</div>
+        </div>
+        <div style="font-size:12px;color:var(--muted)">→</div>
+      </div>`;
+    });
+    html+=section('Employees',results.employees.length,rows);
+  }
+
+  // Departments
+  if(results.departments.length){
+    const rows=results.departments.slice(0,4).map(d=>{
+      const count=(D.employees||[]).filter(e=>e.dept===d).length;
+      return `<div onclick="closeSearch();nav('employees');setTimeout(()=>{const f=document.getElementById('emp-dept-filter');if(f){f.value='${d}';f.dispatchEvent(new Event('change'))}},100)" style="padding:8px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;align-items:center;gap:10px" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+        <div style="font-size:18px">🏢</div>
+        <div style="flex:1"><div style="font-size:13px;font-weight:600">${d}</div><div style="font-size:11px;color:var(--muted)">${count} employee${count!==1?'s':''}</div></div>
+      </div>`;
+    });
+    html+=section('Departments',results.departments.length,rows);
+  }
+
+  // Leaves
+  if(results.leaves.length){
+    const rows=results.leaves.slice(0,5).map(l=>{
+      const statusColor=l.status==='Approved'?'#166534':l.status==='Rejected'?'#991b1b':'#92400e';
+      const statusBg=l.status==='Approved'?'#dcfce7':l.status==='Rejected'?'#fee2e2':'#fef3c7';
+      return `<div onclick="closeSearch();nav('leave')" style="padding:8px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;align-items:center;gap:10px" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+        <div style="font-size:18px">🏖</div>
+        <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${l.emp||'—'} · ${l.type||''} leave</div><div style="font-size:11px;color:var(--muted)">${l.from||''}${l.to&&l.to!==l.from?' → '+l.to:''} · ${l.days||1} day${(l.days||1)>1?'s':''}</div></div>
+        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:${statusBg};color:${statusColor}">${l.status||'Pending'}</span>
+      </div>`;
+    });
+    html+=section('Leaves',results.leaves.length,rows);
+  }
+
+  // Expenses
+  if(results.expenses.length){
+    const rows=results.expenses.slice(0,5).map(e=>{
+      const statusColor=e.status==='Approved'?'#166534':e.status==='Rejected'?'#991b1b':'#92400e';
+      const statusBg=e.status==='Approved'?'#dcfce7':e.status==='Rejected'?'#fee2e2':'#fef3c7';
+      return `<div onclick="closeSearch();nav('expenses')" style="padding:8px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;align-items:center;gap:10px" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+        <div style="font-size:18px">🧾</div>
+        <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${e.emp||'—'} · ₹${fmt(e.amount||0)}</div><div style="font-size:11px;color:var(--muted)">${e.cat||''} · ${e.date||''} · ${(e.desc||'').substring(0,40)}${(e.desc||'').length>40?'…':''}</div></div>
+        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:${statusBg};color:${statusColor}">${e.status||'Pending'}</span>
+      </div>`;
+    });
+    html+=section('Expenses',results.expenses.length,rows);
+  }
+
+  // Performance
+  if(results.performance.length){
+    const rows=results.performance.slice(0,4).map(p=>`
+      <div onclick="closeSearch();nav('performance')" style="padding:8px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;align-items:center;gap:10px" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+        <div style="font-size:18px">⭐</div>
+        <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${p.emp||'—'} · ${p.quarter||''}</div><div style="font-size:11px;color:var(--muted)">Rating ${p.rating||0}/5 · Goals ${p.achieved||0}/${p.goals||0}</div></div>
+      </div>`);
+    html+=section('Performance Reviews',results.performance.length,rows);
+  }
+
+  // Attendance
+  if(results.attendance.length){
+    const rows=results.attendance.slice(0,4).map(a=>`
+      <div onclick="closeSearch();nav('attendance')" style="padding:8px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;align-items:center;gap:10px" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+        <div style="font-size:18px">📅</div>
+        <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${a.empName||'—'} · ${a.date||''}</div><div style="font-size:11px;color:var(--muted)">${a.status||'—'} · In: ${a.in||'--'} · Out: ${a.out||'--'}</div></div>
+      </div>`);
+    html+=section('Attendance',results.attendance.length,rows);
+  }
+
+  // Holidays
+  if(results.holidays.length){
+    const rows=results.holidays.slice(0,4).map(h=>`
+      <div onclick="closeSearch();nav('holidays')" style="padding:8px 12px;border-bottom:1px solid #f1f5f9;cursor:pointer;display:flex;align-items:center;gap:10px" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+        <div style="font-size:18px">🎉</div>
+        <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${h.name||'—'}</div><div style="font-size:11px;color:var(--muted)">${h.date||''} · ${h.type||'Festival'}</div></div>
+      </div>`);
+    html+=section('Holidays',results.holidays.length,rows);
+  }
+
+  box.innerHTML=html;
   box.style.display='block';
+}
+
+function closeSearch(){
+  const box=$('univ-search-results'); if(box){box.style.display='none';}
+  const inp=$('universal-search'); if(inp) inp.value='';
 }
 
 // Detailed employee view with full KYC (admin-only access enforced via UI)
