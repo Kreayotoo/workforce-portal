@@ -6827,10 +6827,20 @@ async function deleteLoc(id){
   D.officeLocations=D.officeLocations.filter(l=>l.id!==id);
   save();nav('settings');
 }
-function saveSettings(){
+async function saveSettings(){
   D.settings={...D.settings,company:$('st-cn').value,email:$('st-em').value,tz:$('st-tz').value,currency:$('st-cu').value,hours:parseInt($('st-wh').value)||9};
-  save();$('st-msg').innerHTML=`<div class="alert alert-s" style="margin-bottom:8px">Settings saved!</div>`;
-  setTimeout(()=>{if($('st-msg'))$('st-msg').innerHTML='';},2000);
+  save();
+  if($('st-msg'))$('st-msg').innerHTML=`<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;margin-bottom:8px">💾 Saving…</div>`;
+  try{
+    await sbSaveSettings();
+    if($('st-msg'))$('st-msg').innerHTML=`<div class="alert alert-s" style="margin-bottom:8px">✅ Settings saved!</div>`;
+    showToast('✅ Settings saved','success');
+  }catch(e){
+    console.error('Settings save error:',e);
+    if($('st-msg'))$('st-msg').innerHTML=`<div class="alert alert-e" style="margin-bottom:8px">❌ Save failed: ${e.message||'Network error'}</div>`;
+    showToast('❌ Settings save failed','info');
+  }
+  setTimeout(()=>{if($('st-msg'))$('st-msg').innerHTML='';},3000);
 }
 function useMyLocation(){
   if(!navigator.geolocation){alert('Geolocation not supported');return;}
