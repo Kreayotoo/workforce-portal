@@ -2283,7 +2283,6 @@ function empDashboard(){
   </div>
   `:''}
 
-  ${celebrationsPanel()}
   <div class="stat-grid">
     <div class="stat"><div class="stat-lbl">Days present</div><div class="stat-val">${present}</div><div class="stat-sub">This month</div></div>
     <div class="stat"><div class="stat-lbl">Leave taken</div><div class="stat-val">${approved}</div><div class="stat-sub">Days this year</div></div>
@@ -2854,6 +2853,23 @@ async function submitEmpLeave(){
 function calcSalaryBreakdown(ctc){
   const c=parseFloat(ctc)||0;
   if(c<=0) return null;
+
+  // Guard: CTC too low for this salary structure.
+  // Fixed components (Conveyance 1,250 + Travel 1,600 = 2,850) + min deductions
+  // (PF ₹1,800×2 + PT ₹200 = ₹3,800) = ₹6,650 floor just for fixed + deductions.
+  // Plus Basic/HRA/LTA make this viable only above ~₹20,000 CTC.
+  const MIN_VIABLE_CTC = 20000;
+  if(c < MIN_VIABLE_CTC){
+    return {
+      ctc: c,
+      basic:0, hra:0, lta:0, conveyance:0, travel:0, special:0, deputation:0,
+      totalEarnings:0, gross:0,
+      professionalTax:0, employeePf:0, employerPf:0, mpp:0, esic:0, otherDeduction:0,
+      totalDeductions:0, netBeforeLop:0,
+      _belowMinimum: true,
+      _minRequired: MIN_VIABLE_CTC
+    };
+  }
 
   const basic = Math.round(c * 0.45);
   const hra = Math.round(basic * 0.40);
@@ -4339,8 +4355,6 @@ function pgDashboard(){
   <div class="modules-grid" style="grid-template-columns:repeat(auto-fill,minmax(120px,1fr));margin-bottom:.75rem">
     ${mods.map(([ic,lb,pg])=>`<div class="mod-card" onclick="nav('${pg}')"><div class="mod-ic">${ic}</div><div class="mod-lb">${lb}</div>${pg==='notifications'&&unreadCount()>0?'<div class="mod-dot"></div>':''}</div>`).join('')}
   </div>
-
-  ${celebrationsPanel()}
 
   <div class="stat-grid" style="margin-bottom:.75rem">
     <div class="stat" style="padding:.6rem .875rem"><div class="stat-lbl">Total employees</div><div class="stat-val" style="font-size:20px">${D.employees.length}</div><div class="stat-sub">${DEPTS.length} departments</div></div>
@@ -5894,9 +5908,12 @@ function pgPayroll(){
   const sel=window._adminPayrollMonth||currentMonth();
   const months=last12Months();
   const allSlips=D.employees.filter(e=>e.salary&&e.salary>0).map(e=>({emp:e,slip:calcPayslip(e,sel)}));
-  const totalCtc=allSlips.reduce((s,x)=>s+(x.slip?.ctc||0),0);
-  const totalNet=allSlips.reduce((s,x)=>s+(x.slip?.netPay||0),0);
-  const totalLop=allSlips.reduce((s,x)=>s+(x.slip?.lopDeduction||0),0);
+  // Totals exclude below-minimum-CTC rows (can't actually pay those)
+  const validSlips=allSlips.filter(x=>x.slip && !x.slip._belowMinimum);
+  const totalCtc=validSlips.reduce((s,x)=>s+(x.slip?.ctc||0),0);
+  const totalNet=validSlips.reduce((s,x)=>s+(x.slip?.netPay||0),0);
+  const totalLop=validSlips.reduce((s,x)=>s+(x.slip?.lopDeduction||0),0);
+  const belowMinCount=allSlips.filter(x=>x.slip && x.slip._belowMinimum).length;
   const activeCount=D.employees.filter(e=>e.status==='Active').length;
   return `
   <div class="page-hd">
@@ -5935,6 +5952,17 @@ function pgPayroll(){
           <td>${e.dept||'—'}</td>
           <td colspan="5" style="text-align:center;color:var(--muted);font-style:italic">CTC not set</td>
           <td><input type="number" value="${e.salary||0}" style="width:80px" onblur="updateSalary('${e.id}',this.value)" placeholder="CTC"></td>
+          <td>—</td>
+        </tr>`;
+      }
+      // Below-minimum CTC warning
+      if(slip._belowMinimum){
+        return `<tr style="background:#fef2f2">
+          <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:8px">${av(e.name)}${e.name}</div></td>
+          <td>${e.dept||'—'}</td>
+          <td>₹${fmt(slip.ctc)}</td>
+          <td colspan="4" style="color:#991b1b;font-size:12px"><strong>⚠ CTC too low.</strong> Minimum viable CTC is <strong>₹${fmt(slip._minRequired)}</strong> for this salary structure (fixed components alone total ₹6,650).</td>
+          <td><input type="number" value="${e.salary||0}" style="width:80px" onblur="updateSalary('${e.id}',this.value)"></td>
           <td>—</td>
         </tr>`;
       }
