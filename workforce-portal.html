@@ -5732,54 +5732,102 @@ async function exportAttendanceExcel(){
 
   showToast('📊 Building Excel file…','info');
 
-  // Collect rows from both sources (sessions + legacy attendance)
-  const rows=[];
   const empMap={};
   D.employees.forEach(e=>{empMap[e.name]=e; empMap[e._uuid]=e; empMap[e.id]=e;});
 
-  // From sessions
+  // CONSOLIDATE: one row per employee per date
+  // Key = employee + date. Merge all sessions into earliest check-in, latest check-out, total hours.
+  const byKey={};
+
+  // Process sessions first (the real data with timestamps)
   (D.attSessions||[]).forEach(s=>{
     if(!s.date||s.date<fromDate||s.date>toDate) return;
     const emp=empMap[s.empName]||empMap[s.empId];
     if(empFilter&&emp&&emp.id!==empFilter) return;
-    const checkIn=s.checkIn?new Date(s.checkIn):null;
-    const checkOut=s.checkOut?new Date(s.checkOut):null;
-    let hoursWorked=0;
-    if(checkIn&&checkOut) hoursWorked=Math.round((checkOut-checkIn)/36000)/100; // 2 dp
-    rows.push({
-      date:s.date,
-      employee:s.empName||'Unknown',
-      employeeId:emp?.id||'—',
-      department:emp?.dept||'—',
-      checkIn:checkIn?checkIn.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false}):'—',
-      checkOut:checkOut?checkOut.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false}):'Active',
-      hoursWorked: hoursWorked||'—',
-      status:'Present',
-      location:s.location||'—',
-      source:'Session'
-    });
+    const key=`${s.empName}|${s.date}`;
+    if(!byKey[key]){
+      byKey[key]={
+        date:s.date,
+        employee:s.empName||'Unknown',
+        employeeId:emp?.id||'—',
+        department:emp?.dept||'—',
+        firstCheckIn:null,
+        lastCheckOut:null,
+        totalMillis:0,
+        sessionCount:0,
+        hasActive:false,
+        locations:new Set(),
+        status:'Present',
+        source:'Session'
+      };
+    }
+    const row=byKey[key];
+    const ci=s.checkIn?new Date(s.checkIn):null;
+    const co=s.checkOut?new Date(s.checkOut):null;
+    if(ci){
+      if(!row.firstCheckIn||ci<row.firstCheckIn) row.firstCheckIn=ci;
+    }
+    if(co){
+      if(!row.lastCheckOut||co>row.lastCheckOut) row.lastCheckOut=co;
+      if(ci) row.totalMillis += (co-ci);
+    } else if(ci){
+      row.hasActive=true; // currently checked in
+    }
+    row.sessionCount++;
+    if(s.location) row.locations.add(s.location);
   });
 
-  // From legacy attendance (skip dates already covered by sessions for same employee)
-  const sessionKeys=new Set(rows.map(r=>`${r.employee}|${r.date}`));
+  // Fill in legacy attendance for employee+date pairs not already covered by sessions
   (D.attendance||[]).forEach(a=>{
     if(!a.date||a.date<fromDate||a.date>toDate) return;
     const emp=empMap[a.empName]||empMap[a.empId];
     if(empFilter&&emp&&emp.id!==empFilter) return;
     const key=`${a.empName}|${a.date}`;
-    if(sessionKeys.has(key)) return; // already covered
-    rows.push({
+    if(byKey[key]) return; // already have session data, don't double-count
+    byKey[key]={
       date:a.date,
       employee:a.empName||'Unknown',
       employeeId:emp?.id||'—',
       department:emp?.dept||'—',
-      checkIn:a.in||'—',
-      checkOut:a.out||'—',
-      hoursWorked:'—',
-      status:a.status||'—',
-      location:'—',
-      source:'Manual'
-    });
+      firstCheckIn:null,
+      lastCheckOut:null,
+      totalMillis:0,
+      sessionCount:0,
+      hasActive:false,
+      locations:new Set(),
+      status:a.status||'Present',
+      source:'Manual',
+      manualIn:a.in||'—',
+      manualOut:a.out||'—'
+    };
+  });
+
+  // Convert to flat rows
+  const rows=Object.values(byKey).map(r=>{
+    const checkIn = r.firstCheckIn
+      ? r.firstCheckIn.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false})
+      : (r.manualIn||'—');
+    const checkOut = r.hasActive
+      ? 'Active'
+      : r.lastCheckOut
+        ? r.lastCheckOut.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false})
+        : (r.manualOut||'—');
+    const hoursWorked = r.totalMillis>0 ? Math.round((r.totalMillis/3600000)*100)/100 : '—';
+    const location = r.locations.size>0 ? Array.from(r.locations).join(', ') : '—';
+    const sessionCol = r.sessionCount>1 ? r.sessionCount : '';
+    return {
+      date:r.date,
+      employee:r.employee,
+      employeeId:r.employeeId,
+      department:r.department,
+      checkIn,
+      checkOut,
+      hoursWorked,
+      sessionsCount:sessionCol,
+      status:r.status,
+      location,
+      source:r.source
+    };
   });
 
   // Sort by date desc, then employee
@@ -5807,48 +5855,48 @@ async function exportAttendanceExcel(){
   if(typeof XLSX!=='undefined'){
     const header=[
       'Date','Employee','Employee ID','Department',
-      'Check-in','Check-out','Hours Worked','Status','Location','Source'
+      'First Check-in','Last Check-out','Hours Worked','Sessions','Status','Location','Source'
     ];
     const data=[header, ...rows.map(r=>[
       r.date, r.employee, r.employeeId, r.department,
-      r.checkIn, r.checkOut, r.hoursWorked, r.status, r.location, r.source
+      r.checkIn, r.checkOut, r.hoursWorked, r.sessionsCount, r.status, r.location, r.source
     ])];
 
-    // Summary row
+    // Summary rows
     const totalHours=rows.reduce((s,r)=>s+(typeof r.hoursWorked==='number'?r.hoursWorked:0),0);
     const presentCount=rows.filter(r=>r.status==='Present').length;
+    const uniqueEmps=new Set(rows.map(r=>r.employee)).size;
     data.push([]);
     data.push(['SUMMARY']);
-    data.push(['Total records:', rows.length]);
+    data.push(['Date range:', `${fromDate} to ${toDate}`]);
+    data.push(['Total days recorded:', rows.length]);
+    data.push(['Unique employees:', uniqueEmps]);
     data.push(['Present count:', presentCount]);
     data.push(['Total hours worked:', Math.round(totalHours*100)/100]);
-    data.push(['Date range:', `${fromDate} to ${toDate}`]);
     data.push(['Generated:', new Date().toLocaleString('en-IN')]);
 
     const ws=XLSX.utils.aoa_to_sheet(data);
-    // Column widths
     ws['!cols']=[
       {wch:12},{wch:22},{wch:10},{wch:14},
-      {wch:10},{wch:10},{wch:12},{wch:12},{wch:28},{wch:10}
+      {wch:14},{wch:14},{wch:12},{wch:10},{wch:12},{wch:28},{wch:10}
     ];
-    // Freeze top row
     ws['!freeze']={xSplit:0,ySplit:1};
 
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
     const filename=`Attendance_${fromDate}_to_${toDate}${empFilter?'_'+(empMap[empFilter]?.name||'emp').replace(/\s+/g,'_'):''}.xlsx`;
     XLSX.writeFile(wb, filename);
-    showToast(`✅ Downloaded ${rows.length} records`,'success');
+    showToast(`✅ Downloaded ${rows.length} rows (${uniqueEmps} employees)`,'success');
   }
 }
 
 // CSV fallback if SheetJS fails to load
 function downloadAttendanceCSV(rows, fromDate, toDate){
   const esc=s=>`"${String(s||'').replace(/"/g,'""')}"`;
-  const header=['Date','Employee','Employee ID','Department','Check-in','Check-out','Hours Worked','Status','Location','Source'];
+  const header=['Date','Employee','Employee ID','Department','First Check-in','Last Check-out','Hours Worked','Sessions','Status','Location','Source'];
   const lines=[header.join(',')];
   rows.forEach(r=>{
-    lines.push([r.date,esc(r.employee),r.employeeId,esc(r.department),r.checkIn,r.checkOut,r.hoursWorked,r.status,esc(r.location),r.source].join(','));
+    lines.push([r.date,esc(r.employee),r.employeeId,esc(r.department),r.checkIn,r.checkOut,r.hoursWorked,r.sessionsCount,r.status,esc(r.location),r.source].join(','));
   });
   const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
   const url=URL.createObjectURL(blob);
@@ -5857,7 +5905,7 @@ function downloadAttendanceCSV(rows, fromDate, toDate){
   a.download=`Attendance_${fromDate}_to_${toDate}.csv`;
   a.click();
   URL.revokeObjectURL(url);
-  showToast(`✅ Downloaded ${rows.length} records (CSV)`,'success');
+  showToast(`✅ Downloaded ${rows.length} rows (CSV)`,'success');
 }
 
 async function saveAtt(){
