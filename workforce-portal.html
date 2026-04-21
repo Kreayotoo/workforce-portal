@@ -2323,6 +2323,30 @@ function empDashboard(){
   const slip=calcPayslip(emp, currentMonth());
   const net=slip?slip.netPay:0;
 
+  // Build unified recent attendance list from sessions + legacy, dedupe by date, newest first
+  const attByDate={};
+  mySessions.forEach(s=>{
+    if(!s.date) return;
+    if(!attByDate[s.date]){
+      attByDate[s.date]={
+        date:s.date,
+        in:s.checkIn?new Date(s.checkIn).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'--',
+        out:s.checkOut?new Date(s.checkOut).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}):'--',
+        status:'Present'
+      };
+    } else if(s.checkOut && attByDate[s.date].out==='--'){
+      attByDate[s.date].out=new Date(s.checkOut).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    }
+  });
+  (D.attendance||[])
+    .filter(a=>a.empName===emp.name||a.empId===emp._uuid||a.empId===emp.id)
+    .forEach(a=>{
+      if(!attByDate[a.date]){
+        attByDate[a.date]={date:a.date,in:a.in||'--',out:a.out||'--',status:a.status||'Present'};
+      }
+    });
+  const myAtt=Object.values(attByDate).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+
   // Profile completion calc: 5 required fields
   const profileFields=[
     {key:'name', label:'Name', filled:!!emp.name&&emp.name.trim().length>0},
