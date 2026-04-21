@@ -4561,7 +4561,7 @@ function pgDashboard(){
   </div>
 
   <div class="card">
-      <div class="card-hd"><h3>Notifications</h3><div style="display:flex;gap:8px;align-items:center">${unreadCount()>0?`<button class="btn-link" onclick="markAllRead()">Mark all read</button>`:''}<span class="muted">${unreadCount()} unread</span></div></div>
+      <div class="card-hd"><h3>Notifications</h3><div style="display:flex;gap:8px;align-items:center">${unreadCount()>0?`<button class="btn-link" onclick="markAllRead()">Mark all read</button>`:''}${D.notifications.length>0?`<button class="btn-link" style="color:#991b1b" onclick="clearAllNotifs()">🗑 Clear all</button>`:''}<span class="muted">${unreadCount()} unread</span></div></div>
       ${D.notifications.slice(0,5).map(n=>{
         const nid=JSON.stringify(n.id||n._uuid||'').replace(/"/g,'&#34;');
         return `<div class="notif-row" style="cursor:pointer;border-radius:6px;padding:8px;background:${n.read?'transparent':'#f8fafc'}" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='${n.read?'transparent':'#f8fafc'}'" onclick="handleNotifClick(${nid})">
