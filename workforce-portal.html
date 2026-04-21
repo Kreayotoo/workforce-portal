@@ -2336,10 +2336,6 @@ async function submitKYC(){
   showToast('✅ KYC completed. Welcome to the portal!', 'success');
   renderEmployeeApp();
 }
-function showSignup(){
-  const np=prompt('Enter new password (min 6 chars):');
-  if(np&&np.length>=6){D.user.password=np;save();alert('Password updated! Use it to sign in.');}
-}
 
 // ─── SELF REGISTRATION ────────────────────────────────────────────
 function showRegister(){
