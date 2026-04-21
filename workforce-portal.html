@@ -9228,15 +9228,33 @@ async function saveCompany(editId){
 
     console.log('[saveCompany] success, returned:',result);
 
-    if(err)err.innerHTML=`<div class="alert alert-s">✅ Company ${editId?'updated':'added'}! Refreshing…</div>`;
+    // Force add to local D.companies immediately so it shows up without waiting for sync
+    if(!editId && result && result[0]){
+      if(!D.companies) D.companies=[];
+      const newRow = result[0];
+      // Replace if somehow already in list, else push
+      const existingIdx = D.companies.findIndex(c=>c.company_id===newRow.company_id);
+      if(existingIdx>=0) D.companies[existingIdx] = newRow;
+      else D.companies.push(newRow);
+      save();
+      console.log('[saveCompany] added to local D.companies. Total:',D.companies.length);
+    } else if(editId && result && result[0]){
+      const newRow = result[0];
+      const idx = D.companies.findIndex(c=>c.company_id===editId);
+      if(idx>=0) D.companies[idx] = newRow;
+      save();
+    }
 
-    // Sync and close after a brief delay
-    await syncFromSupabase();
+    if(err)err.innerHTML=`<div class="alert alert-s">✅ Company ${editId?'updated':'added'}!</div>`;
+
+    // Sync + close modal + re-render
+    try{ await syncFromSupabase(); }catch(e){ console.warn('sync failed after save:',e); }
+
     setTimeout(()=>{
       closeModal('company-modal-wrap');
       nav('companies');
       showToast(`✅ Company "${name}" ${editId?'updated':'added'} successfully`, 'success');
-    }, 600);
+    }, 500);
   }catch(e){
     console.error('[saveCompany] error:',e);
     if(err)err.innerHTML=`<div class="alert alert-e">Network error: ${e.message||e}</div>`;
