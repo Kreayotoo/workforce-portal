@@ -2226,19 +2226,37 @@ function renderEmployeeApp(){
     'emp-notifications':pgNotifications,
     'emp-worklog':empWorkLog
   };
+  console.log('[EMP RENDER] empPage =', empPage, '| has page?', !!pages[empPage], '| D.employees.length =', (D.employees||[]).length, '| currentEmployee =', currentEmployee);
   if(pages[empPage]){
     try{
-      $('emp-main').innerHTML = pages[empPage]();
+      const html = pages[empPage]();
+      console.log('[EMP RENDER]', empPage, 'returned', html?html.length:0, 'chars');
+      if(!html || !html.trim()){
+        $('emp-main').innerHTML = `<div style="padding:2rem;background:#fef3c7;border:1px solid #fde68a;border-radius:10px;color:#92400e">
+          <h3 style="margin-bottom:8px">⚠️ Page returned empty</h3>
+          <div style="font-size:13px">Page: <code>${empPage}</code> rendered to empty string.</div>
+          <button class="btn btn-primary" onclick="location.reload()" style="margin-top:10px">🔄 Reload</button>
+        </div>`;
+      } else {
+        $('emp-main').innerHTML = html;
+      }
     }catch(err){
-      console.error('Employee page render error:', err);
+      console.error('Employee page render error:', err, err.stack);
       $('emp-main').innerHTML = `<div style="padding:2rem;background:#fee2e2;border:1px solid #fecaca;border-radius:10px;color:#991b1b">
         <h3 style="margin-bottom:8px">⚠️ Page failed to load</h3>
         <div style="font-size:13px;margin-bottom:10px">Error: <code style="background:#fff;padding:2px 6px;border-radius:3px">${(err&&err.message)||String(err)}</code></div>
         <div style="font-size:12px;margin-bottom:12px">Page: <code>${empPage}</code></div>
+        <div style="font-size:11px;margin-bottom:12px;max-height:200px;overflow:auto;background:#fff;padding:8px;border-radius:4px"><pre style="white-space:pre-wrap;word-break:break-all">${err&&err.stack?err.stack:''}</pre></div>
         <button class="btn btn-primary" onclick="location.reload()">🔄 Reload page</button>
         <button class="btn btn-sec" onclick="navEmp('emp-dashboard')" style="margin-left:6px">← Back to dashboard</button>
       </div>`;
     }
+  } else {
+    console.error('[EMP RENDER] No page registered for:', empPage);
+    $('emp-main').innerHTML = `<div style="padding:2rem;background:#fee2e2;border-radius:10px">
+      <h3>⚠️ Unknown page: <code>${empPage}</code></h3>
+      <button class="btn btn-primary" onclick="navEmp('emp-dashboard')" style="margin-top:10px">← Go to dashboard</button>
+    </div>`;
   }
   // Auto-start face scan on attendance page
   if(empPage==='emp-attendance'){
