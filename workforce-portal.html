@@ -1309,7 +1309,7 @@ function renderLogin(){
         </div>
 
         <div style="text-align:right;margin-bottom:1.25rem">
-          <a href="#" onclick="event.preventDefault();alert('Forgot password — contact your admin or superadmin to reset.')" style="font-size:12px;color:#3b82f6;text-decoration:none">Forgot password?</a>
+          <a href="#" onclick="event.preventDefault();showForgotPassword()" style="font-size:12px;color:#3b82f6;text-decoration:none">Forgot password?</a>
         </div>
 
         <button onclick="doSmartLogin()" style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
@@ -1392,6 +1392,53 @@ function renderLogin(){
         </div>
       </div>
 
+      <!-- Forgot Password view (hidden by default) -->
+      <div id="forgot-view" class="hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+          <div>
+            <div style="font-size:22px;font-weight:800;color:#111">🔑 Reset Password</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">We'll send a one-time code to your email</div>
+          </div>
+          <a href="#" onclick="event.preventDefault();showSignin()" style="font-size:13px;color:#7c3aed;font-weight:700;text-decoration:none">← Back</a>
+        </div>
+        <div id="forgot-err"></div>
+
+        <!-- Step 1: Enter email -->
+        <div id="forgot-step1">
+          <div class="fld">
+            <label>Your email</label>
+            <input type="email" id="forgot-email" placeholder="Enter your registered email" style="background:#f1f5fb;border:none">
+          </div>
+          <button onclick="sendPasswordOTP()" style="width:100%;padding:13px;background:linear-gradient(135deg,#3b82f6,#2563eb);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px">Send OTP →</button>
+          <div style="margin-top:1rem;padding:10px 14px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;font-size:12px;color:#78350f">
+            💡 Don't remember your email? <strong>Contact your admin or HR</strong> — they can look it up and help you reset.
+          </div>
+        </div>
+
+        <!-- Step 2: Enter OTP + new password -->
+        <div id="forgot-step2" class="hidden">
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e40af;margin-bottom:1rem">
+            📧 Check your email for a 6-digit code. It expires in 10 minutes.
+          </div>
+          <div class="fld">
+            <label>6-digit code</label>
+            <input type="text" id="forgot-otp" placeholder="000000" maxlength="6" style="background:#f1f5fb;border:none;font-family:monospace;letter-spacing:6px;font-size:18px;text-align:center;font-weight:700">
+          </div>
+          <div class="fld">
+            <label>New password (min 6 chars)</label>
+            <input type="password" id="forgot-newpass" placeholder="Create new password" style="background:#f1f5fb;border:none">
+          </div>
+          <div class="fld">
+            <label>Confirm new password</label>
+            <input type="password" id="forgot-newpass2" placeholder="Type password again" style="background:#f1f5fb;border:none">
+          </div>
+          <button onclick="verifyOTPAndReset()" style="width:100%;padding:13px;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Reset Password ✓</button>
+          <div style="text-align:center;margin-top:12px">
+            <button onclick="resendPasswordOTP()" style="background:none;border:none;color:#3b82f6;font-size:12px;cursor:pointer;font-weight:600">↻ Resend code</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Super admin view (hidden by default) -->
       <div id="super-admin-view" class="hidden">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
@@ -1412,6 +1459,149 @@ function renderLogin(){
   </div>`;
 }
 // ─── NEW KREDILY-STYLE UNIFIED LOGIN ────────────────────────────
+function showForgotPassword(){
+  const v1=$('signin-view'); if(v1) v1.classList.add('hidden');
+  const v2=$('signup-view'); if(v2) v2.classList.add('hidden');
+  const vf=$('forgot-view'); if(vf) vf.classList.remove('hidden');
+  const v3=$('super-admin-view'); if(v3) v3.classList.add('hidden');
+  // Reset to step 1
+  const s1=$('forgot-step1'); if(s1) s1.classList.remove('hidden');
+  const s2=$('forgot-step2'); if(s2) s2.classList.add('hidden');
+  const err=$('forgot-err'); if(err) err.innerHTML='';
+  // Pre-fill email if they typed something on sign-in screen
+  const signedEmail=$('smart-email')?.value?.trim();
+  if(signedEmail && $('forgot-email')) $('forgot-email').value=signedEmail;
+}
+
+let _forgotEmail = null;
+let _forgotUserInfo = null;
+
+async function sendPasswordOTP(){
+  const email = $('forgot-email')?.value?.trim().toLowerCase();
+  const err = $('forgot-err');
+  if(!email){ if(err) err.innerHTML = `<div class="alert alert-e">Please enter your email</div>`; return; }
+  if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">🔎 Looking up your account…</div>`;
+
+  // Check if email exists as employee or company admin
+  try{
+    let user=null, role=null;
+    // Try employee first
+    const emps = await sb('employees','GET',null,`?email=eq.${encodeURIComponent(email)}&select=id,name,email,company_id`);
+    if(emps && emps.length){
+      user = emps[0]; role = 'employee';
+    } else {
+      const cos = await sb('companies','GET',null,`?admin_email=eq.${encodeURIComponent(email)}&select=company_id,admin_name,admin_email,name`);
+      if(cos && cos.length){
+        user = cos[0]; role = 'admin'; user.name = cos[0].admin_name || 'Admin';
+      }
+    }
+
+    if(!user){
+      if(err) err.innerHTML = `<div class="alert alert-e">No account found with this email. <br>Try another email or <strong>contact your admin/HR</strong> to help reset your account.</div>`;
+      return;
+    }
+
+    _forgotEmail = email;
+    _forgotUserInfo = { user, role };
+
+    // Send OTP
+    if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">📧 Sending code to ${email}…</div>`;
+    const r = await sendOTP(email, user.name || '');
+    if(r.success){
+      if(err) err.innerHTML = `<div class="alert alert-s">✅ Code sent! Check your inbox (and spam folder).</div>`;
+      // Reveal step 2
+      const s1=$('forgot-step1'); if(s1) s1.classList.add('hidden');
+      const s2=$('forgot-step2'); if(s2) s2.classList.remove('hidden');
+      setTimeout(()=>$('forgot-otp')?.focus(), 100);
+    } else {
+      if(err) err.innerHTML = `<div class="alert alert-e">Could not send email: ${r.error||'unknown error'}. Contact your admin.</div>`;
+    }
+  }catch(e){
+    console.error('Forgot password error:', e);
+    if(err) err.innerHTML = `<div class="alert alert-e">Something went wrong: ${e.message||e}</div>`;
+  }
+}
+
+async function resendPasswordOTP(){
+  if(!_forgotEmail || !_forgotUserInfo){
+    showForgotPassword();
+    return;
+  }
+  const err = $('forgot-err');
+  if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">📧 Resending code…</div>`;
+  const r = await sendOTP(_forgotEmail, _forgotUserInfo.user.name||'');
+  if(r.success){
+    if(err) err.innerHTML = `<div class="alert alert-s">✅ New code sent!</div>`;
+  } else {
+    if(err) err.innerHTML = `<div class="alert alert-e">Could not resend: ${r.error||'try again'}</div>`;
+  }
+}
+
+async function verifyOTPAndReset(){
+  const err = $('forgot-err');
+  const otp = $('forgot-otp')?.value?.trim();
+  const newPass = $('forgot-newpass')?.value;
+  const newPass2 = $('forgot-newpass2')?.value;
+
+  if(!otp || otp.length !== 6){
+    if(err) err.innerHTML = `<div class="alert alert-e">Enter the 6-digit code from your email</div>`;
+    return;
+  }
+  if(!newPass || newPass.length < 6){
+    if(err) err.innerHTML = `<div class="alert alert-e">New password must be at least 6 characters</div>`;
+    return;
+  }
+  if(newPass !== newPass2){
+    if(err) err.innerHTML = `<div class="alert alert-e">Passwords don't match</div>`;
+    return;
+  }
+
+  // Verify OTP
+  const v = verifyOTP(_forgotEmail, otp);
+  if(!v.valid){
+    if(err) err.innerHTML = `<div class="alert alert-e">${v.reason||'Invalid or expired code'}</div>`;
+    return;
+  }
+
+  if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">⚙️ Updating password…</div>`;
+
+  // Update password in DB based on role
+  try{
+    const { user, role } = _forgotUserInfo;
+    if(role === 'employee'){
+      const res = await fetch(`${SB_URL}/rest/v1/employees?id=eq.${user.id}`, {
+        method: 'PATCH',
+        headers: {...SB_HDR, 'Prefer': 'return=representation'},
+        body: JSON.stringify({ password_hash: newPass })
+      });
+      if(!res.ok){ throw new Error(`DB error ${res.status}`); }
+    } else if(role === 'admin'){
+      const res = await fetch(`${SB_URL}/rest/v1/companies?company_id=eq.${encodeURIComponent(user.company_id)}`, {
+        method: 'PATCH',
+        headers: {...SB_HDR, 'Prefer': 'return=representation'},
+        body: JSON.stringify({ admin_password: newPass })
+      });
+      if(!res.ok){ throw new Error(`DB error ${res.status}`); }
+    }
+
+    if(err) err.innerHTML = `<div class="alert alert-s">✅ Password updated! Sign in with your new password.</div>`;
+    // Clear OTP state
+    delete _otpStore[_forgotEmail];
+    _forgotEmail = null;
+    _forgotUserInfo = null;
+    // Pre-fill email back on sign-in
+    const signinEmail=$('smart-email'); const entered=$('forgot-email')?.value;
+    setTimeout(()=>{
+      showSignin();
+      if(signinEmail && entered) signinEmail.value = entered;
+      $('smart-pass')?.focus();
+    }, 1500);
+  }catch(e){
+    console.error('Password update error:', e);
+    if(err) err.innerHTML = `<div class="alert alert-e">Could not update password: ${e.message||e}. Contact your admin.</div>`;
+  }
+}
+
 function showSignup(){
   const v1=$('signin-view'); if(v1) v1.classList.add('hidden');
   const v2=$('signup-view'); if(v2) v2.classList.remove('hidden');
@@ -1422,6 +1612,7 @@ function showSignin(){
   const v1=$('signin-view'); if(v1) v1.classList.remove('hidden');
   const v2=$('signup-view'); if(v2) v2.classList.add('hidden');
   const v3=$('super-admin-view'); if(v3) v3.classList.add('hidden');
+  const vf=$('forgot-view'); if(vf) vf.classList.add('hidden');
 }
 function backToRolePicker(){
   const rp=$('signup-role-picker'); if(rp) rp.classList.remove('hidden');
