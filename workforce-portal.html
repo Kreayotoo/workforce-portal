@@ -855,7 +855,20 @@ function renderApp(){
     </div>
   </div>`;
   const pages = {dashboard:pgDashboard,employees:pgEmployees,attendance:pgAttendance,leave:pgLeave,payroll:pgPayroll,expenses:pgExpenses,performance:pgPerformance,notifications:pgNotifications,settings:pgSettings,locations:pgLocations,holidays:pgHolidays,orgchart:pgOrgChart,idcards:pgIDCards,companies:pgCompanies,kycrequests:pgKYCRequests,'setup-wizard':pgSetupWizard,worklogs:pgWorkLogs};
-  if(pages[currentPage]) $('main-content').innerHTML = pages[currentPage]();
+  if(pages[currentPage]){
+    try{
+      $('main-content').innerHTML = pages[currentPage]();
+    }catch(err){
+      console.error('Admin page render error:', err);
+      $('main-content').innerHTML = `<div style="padding:2rem;background:#fee2e2;border:1px solid #fecaca;border-radius:10px;color:#991b1b">
+        <h3 style="margin-bottom:8px">⚠️ Page failed to load</h3>
+        <div style="font-size:13px;margin-bottom:10px">Error: <code style="background:#fff;padding:2px 6px;border-radius:3px">${(err&&err.message)||String(err)}</code></div>
+        <div style="font-size:12px;margin-bottom:12px">Page: <code>${currentPage}</code></div>
+        <button class="btn btn-primary" onclick="location.reload()">🔄 Reload page</button>
+        <button class="btn btn-sec" onclick="nav('dashboard')" style="margin-left:6px">← Back to dashboard</button>
+      </div>`;
+    }
+  }
   bindPage();
 }
 
@@ -2213,7 +2226,20 @@ function renderEmployeeApp(){
     'emp-notifications':pgNotifications,
     'emp-worklog':empWorkLog
   };
-  if(pages[empPage]) $('emp-main').innerHTML = pages[empPage]();
+  if(pages[empPage]){
+    try{
+      $('emp-main').innerHTML = pages[empPage]();
+    }catch(err){
+      console.error('Employee page render error:', err);
+      $('emp-main').innerHTML = `<div style="padding:2rem;background:#fee2e2;border:1px solid #fecaca;border-radius:10px;color:#991b1b">
+        <h3 style="margin-bottom:8px">⚠️ Page failed to load</h3>
+        <div style="font-size:13px;margin-bottom:10px">Error: <code style="background:#fff;padding:2px 6px;border-radius:3px">${(err&&err.message)||String(err)}</code></div>
+        <div style="font-size:12px;margin-bottom:12px">Page: <code>${empPage}</code></div>
+        <button class="btn btn-primary" onclick="location.reload()">🔄 Reload page</button>
+        <button class="btn btn-sec" onclick="navEmp('emp-dashboard')" style="margin-left:6px">← Back to dashboard</button>
+      </div>`;
+    }
+  }
   // Auto-start face scan on attendance page
   if(empPage==='emp-attendance'){
     const emp=currentEmployee;
@@ -2236,6 +2262,7 @@ function renderEmployeeApp(){
 
 function empDashboard(){
   const emp=currentEmployee;
+  if(!emp){ return `<div style="padding:2rem;text-align:center;color:var(--muted)"><h3>Loading…</h3><p>Employee data not available yet.</p><button class="btn btn-primary" onclick="location.reload()">Refresh</button></div>`; }
   const today=todayStr();
 
   // ── TODAY'S ATTENDANCE STATUS ──
@@ -2244,7 +2271,7 @@ function empDashboard(){
   const todaySessions=mySessions.filter(s=>s.date===today);
   const activeToday=todaySessions.find(s=>!s.checkOut);
   const completedToday=todaySessions.filter(s=>s.checkOut);
-  const legacyAtt=D.attendance.find(a=>(a.empName===emp.name||a.empId===emp._uuid||a.empId===emp.id)&&a.date===today);
+  const legacyAtt=(D.attendance||[]).find(a=>(a.empName===emp.name||a.empId===emp._uuid||a.empId===emp.id)&&a.date===today);
 
   // Determine Today's status
   let todayStatus, todaySub;
@@ -2268,12 +2295,12 @@ function empDashboard(){
   const ym=currentMonth();
   const presentDates=new Set();
   mySessions.filter(s=>s.date&&s.date.startsWith(ym)).forEach(s=>presentDates.add(s.date));
-  D.attendance
+  (D.attendance||[])
     .filter(a=>(a.empName===emp.name||a.empId===emp._uuid||a.empId===emp.id)&&a.date&&a.date.startsWith(ym)&&a.status==='Present')
     .forEach(a=>presentDates.add(a.date));
   const present=presentDates.size;
 
-  const myLeaves=D.leaves.filter(l=>l.emp===emp.name);
+  const myLeaves=(D.leaves||[]).filter(l=>l.emp===emp.name);
   const approved=myLeaves.filter(l=>l.status==='Approved').reduce((s,l)=>s+(l.days||0),0);
   const slip=calcPayslip(emp, currentMonth());
   const net=slip?slip.netPay:0;
@@ -2293,7 +2320,7 @@ function empDashboard(){
 
   return `
   <div class="page-hd">
-    <div><div class="pg-title">Hi, ${emp.name.split(' ')[0]}! 👋</div><div class="pg-sub">${dateLabel()} · ${emp.role} · ${emp.dept}</div></div>
+    <div><div class="pg-title">Hi, ${(emp.name||'there').split(' ')[0]}! 👋</div><div class="pg-sub">${dateLabel()} · ${emp.role||'Employee'} · ${emp.dept||'—'}</div></div>
   </div>
 
   ${pct<100?`
@@ -4469,7 +4496,7 @@ function pgDashboard(){
 
   return `
   <div class="page-hd">
-    <div><div class="pg-title">Hi, ${currentCompany?currentCompany.name.split(' ')[0]:D.user.name.split(' ')[0]}! 👋</div><div class="pg-sub">${dateLabel()}${currentCompany?` · ${currentCompany.name}`:' · Super Admin'}</div></div>
+    <div><div class="pg-title">Hi, ${currentCompany?(currentCompany.name||'').split(' ')[0]:(D.user&&D.user.name?D.user.name.split(' ')[0]:'Admin')}! 👋</div><div class="pg-sub">${dateLabel()}${currentCompany?` · ${currentCompany.name}`:' · Super Admin'}</div></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-sec" onclick="nav('setup-wizard')" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;color:#1e40af;font-weight:700">⚡ Setup Wizard</button>
       <button class="btn btn-primary" onclick="openEmpModal()">+ Add employee</button>
