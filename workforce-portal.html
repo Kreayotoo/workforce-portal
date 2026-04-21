@@ -849,6 +849,14 @@ function renderApp(){
   if(!window._adminRefreshTimer){
     window._adminRefreshTimer = setInterval(async()=>{
       if(!D.loggedIn||currentRole!=='admin') { clearInterval(window._adminRefreshTimer); window._adminRefreshTimer=null; return; }
+
+      // Skip if user has a modal open (don't interrupt typing)
+      const hasOpenModal = document.querySelector('.modal-bg');
+      if(hasOpenModal){
+        console.log('[auto-refresh] skipped — modal open');
+        return;
+      }
+
       const prevEmpCount = D.employees.length;
       const prevLeaveCount = (D.leaves||[]).filter(l=>l.status==='Pending').length;
       const prevSessionCount = (D.attSessions||[]).length;
@@ -856,7 +864,11 @@ function renderApp(){
       const newEmpCount = D.employees.length;
       const newLeaveCount = (D.leaves||[]).filter(l=>l.status==='Pending').length;
       const newSessionCount = (D.attSessions||[]).length;
-      // Always re-render current page with fresh data
+
+      // Re-check after async — modal might have opened while syncing
+      if(document.querySelector('.modal-bg')) return;
+
+      // Re-render current page with fresh data
       nav(currentPage);
       // Show toasts for new events
       if(newEmpCount > prevEmpCount)
