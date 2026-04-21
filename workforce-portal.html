@@ -577,12 +577,67 @@ async function sbSaveNotification(n){
 async function sbMarkNotifRead(n){ if(n._uuid)await sb('notifications','PATCH',{is_read:true},`?id=eq.${n._uuid}`); }
 async function sbSaveSettings(){
   const s=D.settings;
-  const payload={company_name:s.company,company_email:s.email,timezone:s.tz,currency:s.currency,work_hours:s.hours,office_lat:s.officeLat,office_lng:s.officeLng,office_radius:s.officeRadius};
-  if(s._uuid){
-    await sb('settings','PATCH',payload,`?id=eq.${s._uuid}`);
-  } else {
-    const r=await sb('settings','POST',payload);
-    if(r&&r[0])D.settings._uuid=r[0].id;
+  const payload={
+    company_name:s.company,
+    company_email:s.email,
+    timezone:s.tz,
+    currency:s.currency,
+    work_hours:s.hours,
+    office_lat:s.officeLat||null,
+    office_lng:s.officeLng||null,
+    office_radius:s.officeRadius||null
+  };
+  console.log('[SETTINGS SAVE] payload:', payload, 'uuid:', s._uuid);
+  try{
+    if(s._uuid){
+      // Direct PATCH with return=representation to verify
+      const res = await fetch(`${SB_URL}/rest/v1/settings?id=eq.${s._uuid}`,{
+        method:'PATCH',
+        headers:{...SB_HDR, 'Prefer':'return=representation'},
+        body:JSON.stringify(payload)
+      });
+      if(!res.ok){
+        const errText=await res.text();
+        console.error('[SETTINGS SAVE] PATCH failed:', res.status, errText);
+        throw new Error(`DB error (${res.status}): ${errText.substring(0,120)}`);
+      }
+      const rows=await res.json();
+      console.log('[SETTINGS SAVE] PATCH returned:', rows);
+      if(!rows||!rows[0]){
+        throw new Error('Server accepted the save but returned no row');
+      }
+      // Verify company name actually saved
+      if(rows[0].company_name!==s.company){
+        throw new Error(`Server saved "${rows[0].company_name}" instead of "${s.company}"`);
+      }
+      return rows[0];
+    } else {
+      // No UUID — look up existing row first (settings has only one row typically)
+      const existing=await sb('settings','GET',null,'?select=id&limit=1');
+      if(existing&&existing[0]){
+        D.settings._uuid=existing[0].id;
+        console.log('[SETTINGS SAVE] Found existing row, retrying:', D.settings._uuid);
+        return await sbSaveSettings(); // retry with uuid
+      }
+      // No existing row — insert fresh
+      const res = await fetch(`${SB_URL}/rest/v1/settings`,{
+        method:'POST',
+        headers:{...SB_HDR, 'Prefer':'return=representation'},
+        body:JSON.stringify(payload)
+      });
+      if(!res.ok){
+        const errText=await res.text();
+        console.error('[SETTINGS SAVE] POST failed:', res.status, errText);
+        throw new Error(`DB error (${res.status}): ${errText.substring(0,120)}`);
+      }
+      const rows=await res.json();
+      console.log('[SETTINGS SAVE] POST returned:', rows);
+      if(rows&&rows[0]) D.settings._uuid=rows[0].id;
+      return rows[0];
+    }
+  }catch(e){
+    console.error('[SETTINGS SAVE] error:', e);
+    throw e;
   }
 }
 async function sbLoginLog(log){
