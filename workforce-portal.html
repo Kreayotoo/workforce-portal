@@ -2236,11 +2236,45 @@ function renderEmployeeApp(){
 
 function empDashboard(){
   const emp=currentEmployee;
-  const myAtt=D.attendance.filter(a=>a.empName===emp.name||a.empId===emp._uuid||a.empId===emp.id);
-  const present=myAtt.filter(a=>a.status==='Present').length;
+  const today=todayStr();
+
+  // ── TODAY'S ATTENDANCE STATUS ──
+  // Check sessions (new source) first, then legacy attendance grid as fallback
+  const mySessions=(D.attSessions||[]).filter(s=>s.empName===emp.name||s.empId===emp._uuid);
+  const todaySessions=mySessions.filter(s=>s.date===today);
+  const activeToday=todaySessions.find(s=>!s.checkOut);
+  const completedToday=todaySessions.filter(s=>s.checkOut);
+  const legacyAtt=D.attendance.find(a=>(a.empName===emp.name||a.empId===emp._uuid||a.empId===emp.id)&&a.date===today);
+
+  // Determine Today's status
+  let todayStatus, todaySub;
+  if(activeToday){
+    todayStatus='Present'; // Currently checked in
+    todaySub=`In: ${new Date(activeToday.checkIn).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`;
+  } else if(completedToday.length>0){
+    todayStatus='Present'; // Checked in & out
+    const earliest=completedToday.reduce((a,b)=>new Date(a.checkIn)<new Date(b.checkIn)?a:b);
+    todaySub=`In: ${new Date(earliest.checkIn).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`;
+  } else if(legacyAtt){
+    todayStatus=legacyAtt.status;
+    todaySub=`In: ${legacyAtt.in||'--'}`;
+  } else {
+    todayStatus='Not marked';
+    todaySub='Mark attendance below';
+  }
+
+  // ── DAYS PRESENT THIS MONTH ──
+  // Union of unique dates from sessions AND legacy attendance
+  const ym=currentMonth();
+  const presentDates=new Set();
+  mySessions.filter(s=>s.date&&s.date.startsWith(ym)).forEach(s=>presentDates.add(s.date));
+  D.attendance
+    .filter(a=>(a.empName===emp.name||a.empId===emp._uuid||a.empId===emp.id)&&a.date&&a.date.startsWith(ym)&&a.status==='Present')
+    .forEach(a=>presentDates.add(a.date));
+  const present=presentDates.size;
+
   const myLeaves=D.leaves.filter(l=>l.emp===emp.name);
   const approved=myLeaves.filter(l=>l.status==='Approved').reduce((s,l)=>s+(l.days||0),0);
-  const todayAtt=D.attendance.find(a=>a.empName===emp.name&&a.date===todayStr()||a.empId===emp._uuid&&a.date===todayStr());
   const slip=calcPayslip(emp, currentMonth());
   const net=slip?slip.netPay:0;
 
@@ -2289,7 +2323,7 @@ function empDashboard(){
     <div class="stat"><div class="stat-lbl">Days present</div><div class="stat-val">${present}</div><div class="stat-sub">This month</div></div>
     <div class="stat"><div class="stat-lbl">Leave taken</div><div class="stat-val">${approved}</div><div class="stat-sub">Days this year</div></div>
     <div class="stat"><div class="stat-lbl">Net salary</div><div class="stat-val">₹${fmt(net)}</div><div class="stat-sub">This month</div></div>
-    <div class="stat"><div class="stat-lbl">Today</div><div class="stat-val" style="font-size:14px">${todayAtt?todayAtt.status:'Not marked'}</div><div class="stat-sub">${todayAtt?`In: ${todayAtt.in||'--'}`:'Mark attendance below'}</div></div>
+    <div class="stat"><div class="stat-lbl">Today</div><div class="stat-val" style="font-size:14px">${todayStatus}</div><div class="stat-sub">${todaySub}</div></div>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
     <div class="card">
