@@ -2398,7 +2398,11 @@ function empDashboard(){
     <div class="card">
       <div class="card-hd"><h3>Quick actions</h3></div>
       <div style="display:flex;flex-direction:column;gap:8px">
-        <button class="btn btn-primary" style="background:#0f766e" onclick="navEmp('emp-attendance')">📅 Mark today's attendance</button>
+        ${activeToday
+          ? `<button class="btn btn-primary" style="background:#dc2626" onclick="navEmp('emp-attendance')">🔴 Check out now (active since ${new Date(activeToday.checkIn).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})})</button>`
+          : completedToday.length>0
+            ? `<button class="btn btn-primary" style="background:#16a34a;cursor:default" disabled>✅ Attendance marked today (${completedToday.length} ${completedToday.length===1?'session':'sessions'})</button>`
+            : `<button class="btn btn-primary" style="background:#0f766e" onclick="navEmp('emp-attendance')">📅 Mark today's attendance</button>`}
         <button class="btn btn-primary" style="background:#0f766e" onclick="navEmp('emp-leave')">🏖 Apply for leave</button>
         <button class="btn btn-primary" style="background:#0f766e" onclick="navEmp('emp-payslip')">💰 View payslip</button>
       </div>
