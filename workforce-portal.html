@@ -9151,10 +9151,10 @@ function openCompanyModal(editId=null){
     <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:10px 12px;font-size:12px;color:#0369a1;margin-bottom:1rem">
       ${editId?'Update company credentials below.':'Fill in the company details. They will use these credentials to log in under the 🏢 Company tab.'}
     </div>
-    <div class="fld"><label>Company name *</label><input type="text" id="co-name" value="${existing?.name||''}" placeholder="e.g. Acme Technologies"></div>
-    <div class="fld"><label>Company ID *</label><input type="text" id="co-id" value="${existing?.company_id||''}" placeholder="e.g. ACME" ${editId?'readonly style="background:#f1f5f9"':''}><div style="font-size:11px;color:var(--muted);margin-top:3px">Short unique code, no spaces (e.g. ACME, TCS)</div></div>
-    <div class="fld"><label>Admin email *</label><input type="email" id="co-admin-email" value="${existing?.admin_email||''}" placeholder="admin@company.com"></div>
-    <div class="fld"><label>Admin password *</label><input type="text" id="co-admin-pw" value="${existing?.admin_password||''}" placeholder="Set a strong password"></div>
+    <div class="fld"><label>Company name *</label><input type="text" id="co-name" value="${existing?.name||''}" placeholder="e.g. Acme Technologies" autocomplete="off"></div>
+    <div class="fld"><label>Company ID *</label><input type="text" id="co-id" value="${existing?.company_id||''}" placeholder="e.g. ACME" autocomplete="off" ${editId?'readonly style="background:#f1f5f9"':''}><div style="font-size:11px;color:var(--muted);margin-top:3px">Short unique code, no spaces (e.g. ACME, TCS)</div></div>
+    <div class="fld"><label>Admin email *</label><input type="email" id="co-admin-email" value="${existing?.admin_email||''}" placeholder="admin@company.com" autocomplete="off"></div>
+    <div class="fld"><label>Admin password *</label><input type="text" id="co-admin-pw" value="${existing?.admin_password||''}" placeholder="Set a strong password" autocomplete="off"></div>
     <div class="fld"><label>Status</label>
       <select id="co-status">
         <option ${(existing?.status||'Active')==='Active'?'selected':''}>Active</option>
@@ -9176,21 +9176,71 @@ async function saveCompany(editId){
   const pw=($('co-admin-pw')||{}).value?.trim();
   const status=($('co-status')||{}).value||'Active';
   const err=$('co-modal-err');
-  if(!name||!email||!pw){if(err)err.innerHTML=`<div class="alert alert-e">Please fill all required fields</div>`;return;}
-  if(!editId&&!cid){if(err)err.innerHTML=`<div class="alert alert-e">Company ID is required</div>`;return;}
-  showSyncBanner('Saving company…');
-  let result;
-  if(editId){
-    result=await sb('companies','PATCH',{name,admin_email:email,admin_password:pw,status},`?company_id=eq.${editId}`);
-  } else {
-    result=await sb('companies','POST',{company_id:cid,name,admin_email:email,admin_password:pw,status});
+
+  console.log('[saveCompany] editId=',editId,'name=',name,'cid=',cid,'email=',email);
+
+  if(!name||!email||!pw){
+    if(err)err.innerHTML=`<div class="alert alert-e">Please fill all required fields</div>`;
+    return;
   }
-  hideSyncBanner();
-  if(!result){if(err)err.innerHTML=`<div class="alert alert-e">Failed to save. Email or Company ID may already exist.</div>`;return;}
-  await syncFromSupabase();
-  closeModal('company-modal-wrap');
-  nav('companies');
-  alert(`✅ Company "${name}" ${editId?'updated':'added'}!\n\nLogin details:\nURL: kspl.vercel.app\nTab: 🏢 Company\nEmail: ${email}\nPassword: ${pw}`);
+  if(!editId&&!cid){
+    if(err)err.innerHTML=`<div class="alert alert-e">Company ID is required</div>`;
+    return;
+  }
+
+  if(err)err.innerHTML=`<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">💾 Saving…</div>`;
+
+  try{
+    let result;
+    if(editId){
+      const res=await fetch(`${SB_URL}/rest/v1/companies?company_id=eq.${editId}`,{
+        method:'PATCH',
+        headers:{...SB_HDR,'Prefer':'return=representation'},
+        body:JSON.stringify({name,admin_email:email,admin_password:pw,status})
+      });
+      if(!res.ok){
+        const errText=await res.text();
+        console.error('[saveCompany] PATCH failed:',res.status,errText);
+        if(err)err.innerHTML=`<div class="alert alert-e">Update failed: ${errText.substring(0,150)}</div>`;
+        return;
+      }
+      result=await res.json();
+    } else {
+      const res=await fetch(`${SB_URL}/rest/v1/companies`,{
+        method:'POST',
+        headers:{...SB_HDR,'Prefer':'return=representation'},
+        body:JSON.stringify({company_id:cid,name,admin_email:email,admin_password:pw,status})
+      });
+      if(!res.ok){
+        const errText=await res.text();
+        console.error('[saveCompany] POST failed:',res.status,errText);
+        if(err){
+          if(res.status===409||errText.includes('duplicate')||errText.includes('unique')){
+            err.innerHTML=`<div class="alert alert-e">⚠️ Company ID "${cid}" or email "${email}" already exists. Try a different one.</div>`;
+          } else {
+            err.innerHTML=`<div class="alert alert-e">Save failed: ${errText.substring(0,200)}</div>`;
+          }
+        }
+        return;
+      }
+      result=await res.json();
+    }
+
+    console.log('[saveCompany] success, returned:',result);
+
+    if(err)err.innerHTML=`<div class="alert alert-s">✅ Company ${editId?'updated':'added'}! Refreshing…</div>`;
+
+    // Sync and close after a brief delay
+    await syncFromSupabase();
+    setTimeout(()=>{
+      closeModal('company-modal-wrap');
+      nav('companies');
+      showToast(`✅ Company "${name}" ${editId?'updated':'added'} successfully`, 'success');
+    }, 600);
+  }catch(e){
+    console.error('[saveCompany] error:',e);
+    if(err)err.innerHTML=`<div class="alert alert-e">Network error: ${e.message||e}</div>`;
+  }
 }
 
 async function toggleCompanyStatus(cid,currentStatus){
