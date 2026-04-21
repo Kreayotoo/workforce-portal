@@ -5532,6 +5532,46 @@ function pgAttendance(){
       <button class="btn btn-primary" onclick="saveAtt()">Save attendance</button>
     </div>
   </div>
+
+  <!-- Export to Excel section -->
+  <div class="card" style="margin-bottom:1rem;background:linear-gradient(135deg,#f0fdf4,#ecfdf5);border:1px solid #bbf7d0">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <span style="font-size:20px">📊</span>
+      <div>
+        <div style="font-weight:700;font-size:15px;color:#166534">Export attendance to Excel</div>
+        <div style="font-size:12px;color:#166534">Download attendance records as .xlsx file for any date range</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:auto 1fr 1fr 1fr auto;gap:10px;align-items:end">
+      <div class="fld" style="margin-bottom:0">
+        <label style="font-size:12px">Range</label>
+        <select id="att-range" onchange="onAttRangeChange(this.value)">
+          <option value="daily">📅 Daily (today)</option>
+          <option value="weekly">📆 This week</option>
+          <option value="monthly" selected>🗓 This month</option>
+          <option value="last-month">⬅ Last month</option>
+          <option value="custom">⚙ Custom range</option>
+        </select>
+      </div>
+      <div class="fld" style="margin-bottom:0">
+        <label style="font-size:12px">From</label>
+        <input type="date" id="att-from" value="${firstOfMonth()}">
+      </div>
+      <div class="fld" style="margin-bottom:0">
+        <label style="font-size:12px">To</label>
+        <input type="date" id="att-to" value="${todayStr()}">
+      </div>
+      <div class="fld" style="margin-bottom:0">
+        <label style="font-size:12px">Employee</label>
+        <select id="att-emp">
+          <option value="">All employees</option>
+          ${D.employees.map(e=>`<option value="${e.id}">${e.name}</option>`).join('')}
+        </select>
+      </div>
+      <button class="btn btn-primary" style="background:#16a34a;height:fit-content" onclick="exportAttendanceExcel()">⬇ Download Excel</button>
+    </div>
+  </div>
+
   <div class="stat-grid" style="grid-template-columns:repeat(4,minmax(0,1fr))">
     <div class="stat"><div class="stat-lbl">Present</div><div class="stat-val">${present}</div></div>
     <div class="stat"><div class="stat-lbl">Absent</div><div class="stat-val">${absent}</div></div>
@@ -5649,6 +5689,177 @@ async function loadAdminSessions(date){
 function markAllAtt(status){
   document.querySelectorAll('.att-st').forEach(s=>s.value=status);
 }
+// ── Date range helpers + Excel export for attendance ──
+function firstOfMonth(){
+  const d=new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`;
+}
+function lastOfLastMonth(){
+  const d=new Date();
+  d.setDate(0); // last day of previous month
+  return d.toISOString().slice(0,10);
+}
+function firstOfLastMonth(){
+  const d=new Date();
+  d.setDate(1); d.setMonth(d.getMonth()-1);
+  return d.toISOString().slice(0,10);
+}
+function mondayOfThisWeek(){
+  const d=new Date();
+  const day=d.getDay(); // 0=Sun, 1=Mon, ...
+  const diff=day===0?-6:1-day;
+  d.setDate(d.getDate()+diff);
+  return d.toISOString().slice(0,10);
+}
+
+function onAttRangeChange(range){
+  const from=$('att-from'), to=$('att-to');
+  if(!from||!to) return;
+  const today=todayStr();
+  if(range==='daily'){ from.value=today; to.value=today; }
+  else if(range==='weekly'){ from.value=mondayOfThisWeek(); to.value=today; }
+  else if(range==='monthly'){ from.value=firstOfMonth(); to.value=today; }
+  else if(range==='last-month'){ from.value=firstOfLastMonth(); to.value=lastOfLastMonth(); }
+  // custom: leave as-is, let user edit manually
+}
+
+async function exportAttendanceExcel(){
+  const fromDate=$('att-from')?.value;
+  const toDate=$('att-to')?.value;
+  const empFilter=$('att-emp')?.value||'';
+  if(!fromDate||!toDate){ showToast('Pick a date range','info'); return; }
+  if(fromDate>toDate){ showToast('From date must be before To date','info'); return; }
+
+  showToast('📊 Building Excel file…','info');
+
+  // Collect rows from both sources (sessions + legacy attendance)
+  const rows=[];
+  const empMap={};
+  D.employees.forEach(e=>{empMap[e.name]=e; empMap[e._uuid]=e; empMap[e.id]=e;});
+
+  // From sessions
+  (D.attSessions||[]).forEach(s=>{
+    if(!s.date||s.date<fromDate||s.date>toDate) return;
+    const emp=empMap[s.empName]||empMap[s.empId];
+    if(empFilter&&emp&&emp.id!==empFilter) return;
+    const checkIn=s.checkIn?new Date(s.checkIn):null;
+    const checkOut=s.checkOut?new Date(s.checkOut):null;
+    let hoursWorked=0;
+    if(checkIn&&checkOut) hoursWorked=Math.round((checkOut-checkIn)/36000)/100; // 2 dp
+    rows.push({
+      date:s.date,
+      employee:s.empName||'Unknown',
+      employeeId:emp?.id||'—',
+      department:emp?.dept||'—',
+      checkIn:checkIn?checkIn.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false}):'—',
+      checkOut:checkOut?checkOut.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false}):'Active',
+      hoursWorked: hoursWorked||'—',
+      status:'Present',
+      location:s.location||'—',
+      source:'Session'
+    });
+  });
+
+  // From legacy attendance (skip dates already covered by sessions for same employee)
+  const sessionKeys=new Set(rows.map(r=>`${r.employee}|${r.date}`));
+  (D.attendance||[]).forEach(a=>{
+    if(!a.date||a.date<fromDate||a.date>toDate) return;
+    const emp=empMap[a.empName]||empMap[a.empId];
+    if(empFilter&&emp&&emp.id!==empFilter) return;
+    const key=`${a.empName}|${a.date}`;
+    if(sessionKeys.has(key)) return; // already covered
+    rows.push({
+      date:a.date,
+      employee:a.empName||'Unknown',
+      employeeId:emp?.id||'—',
+      department:emp?.dept||'—',
+      checkIn:a.in||'—',
+      checkOut:a.out||'—',
+      hoursWorked:'—',
+      status:a.status||'—',
+      location:'—',
+      source:'Manual'
+    });
+  });
+
+  // Sort by date desc, then employee
+  rows.sort((x,y)=>y.date.localeCompare(x.date)||x.employee.localeCompare(y.employee));
+
+  if(!rows.length){
+    showToast('No attendance records in this range','info');
+    return;
+  }
+
+  // Build Excel via SheetJS CDN
+  if(typeof XLSX==='undefined'){
+    await new Promise((resolve,reject)=>{
+      const s=document.createElement('script');
+      s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+      s.onload=resolve; s.onerror=()=>reject(new Error('Could not load Excel library'));
+      document.head.appendChild(s);
+    }).catch(e=>{
+      console.error('SheetJS load failed:',e);
+      showToast('❌ Could not load Excel library — downloading CSV instead','info');
+      return downloadAttendanceCSV(rows, fromDate, toDate);
+    });
+  }
+
+  if(typeof XLSX!=='undefined'){
+    const header=[
+      'Date','Employee','Employee ID','Department',
+      'Check-in','Check-out','Hours Worked','Status','Location','Source'
+    ];
+    const data=[header, ...rows.map(r=>[
+      r.date, r.employee, r.employeeId, r.department,
+      r.checkIn, r.checkOut, r.hoursWorked, r.status, r.location, r.source
+    ])];
+
+    // Summary row
+    const totalHours=rows.reduce((s,r)=>s+(typeof r.hoursWorked==='number'?r.hoursWorked:0),0);
+    const presentCount=rows.filter(r=>r.status==='Present').length;
+    data.push([]);
+    data.push(['SUMMARY']);
+    data.push(['Total records:', rows.length]);
+    data.push(['Present count:', presentCount]);
+    data.push(['Total hours worked:', Math.round(totalHours*100)/100]);
+    data.push(['Date range:', `${fromDate} to ${toDate}`]);
+    data.push(['Generated:', new Date().toLocaleString('en-IN')]);
+
+    const ws=XLSX.utils.aoa_to_sheet(data);
+    // Column widths
+    ws['!cols']=[
+      {wch:12},{wch:22},{wch:10},{wch:14},
+      {wch:10},{wch:10},{wch:12},{wch:12},{wch:28},{wch:10}
+    ];
+    // Freeze top row
+    ws['!freeze']={xSplit:0,ySplit:1};
+
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
+    const filename=`Attendance_${fromDate}_to_${toDate}${empFilter?'_'+(empMap[empFilter]?.name||'emp').replace(/\s+/g,'_'):''}.xlsx`;
+    XLSX.writeFile(wb, filename);
+    showToast(`✅ Downloaded ${rows.length} records`,'success');
+  }
+}
+
+// CSV fallback if SheetJS fails to load
+function downloadAttendanceCSV(rows, fromDate, toDate){
+  const esc=s=>`"${String(s||'').replace(/"/g,'""')}"`;
+  const header=['Date','Employee','Employee ID','Department','Check-in','Check-out','Hours Worked','Status','Location','Source'];
+  const lines=[header.join(',')];
+  rows.forEach(r=>{
+    lines.push([r.date,esc(r.employee),r.employeeId,esc(r.department),r.checkIn,r.checkOut,r.hoursWorked,r.status,esc(r.location),r.source].join(','));
+  });
+  const blob=new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`Attendance_${fromDate}_to_${toDate}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`✅ Downloaded ${rows.length} records (CSV)`,'success');
+}
+
 async function saveAtt(){
   const date=window._attDate||todayStr();
   showSyncBanner('Saving attendance…');
