@@ -6122,26 +6122,26 @@ function pgAttendance(){
       <div class="fld" style="margin-bottom:0">
         <label style="font-size:12px">Range</label>
         <select id="att-range" onchange="onAttRangeChange(this.value)">
-          <option value="daily">📅 Daily (today)</option>
-          <option value="weekly">📆 This week</option>
-          <option value="monthly" selected>🗓 This month</option>
-          <option value="last-month">⬅ Last month</option>
-          <option value="custom">⚙ Custom range</option>
+          <option value="daily" ${(window._attExportRange||localStorage.getItem('wf_att_range')||'monthly')==='daily'?'selected':''}>📅 Daily (today)</option>
+          <option value="weekly" ${(window._attExportRange||localStorage.getItem('wf_att_range')||'monthly')==='weekly'?'selected':''}>📆 This week</option>
+          <option value="monthly" ${(window._attExportRange||localStorage.getItem('wf_att_range')||'monthly')==='monthly'?'selected':''}>🗓 This month</option>
+          <option value="last-month" ${(window._attExportRange||localStorage.getItem('wf_att_range')||'monthly')==='last-month'?'selected':''}>⬅ Last month</option>
+          <option value="custom" ${(window._attExportRange||localStorage.getItem('wf_att_range')||'monthly')==='custom'?'selected':''}>⚙ Custom range</option>
         </select>
       </div>
       <div class="fld" style="margin-bottom:0">
         <label style="font-size:12px">From</label>
-        <input type="date" id="att-from" value="${firstOfMonth()}">
+        <input type="date" id="att-from" value="${window._attExportFrom||localStorage.getItem('wf_att_from')||firstOfMonth()}" onchange="saveAttRange()">
       </div>
       <div class="fld" style="margin-bottom:0">
         <label style="font-size:12px">To</label>
-        <input type="date" id="att-to" value="${todayStr()}">
+        <input type="date" id="att-to" value="${window._attExportTo||localStorage.getItem('wf_att_to')||todayStr()}" onchange="saveAttRange()">
       </div>
       <div class="fld" style="margin-bottom:0">
         <label style="font-size:12px">Employee</label>
-        <select id="att-emp">
+        <select id="att-emp" onchange="localStorage.setItem('wf_att_emp',this.value)">
           <option value="">All employees</option>
-          ${D.employees.map(e=>`<option value="${e.id}">${e.name}</option>`).join('')}
+          ${D.employees.map(e=>`<option value="${e.id}" ${(localStorage.getItem('wf_att_emp')||'')===e.id?'selected':''}>${e.name}</option>`).join('')}
         </select>
       </div>
       <button class="btn btn-primary" style="background:#16a34a;height:fit-content" onclick="exportAttendanceExcel()">⬇ Download Excel</button>
@@ -6290,6 +6290,8 @@ function mondayOfThisWeek(){
 }
 
 function onAttRangeChange(range){
+  localStorage.setItem('wf_att_range', range);
+  window._attExportRange = range;
   const from=$('att-from'), to=$('att-to');
   if(!from||!to) return;
   const today=todayStr();
@@ -6298,6 +6300,35 @@ function onAttRangeChange(range){
   else if(range==='monthly'){ from.value=firstOfMonth(); to.value=today; }
   else if(range==='last-month'){ from.value=firstOfLastMonth(); to.value=lastOfLastMonth(); }
   // custom: leave as-is, let user edit manually
+  // Persist whatever dates are now shown
+  localStorage.setItem('wf_att_from', from.value);
+  localStorage.setItem('wf_att_to', to.value);
+  window._attExportFrom = from.value;
+  window._attExportTo = to.value;
+}
+
+// Called when user manually edits From/To dates (usually when Range=Custom)
+function saveAttRange(){
+  const from=$('att-from')?.value, to=$('att-to')?.value;
+  if(from){ localStorage.setItem('wf_att_from', from); window._attExportFrom = from; }
+  if(to){ localStorage.setItem('wf_att_to', to); window._attExportTo = to; }
+  // If user edited dates manually and the range doesn't match a preset, snap to custom
+  const range=$('att-range');
+  if(range && range.value!=='custom'){
+    const today=todayStr();
+    const presets={
+      daily: [today, today],
+      weekly: [mondayOfThisWeek(), today],
+      monthly: [firstOfMonth(), today],
+      'last-month': [firstOfLastMonth(), lastOfLastMonth()]
+    };
+    const current=presets[range.value];
+    if(!current || current[0]!==from || current[1]!==to){
+      range.value='custom';
+      localStorage.setItem('wf_att_range', 'custom');
+      window._attExportRange = 'custom';
+    }
+  }
 }
 
 async function exportAttendanceExcel(){
