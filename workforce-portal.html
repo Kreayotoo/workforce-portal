@@ -1258,105 +1258,505 @@ function faceSignIn(name){
   D.loggedIn=true;frStopCamera();save();renderApp();
 }
 function renderLogin(){
-  return `<div class="login-wrap" style="position:relative">
-  <div id="super-admin-link" style="position:absolute;top:16px;right:20px;z-index:10">
-    <button onclick="revealSuperAdmin()" style="background:rgba(255,255,255,0.9);border:1px solid #e2e5ea;color:#64748b;padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px;box-shadow:0 1px 3px rgba(0,0,0,0.04)" onmouseover="this.style.background='#1a1a4e';this.style.color='#fff';this.style.borderColor='#1a1a4e'" onmouseout="this.style.background='rgba(255,255,255,0.9)';this.style.color='#64748b';this.style.borderColor='#e2e5ea'" title="Kreayotoo Solutions internal access">
-      <span>👑</span><span>Super Admin</span>
-    </button>
-  </div>
-  <div class="login-left" style="flex:1.1;background:var(--navy);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3rem 2.5rem;color:#fff;min-height:100vh">
-    <div style="max-width:340px;width:100%">
-      <div style="display:flex;align-items:center;gap:16px;margin-bottom:2.5rem">
-        <div class="login-logo" style="font-size:9px;letter-spacing:.04em;text-align:center;line-height:1.4;padding:8px;font-weight:800;flex-shrink:0;width:72px;height:72px">KREAYOTOO<br>SOLUTIONS</div>
+  return `<div class="login-wrap" style="position:relative;display:flex;min-height:100vh;background:linear-gradient(135deg,#0b1120 0%,#1a1a4e 100%)">
+
+  <!-- Left panel: branding -->
+  <div class="login-left" style="flex:1.1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3rem 2.5rem;color:#fff">
+    <div style="max-width:360px;width:100%">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:2rem">
+        <div style="width:56px;height:56px;border-radius:12px;background:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42 42" width="36" height="36"><polygon points="21,2 38,11 38,31 21,40 4,31 4,11" fill="#1a1a4e" stroke="#80cdc5" stroke-width="2"/><polyline points="10,16 18,21 10,26" fill="none" stroke="#80cdc5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="22,16 14,21 22,26" fill="none" stroke="#80cdc5" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
         <div>
-          <div style="font-family:Arial Black,sans-serif;font-weight:900;font-size:26px;color:#fff;letter-spacing:1px;line-height:1.1">KREAYOTOO</div>
+          <div style="font-family:Arial Black,sans-serif;font-weight:900;font-size:28px;letter-spacing:1px;line-height:1">KREAYOTOO</div>
           <div style="font-size:10px;color:#80cdc5;letter-spacing:2.5px;font-weight:600;margin-top:4px">SOLUTIONS (P) LTD</div>
-          <div style="font-size:8.5px;color:rgba(255,255,255,0.45);letter-spacing:2px;margin-top:3px">WE CREATE FOR YOU</div>
         </div>
       </div>
-      <div style="border-top:1px solid rgba(255,255,255,.12);padding-top:2rem;margin-bottom:2rem">
-        <div style="font-size:22px;font-weight:700;margin-bottom:.5rem">HR & Employee Portal</div>
-        <div style="font-size:13px;opacity:.6;line-height:1.7">Complete workforce management for your team — all in one place.</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:10px">
-        ${['🎭 Face recognition login','📍 Geo-location tracking','👤 Employee self-service','📅 Attendance marking','🏖 Leave management','💰 Payslip access'].map(f=>`<div style="display:flex;align-items:center;gap:10px;font-size:13px;opacity:.8"><div style="width:6px;height:6px;border-radius:50%;background:#80cdc5;flex-shrink:0"></div>${f}</div>`).join('')}
+      <div style="font-size:40px;font-weight:800;line-height:1.1;margin-bottom:14px">Welcome<br>back</div>
+      <div style="font-size:15px;color:rgba(255,255,255,.7);line-height:1.6;margin-bottom:2.5rem">Payroll, attendance, leaves — all in one place for your team.</div>
+      <div style="background:linear-gradient(135deg,rgba(128,205,197,.08),rgba(128,205,197,.02));border:1px solid rgba(128,205,197,.2);border-radius:14px;padding:16px 20px;display:flex;align-items:center;gap:14px">
+        <div style="width:42px;height:42px;border-radius:10px;background:rgba(128,205,197,.15);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🎭</div>
+        <div>
+          <div style="font-size:11px;color:#80cdc5;letter-spacing:2px;font-weight:700;margin-bottom:2px">KREDEYE</div>
+          <div style="font-size:14px;font-weight:700;margin-bottom:2px">AI Face Recognition Attendance</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.55)">Face / Mobile / Geo tracking</div>
+        </div>
       </div>
     </div>
   </div>
-  <div class="login-right" style="flex:1;background:#f8fafc;overflow-y:auto;display:flex;align-items:center;justify-content:center;padding:2rem;min-height:100vh">
-    <div class="login-card" style="max-width:400px;width:100%;background:#fff;border-radius:14px;padding:2rem;border:1px solid #e2e5ea">
-      <div id="public-login-header">
-        <h2 style="font-size:22px;font-weight:700;margin-bottom:.25rem;color:#111">Welcome back</h2>
-        <p class="login-sub" style="margin-bottom:1.5rem">Select your role to sign in</p>
-        <div style="display:flex;gap:0;margin-bottom:1.25rem;border:1px solid var(--border);border-radius:8px;overflow:hidden">
-          <button id="tab-company" onclick="switchLoginTab('company')" style="flex:1;padding:9px;border:none;background:var(--white);color:var(--muted);font-weight:600;font-size:12px;cursor:pointer">🏢 Admin</button>
-          <button id="tab-emp" onclick="switchLoginTab('emp')" style="flex:1;padding:9px;border:none;background:var(--navy);color:#fff;font-weight:700;font-size:12px;cursor:pointer">👤 Employee</button>
-        </div>
-      </div>
 
-      <div id="admin-login-header" class="hidden">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:1.25rem">
-          <button onclick="hideSuperAdmin()" style="background:#f1f5f9;border:none;color:#475569;width:32px;height:32px;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center" title="Back to main login">←</button>
-          <div>
-            <h2 style="font-size:20px;font-weight:700;color:#111;line-height:1.2">👑 Super Admin</h2>
-            <div style="font-size:12px;color:var(--muted);margin-top:2px">Kreayotoo Solutions internal access</div>
-          </div>
-        </div>
-      </div>
+  <!-- Right panel: login/signup card -->
+  <div class="login-right" style="flex:1;display:flex;align-items:center;justify-content:center;padding:2rem">
+    <div class="login-card" style="max-width:440px;width:100%;background:#fff;border-radius:16px;padding:2.25rem;box-shadow:0 20px 50px rgba(0,0,0,.3)">
 
-      <div id="admin-login-tab" class="hidden">
+      <!-- Sign In view -->
+      <div id="signin-view">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.75rem">
+          <div style="font-size:24px;font-weight:800;color:#111">Sign In</div>
+          <div style="font-size:13px;color:var(--muted)">New here? <a href="#" onclick="event.preventDefault();showSignup()" style="color:#7c3aed;font-weight:700;text-decoration:none">Sign Up</a></div>
+        </div>
+
         <div id="login-err"></div>
-        <div class="fld"><label>Email</label><input type="email" id="l-email" placeholder="Enter your email" autocomplete="username"></div>
-        <div class="fld"><label>Password</label><input type="password" id="l-pass" placeholder="Enter your password" autocomplete="current-password"></div>
-        <button class="btn btn-primary" style="width:100%;padding:10px" onclick="doLogin()">Sign in as Super Admin</button>
+
+        <div class="fld" style="margin-bottom:12px">
+          <label style="font-size:12px;color:#64748b;font-weight:600">Work Email</label>
+          <input type="email" id="smart-email" placeholder="your email address" autocomplete="username" style="background:#f1f5fb;border:1px solid transparent;padding:12px 14px;font-size:14px">
+        </div>
+
+        <div class="fld" style="margin-bottom:8px">
+          <label style="font-size:12px;color:#64748b;font-weight:600">Password</label>
+          <input type="password" id="smart-pass" placeholder="Your password" autocomplete="current-password" style="background:#f1f5fb;border:1px solid transparent;padding:12px 14px;font-size:14px">
+        </div>
+
+        <div style="text-align:right;margin-bottom:1.25rem">
+          <a href="#" onclick="event.preventDefault();alert('Forgot password — contact your admin or superadmin to reset.')" style="font-size:12px;color:#3b82f6;text-decoration:none">Forgot password?</a>
+        </div>
+
+        <button onclick="doSmartLogin()" style="width:100%;padding:14px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+          Sign In <span>→</span>
+        </button>
+
+        <div style="text-align:center;margin:1.25rem 0;color:var(--muted);font-size:11px;letter-spacing:2px;font-weight:600;position:relative">
+          <span style="background:#fff;padding:0 14px;position:relative;z-index:1">OR</span>
+          <div style="position:absolute;top:50%;left:0;right:0;height:1px;background:#e5e7eb"></div>
+        </div>
+
+        <button onclick="loginWithFace()" style="width:100%;padding:12px;background:#fff;border:1px solid #e5e7eb;border-radius:10px;font-size:14px;font-weight:600;color:#334155;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+          <span style="font-size:16px">🎭</span> Sign in with face
+        </button>
+
+        <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid #f1f5f9;text-align:center">
+          <button onclick="revealSuperAdmin()" style="background:none;border:none;color:#94a3b8;font-size:11px;cursor:pointer;letter-spacing:1px;font-weight:600">👑 SUPER ADMIN ACCESS</button>
+        </div>
       </div>
 
-      <div id="company-login-tab" class="hidden">
-        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;font-size:12px;color:#1e40af;margin-bottom:1rem">
-          🏢 Admins — log in with your administrator credentials
+      <!-- Sign Up view (hidden by default) -->
+      <div id="signup-view" class="hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+          <div style="font-size:24px;font-weight:800;color:#111">Sign Up</div>
+          <a href="#" onclick="event.preventDefault();showSignin()" style="font-size:13px;color:#7c3aed;font-weight:700;text-decoration:none">← Back to Sign In</a>
         </div>
-        <div id="company-login-err"></div>
-        <div class="fld"><label>Admin email</label><input type="email" id="co-email" placeholder="admin@yourcompany.com" onkeydown="if(event.key==='Enter')doCompanyLogin()"></div>
-        <div class="fld"><label>Password</label><input type="password" id="co-pass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doCompanyLogin()"></div>
-        <button class="btn btn-primary" style="width:100%;padding:10px;background:#7c3aed" onclick="doCompanyLogin()">Sign in as Admin</button>
+
+        <!-- Role picker -->
+        <div id="signup-role-picker">
+          <div style="font-size:13px;color:#64748b;margin-bottom:14px">What are you signing up as?</div>
+
+          <button onclick="showSignupCompany()" style="width:100%;padding:18px;background:#fff;border:2px solid #e5e7eb;border-radius:12px;cursor:pointer;text-align:left;margin-bottom:10px;transition:all .2s" onmouseover="this.style.borderColor='#7c3aed';this.style.background='#faf5ff'" onmouseout="this.style.borderColor='#e5e7eb';this.style.background='#fff'">
+            <div style="display:flex;align-items:center;gap:14px">
+              <div style="width:42px;height:42px;border-radius:10px;background:#ede9fe;display:flex;align-items:center;justify-content:center;font-size:22px">🏢</div>
+              <div>
+                <div style="font-weight:700;color:#111">Register my company</div>
+                <div style="font-size:12px;color:#64748b;margin-top:2px">Set up a new workspace for your team</div>
+              </div>
+            </div>
+          </button>
+
+          <button onclick="showSignupEmployee()" style="width:100%;padding:18px;background:#fff;border:2px solid #e5e7eb;border-radius:12px;cursor:pointer;text-align:left;transition:all .2s" onmouseover="this.style.borderColor='#0f766e';this.style.background='#f0fdf4'" onmouseout="this.style.borderColor='#e5e7eb';this.style.background='#fff'">
+            <div style="display:flex;align-items:center;gap:14px">
+              <div style="width:42px;height:42px;border-radius:10px;background:#d1fae5;display:flex;align-items:center;justify-content:center;font-size:22px">👤</div>
+              <div>
+                <div style="font-weight:700;color:#111">Join my company</div>
+                <div style="font-size:12px;color:#64748b;margin-top:2px">I have a company code from my employer</div>
+              </div>
+            </div>
+          </button>
+        </div>
+
+        <!-- Company registration form -->
+        <div id="signup-company-form" class="hidden">
+          <button onclick="backToRolePicker()" style="background:none;border:none;color:#7c3aed;font-size:13px;font-weight:600;cursor:pointer;padding:0;margin-bottom:12px">← Choose different option</button>
+          <div id="signup-err"></div>
+          <div class="fld"><label>Company name *</label><input type="text" id="su-company-name" placeholder="Your company name" style="background:#f1f5fb;border:none"></div>
+          <div class="fld"><label>Your name (admin) *</label><input type="text" id="su-admin-name" placeholder="Full name" style="background:#f1f5fb;border:none"></div>
+          <div class="fld"><label>Work email *</label><input type="email" id="su-admin-email" placeholder="your work email" style="background:#f1f5fb;border:none"></div>
+          <div class="fld"><label>Phone</label><input type="tel" id="su-admin-phone" placeholder="10-digit mobile" style="background:#f1f5fb;border:none"></div>
+          <div class="fld"><label>Create password * (min 6 chars)</label><input type="password" id="su-admin-pass" placeholder="Strong password" style="background:#f1f5fb;border:none"></div>
+          <button onclick="doCompanySignup()" style="width:100%;padding:13px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px">Create Company Account →</button>
+        </div>
+
+        <!-- Employee join form -->
+        <div id="signup-employee-form" class="hidden">
+          <button onclick="backToRolePicker()" style="background:none;border:none;color:#0f766e;font-size:13px;font-weight:600;cursor:pointer;padding:0;margin-bottom:12px">← Choose different option</button>
+          <div id="signup-emp-err"></div>
+          <div class="fld"><label>Select your company *</label>
+            <select id="su-emp-company" style="background:#f0fdf4;border:none;font-weight:600">
+              <option value="">Loading companies…</option>
+            </select>
+          </div>
+          <div style="font-size:11px;color:#64748b;margin-top:-10px;margin-bottom:14px">Your company not listed? Ask your HR to register it first.</div>
+          <div class="fld"><label>Full name *</label><input type="text" id="su-emp-name" placeholder="Your name" style="background:#f1f5fb;border:none"></div>
+          <div class="fld"><label>Work email *</label><input type="email" id="su-emp-email" placeholder="your email address" style="background:#f1f5fb;border:none"></div>
+          <div class="fld"><label>Phone</label><input type="tel" id="su-emp-phone" placeholder="10-digit mobile" style="background:#f1f5fb;border:none"></div>
+          <div class="fld"><label>Create password * (min 6 chars)</label><input type="password" id="su-emp-pass" placeholder="Strong password" style="background:#f1f5fb;border:none"></div>
+          <button onclick="doEmployeeSignup()" style="width:100%;padding:13px;background:linear-gradient(135deg,#0f766e,#10b981);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px">Join Company →</button>
+        </div>
       </div>
 
-      <div id="emp-login-tab">
-        <div id="emp-login-err"></div>
-        <div id="emp-login-form">
-          <div class="fld"><label>Your work email</label><input type="email" id="emp-email" placeholder="yourname@company.com" autocomplete="username"></div>
-          <div class="fld"><label>Password</label><input type="password" id="emp-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doEmpLogin()"></div>
-          <button class="btn btn-primary" style="width:100%;padding:10px;background:#0f766e" onclick="doEmpLogin()">Sign in as Employee</button>
+      <!-- Super admin view (hidden by default) -->
+      <div id="super-admin-view" class="hidden">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
+          <div>
+            <div style="font-size:22px;font-weight:800;color:#111">👑 Super Admin</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">Kreayotoo internal access</div>
+          </div>
+          <a href="#" onclick="event.preventDefault();hideSuperAdmin()" style="font-size:13px;color:#7c3aed;font-weight:700;text-decoration:none">← Back</a>
         </div>
-        <div id="emp-otp-form" class="hidden">
-          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 12px;margin-bottom:1rem;font-size:12px;color:#1e40af">
-            📧 OTP sent to <strong id="emp-otp-email-show"></strong>
-          </div>
-          <div class="fld"><label>Enter OTP *</label>
-            <input type="text" id="emp-otp-input" placeholder="Enter 6-digit code" maxlength="6"
-              style="letter-spacing:8px;font-size:20px;font-weight:700;text-align:center"
-              onkeydown="if(event.key==='Enter')empVerifyOTP()">
-          </div>
-          <div id="emp-otp-timer" style="font-size:12px;color:var(--muted);margin-bottom:8px;text-align:center"></div>
-          <div id="emp-otp-err"></div>
-            <div style="display:flex;gap:8px;margin-top:.5rem">
-              <button class="btn btn-sec" style="flex:1" onclick="empOTPBack()">← Back</button>
-              <button class="btn btn-primary" style="flex:2;background:#0f766e" onclick="empVerifyOTP()">Verify & Sign in</button>
-            </div>
-            <div style="text-align:center;margin-top:10px;font-size:12px;color:var(--muted)">
-              Didn't receive? <span style="color:#0f766e;cursor:pointer;font-weight:600" onclick="empResendOTP()">Resend OTP</span>
-            </div>
-          </div>
-
-        <div style="margin-top:12px;text-align:center;font-size:13px;color:var(--muted)">
-          New here? <span style="color:#0f766e;cursor:pointer;font-weight:700" onclick="showRegister()">Create your account →</span>
-        </div>
-        <div style="margin-top:8px;text-align:center;font-size:11px;color:var(--muted)"><span style="color:#0f766e;cursor:pointer;font-weight:600" onclick="showForgotPassword()">Forgot password?</span></div>
+        <div id="sa-err"></div>
+        <div class="fld"><label>Email</label><input type="email" id="sa-email" placeholder="claudekreayotoo@gmail.com" style="background:#f1f5fb;border:none"></div>
+        <div class="fld"><label>Password</label><input type="password" id="sa-pass" placeholder="Your password" style="background:#f1f5fb;border:none"></div>
+        <button onclick="doSuperAdminLogin()" style="width:100%;padding:13px;background:#1a1a4e;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Access Super Admin →</button>
       </div>
     </div>
   </div>
+
   </div>`;
 }
+// ─── NEW KREDILY-STYLE UNIFIED LOGIN ────────────────────────────
+function showSignup(){
+  const v1=$('signin-view'); if(v1) v1.classList.add('hidden');
+  const v2=$('signup-view'); if(v2) v2.classList.remove('hidden');
+  const v3=$('super-admin-view'); if(v3) v3.classList.add('hidden');
+  backToRolePicker();
+}
+function showSignin(){
+  const v1=$('signin-view'); if(v1) v1.classList.remove('hidden');
+  const v2=$('signup-view'); if(v2) v2.classList.add('hidden');
+  const v3=$('super-admin-view'); if(v3) v3.classList.add('hidden');
+}
+function backToRolePicker(){
+  const rp=$('signup-role-picker'); if(rp) rp.classList.remove('hidden');
+  const cf=$('signup-company-form'); if(cf) cf.classList.add('hidden');
+  const ef=$('signup-employee-form'); if(ef) ef.classList.add('hidden');
+}
+function showSignupCompany(){
+  const rp=$('signup-role-picker'); if(rp) rp.classList.add('hidden');
+  const cf=$('signup-company-form'); if(cf) cf.classList.remove('hidden');
+}
+async function showSignupEmployee(){
+  const rp=$('signup-role-picker'); if(rp) rp.classList.add('hidden');
+  const ef=$('signup-employee-form'); if(ef) ef.classList.remove('hidden');
+  // Load companies into dropdown
+  const sel=$('su-emp-company');
+  if(!sel) return;
+  sel.innerHTML='<option value="">Loading companies…</option>';
+  try{
+    const companies=await sb('companies','GET',null,'?select=company_id,name,status&order=name.asc');
+    if(!companies||!companies.length){
+      sel.innerHTML='<option value="">No companies registered yet</option>';
+      return;
+    }
+    const active=companies.filter(c=>(c.status||'Active')==='Active'&&c.company_id!=='KSPL');
+    if(!active.length){
+      sel.innerHTML='<option value="">No active companies — ask your HR to register one</option>';
+      return;
+    }
+    sel.innerHTML='<option value="">— Select your company —</option>'+
+      active.map(c=>`<option value="${c.company_id}">${c.name}</option>`).join('');
+  }catch(e){
+    console.error('Could not load companies:',e);
+    sel.innerHTML='<option value="">Failed to load companies — check your connection</option>';
+  }
+}
+function revealSuperAdmin(){
+  const v1=$('signin-view'); if(v1) v1.classList.add('hidden');
+  const v2=$('signup-view'); if(v2) v2.classList.add('hidden');
+  const v3=$('super-admin-view'); if(v3) v3.classList.remove('hidden');
+  frStopCamera();
+}
+function hideSuperAdmin(){ showSignin(); }
+
+function loginWithFace(){
+  alert('Face login: enter your email first on the Sign In tab, then I\'ll show face scan.');
+  // Legacy face flow can be wired here - left as simple handler for now
+}
+
+// SMART LOGIN — email decides role
+async function doSmartLogin(){
+  const em = ($('smart-email')||{}).value?.trim().toLowerCase();
+  const pw = ($('smart-pass')||{}).value;
+  const err = $('login-err');
+  if(!em||!pw){ if(err)err.innerHTML=`<div class="alert alert-e">Enter email and password</div>`; return; }
+  if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe;margin-bottom:8px">🔎 Looking up your account…</div>`;
+
+  // 1. Super admin (hardcoded)
+  if(em === D.user.email.toLowerCase() && pw === D.user.password){
+    currentCompany = null;
+    currentRole = 'admin';
+    D.loggedIn = true;
+    save();
+    if(err) err.innerHTML = `<div class="alert alert-s">✅ Welcome, Super Admin!</div>`;
+    await syncFromSupabase();
+    renderApp();
+    return;
+  }
+
+  // 2. Company admin
+  try{
+    const companies = await sb('companies','GET',null,`?admin_email=eq.${encodeURIComponent(em)}&select=*`);
+    if(companies && companies.length){
+      const company = companies[0];
+      if(company.admin_password !== pw){
+        if(err) err.innerHTML = `<div class="alert alert-e">Wrong password</div>`;
+        return;
+      }
+      if(company.status && company.status !== 'Active'){
+        if(err) err.innerHTML = `<div class="alert alert-e">This company account is inactive.</div>`;
+        return;
+      }
+      currentCompany = company;
+      currentRole = 'admin';
+      D.loggedIn = true;
+      D.settings = {...D.settings, company: company.name};
+      save();
+      if(err) err.innerHTML = `<div class="alert alert-s">✅ Welcome to ${company.name}!</div>`;
+      await syncFromSupabase();
+      renderApp();
+      return;
+    }
+  }catch(e){ console.warn('Company lookup failed:', e); }
+
+  // 3. Employee
+  try{
+    const employees = await sb('employees','GET',null,`?email=eq.${encodeURIComponent(em)}&select=*`);
+    if(employees && employees.length){
+      const empRec = employees[0];
+      // Check password — stored as password_hash (plain text for now in this portal)
+      if(empRec.password_hash && empRec.password_hash !== pw){
+        if(err) err.innerHTML = `<div class="alert alert-e">Wrong password</div>`;
+        return;
+      }
+      if(!empRec.password_hash){
+        if(err) err.innerHTML = `<div class="alert alert-e">No password set for this account. Please ask your admin to set one.</div>`;
+        return;
+      }
+      // Set the company scope for this employee
+      if(empRec.company_id){
+        const cRes = await sb('companies','GET',null,`?company_id=eq.${encodeURIComponent(empRec.company_id)}&select=*`);
+        if(cRes && cRes.length){
+          currentCompany = cRes[0];
+          D.settings = {...D.settings, company: cRes[0].name};
+        }
+      }
+      currentRole = 'employee';
+      D.loggedIn = true;
+      save();
+      // Build the employee object for the employee portal
+      await syncFromSupabase();
+      const emp = D.employees.find(e => e.email && e.email.toLowerCase() === em);
+      if(!emp){
+        if(err) err.innerHTML = `<div class="alert alert-e">Couldn't load employee profile. Try again.</div>`;
+        return;
+      }
+      currentEmployee = emp;
+      if(err) err.innerHTML = `<div class="alert alert-s">✅ Welcome, ${emp.name}!</div>`;
+      renderEmployeeApp();
+      return;
+    }
+  }catch(e){ console.warn('Employee lookup failed:', e); }
+
+  if(err) err.innerHTML = `<div class="alert alert-e">No account found with this email. <a href="#" onclick="event.preventDefault();showSignup()" style="color:#7c3aed;font-weight:700">Sign up?</a></div>`;
+}
+
+// SUPER ADMIN LOGIN (dedicated form)
+async function doSuperAdminLogin(){
+  const em = ($('sa-email')||{}).value?.trim().toLowerCase();
+  const pw = ($('sa-pass')||{}).value;
+  const err = $('sa-err');
+  if(em === D.user.email.toLowerCase() && pw === D.user.password){
+    currentCompany = null;
+    currentRole = 'admin';
+    D.loggedIn = true;
+    save();
+    await syncFromSupabase();
+    renderApp();
+    return;
+  }
+  if(err) err.innerHTML = `<div class="alert alert-e">Wrong super admin credentials</div>`;
+}
+
+// COMPANY SIGNUP — creates a company + admin
+async function doCompanySignup(){
+  const err = $('signup-err');
+  const name = ($('su-company-name')||{}).value?.trim();
+  const adminName = ($('su-admin-name')||{}).value?.trim();
+  const email = ($('su-admin-email')||{}).value?.trim().toLowerCase();
+  const phone = ($('su-admin-phone')||{}).value?.trim();
+  const pw = ($('su-admin-pass')||{}).value;
+
+  if(!name || !adminName || !email || !pw){
+    if(err) err.innerHTML = `<div class="alert alert-e">Please fill all required fields</div>`;
+    return;
+  }
+  if(pw.length < 6){
+    if(err) err.innerHTML = `<div class="alert alert-e">Password must be 6+ characters</div>`;
+    return;
+  }
+  if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">⚙️ Creating company account…</div>`;
+
+  // Check if email already in use
+  try{
+    const existing = await sb('companies','GET',null,`?admin_email=eq.${encodeURIComponent(email)}&select=company_id`);
+    if(existing && existing.length){
+      if(err) err.innerHTML = `<div class="alert alert-e">This email is already registered as a company admin. <a href="#" onclick="event.preventDefault();showSignin()" style="font-weight:700">Sign in instead?</a></div>`;
+      return;
+    }
+    const existingEmp = await sb('employees','GET',null,`?email=eq.${encodeURIComponent(email)}&select=id`);
+    if(existingEmp && existingEmp.length){
+      if(err) err.innerHTML = `<div class="alert alert-e">This email is already used by an employee. Use a different email for your admin account.</div>`;
+      return;
+    }
+  }catch(e){ /* continue */ }
+
+  // Generate unique company code (first 3 letters of name + 3-digit number)
+  const prefix = name.replace(/[^A-Za-z]/g,'').toUpperCase().slice(0,3).padEnd(3,'X');
+  const code = `${prefix}${Math.floor(Math.random()*900+100)}`;
+
+  const payload = {
+    company_id: code,
+    name,
+    admin_name: adminName,
+    admin_email: email,
+    admin_phone: phone || null,
+    admin_password: pw,
+    status: 'Active',
+    created_at: new Date().toISOString()
+  };
+
+  try{
+    const res = await fetch(`${SB_URL}/rest/v1/companies`, {
+      method: 'POST',
+      headers: {...SB_HDR, 'Prefer': 'return=representation'},
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok){
+      const errText = await res.text();
+      if(err) err.innerHTML = `<div class="alert alert-e">Could not create account: ${errText.substring(0,200)}</div>`;
+      return;
+    }
+    const rows = await res.json();
+    const company = rows[0];
+    if(err) err.innerHTML = `<div class="alert alert-s">✅ Company created! Your company code: <strong>${code}</strong></div>`;
+    setTimeout(()=>{
+      // Auto-login
+      currentCompany = company;
+      currentRole = 'admin';
+      D.loggedIn = true;
+      D.settings = {...D.settings, company: company.name};
+      save();
+      syncFromSupabase().then(()=>renderApp());
+    }, 1500);
+  }catch(e){
+    console.error('Company signup error:', e);
+    if(err) err.innerHTML = `<div class="alert alert-e">Network error: ${e.message||e}</div>`;
+  }
+}
+
+// EMPLOYEE SIGNUP — joins an existing company (picked from dropdown)
+async function doEmployeeSignup(){
+  const err = $('signup-emp-err');
+  const code = ($('su-emp-company')||{}).value?.trim().toUpperCase();
+  const name = ($('su-emp-name')||{}).value?.trim();
+  const email = ($('su-emp-email')||{}).value?.trim().toLowerCase();
+  const phone = ($('su-emp-phone')||{}).value?.trim();
+  const pw = ($('su-emp-pass')||{}).value;
+
+  if(!code){
+    if(err) err.innerHTML = `<div class="alert alert-e">Please select your company</div>`;
+    return;
+  }
+  if(!name || !email || !pw){
+    if(err) err.innerHTML = `<div class="alert alert-e">Please fill all required fields</div>`;
+    return;
+  }
+  if(pw.length < 6){
+    if(err) err.innerHTML = `<div class="alert alert-e">Password must be 6+ characters</div>`;
+    return;
+  }
+  if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">🔎 Verifying company…</div>`;
+
+  try{
+    const companies = await sb('companies','GET',null,`?company_id=eq.${encodeURIComponent(code)}&select=*`);
+    if(!companies || !companies.length){
+      if(err) err.innerHTML = `<div class="alert alert-e">Selected company no longer exists. Please pick again.</div>`;
+      return;
+    }
+    const company = companies[0];
+
+    // Check email not already used in same company
+    const existing = await sb('employees','GET',null,`?email=eq.${encodeURIComponent(email)}&company_id=eq.${encodeURIComponent(code)}&select=id`);
+    if(existing && existing.length){
+      if(err) err.innerHTML = `<div class="alert alert-e">This email is already registered in ${company.name}. <a href="#" onclick="event.preventDefault();showSignin()" style="font-weight:700">Sign in instead?</a></div>`;
+      return;
+    }
+
+    if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">⚙️ Creating your account in ${company.name}…</div>`;
+
+    // Generate emp ID
+    const empCount = await sb('employees','GET',null,`?company_id=eq.${encodeURIComponent(code)}&select=id`);
+    const num = String((empCount?empCount.length:0)+1).padStart(3,'0');
+    const empId = `${code}-${num}`;
+
+    const payload = {
+      employee_id: empId,
+      name,
+      email,
+      phone: phone || null,
+      dept: 'Unassigned',
+      role: 'Employee',
+      status: 'Active',
+      salary: 0,
+      joined: new Date().toISOString().slice(0,10),
+      self_registered: true,
+      password_hash: pw,
+      emp_type: 'office',
+      company_id: code
+    };
+
+    const res = await fetch(`${SB_URL}/rest/v1/employees`, {
+      method: 'POST',
+      headers: {...SB_HDR, 'Prefer': 'return=representation'},
+      body: JSON.stringify(payload)
+    });
+    if(!res.ok){
+      const errText = await res.text();
+      if(err) err.innerHTML = `<div class="alert alert-e">Could not create account: ${errText.substring(0,200)}</div>`;
+      return;
+    }
+    if(err) err.innerHTML = `<div class="alert alert-s">✅ Welcome to ${company.name}! Employee ID: <strong>${empId}</strong></div>`;
+
+    // Notify company admin
+    try{
+      await sbSaveNotification({
+        msg: `👋 ${name} just joined as an employee (ID: ${empId})`,
+        type: 'success',
+        to: company.admin_email,
+        company_id: code
+      });
+    }catch(e){/* non-critical */}
+
+    setTimeout(()=>{
+      // Auto-login as employee
+      currentCompany = company;
+      currentRole = 'employee';
+      D.loggedIn = true;
+      D.settings = {...D.settings, company: company.name};
+      save();
+      syncFromSupabase().then(()=>{
+        const emp = D.employees.find(e => e.email && e.email.toLowerCase() === email);
+        if(emp){
+          currentEmployee = emp;
+          renderEmployeeApp();
+        } else {
+          location.reload();
+        }
+      });
+    }, 1500);
+  }catch(e){
+    console.error('Employee signup error:', e);
+    if(err) err.innerHTML = `<div class="alert alert-e">Network error: ${e.message||e}</div>`;
+  }
+}
+
 function switchLoginTab(tab){
   ['admin','company','emp'].forEach(t=>{
     const el=$(t==='emp'?'emp-login-tab':t==='company'?'company-login-tab':'admin-login-tab');
@@ -1400,7 +1800,12 @@ function setLoginMethod(method){
   else{frStopCamera();captureGeo();}
 }
 function bindLogin(){
-  document.querySelectorAll('#l-email,#l-pass').forEach(el=>el.addEventListener('keydown',e=>e.key==='Enter'&&doLogin()));
+  // New unified login
+  document.querySelectorAll('#smart-email,#smart-pass').forEach(el=>el.addEventListener('keydown',e=>e.key==='Enter'&&doSmartLogin()));
+  document.querySelectorAll('#sa-email,#sa-pass').forEach(el=>el.addEventListener('keydown',e=>e.key==='Enter'&&doSuperAdminLogin()));
+  // Auto-uppercase company code
+  const codeInput=$('su-emp-code');
+  if(codeInput) codeInput.addEventListener('input', e=>{ e.target.value = e.target.value.toUpperCase(); });
   setTimeout(captureGeo,200);
 }
 function revealSuperAdmin(){
@@ -4599,6 +5004,7 @@ function pgDashboard(){
   <div class="page-hd">
     <div><div class="pg-title">Hi, ${currentCompany?(currentCompany.name||'').split(' ')[0]:(D.user&&D.user.name?D.user.name.split(' ')[0]:'Admin')}! 👋</div><div class="pg-sub">${dateLabel()}${currentCompany?` · ${currentCompany.name}`:' · Super Admin'}</div></div>
     <div style="display:flex;gap:8px">
+      ${currentCompany?`<button class="btn btn-sec" onclick="copyCompanyCode('${currentCompany.company_id}','${(currentCompany.name||'').replace(/'/g,'&apos;')}')" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #fbbf24;color:#78350f;font-weight:700">📋 Invite employees</button>`:''}
       <button class="btn btn-sec" onclick="nav('setup-wizard')" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;color:#1e40af;font-weight:700">⚡ Setup Wizard</button>
       <button class="btn btn-primary" onclick="openEmpModal()">+ Add employee</button>
     </div>
@@ -8233,20 +8639,34 @@ function pgCompanies(){
     <div><div class="pg-title">🏭 Manage Companies</div><div class="pg-sub">${companies.length} companies on the platform</div></div>
     <button class="btn btn-primary" onclick="openCompanyModal()">+ Add company</button>
   </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem">
-    ${companies.map(c=>`
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem">
+    ${companies.map(c=>{
+      const empCount = (D.employees||[]).filter(e=>e.companyId===c.company_id||e.company_id===c.company_id).length;
+      return `
     <div style="background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.06)">
-      <div style="background:${c.company_id==='KSPL'?'var(--navy)':'#7c3aed'};color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-weight:800;font-size:14px">${c.name}</div>
-          <div style="font-size:11px;opacity:.7;margin-top:2px">ID: ${c.company_id}</div>
+      <div style="background:${c.company_id==='KSPL'?'var(--navy)':'#7c3aed'};color:#fff;padding:14px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <div style="font-weight:800;font-size:15px">${c.name}</div>
+            <div style="font-size:11px;opacity:.75;margin-top:2px">${c.admin_name||''} · ${empCount} employee${empCount!==1?'s':''}</div>
+          </div>
+          <span style="background:rgba(255,255,255,.2);padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600">${c.status||'Active'}</span>
         </div>
-        <span style="background:rgba(255,255,255,.2);padding:3px 10px;border-radius:20px;font-size:11px">${c.status||'Active'}</span>
       </div>
+
+      <!-- Signup code block -->
+      <div style="background:#fef3c7;padding:10px 16px;border-bottom:1px solid #fde68a">
+        <div style="font-size:10px;color:#92400e;font-weight:700;letter-spacing:1px;margin-bottom:4px">SIGNUP CODE</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <code style="background:#fff;padding:6px 12px;border-radius:6px;font-family:monospace;font-size:15px;font-weight:800;color:#78350f;letter-spacing:2px;border:1px dashed #fbbf24">${c.company_id}</code>
+          <button onclick="copyCompanyCode('${c.company_id}','${(c.name||'').replace(/'/g,'&apos;')}')" style="background:#f59e0b;color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">📋 Copy invite</button>
+        </div>
+      </div>
+
       <div style="padding:12px 16px">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:2px">Admin login</div>
-        <div style="font-size:13px;font-weight:600">${c.admin_email}</div>
-        <div style="font-size:12px;font-family:monospace;background:#f1f5f9;padding:3px 8px;border-radius:6px;margin:6px 0 12px;display:inline-block">${c.admin_password}</div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">Admin</div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:4px">${c.admin_email}</div>
+        <div style="font-size:11px;font-family:monospace;background:#f1f5f9;padding:3px 8px;border-radius:4px;margin-bottom:10px;color:var(--muted);display:inline-block">password: ${c.admin_password}</div>
         <div style="display:flex;gap:6px">
           ${c.company_id!=='KSPL'?`
           <button class="btn btn-sec" style="flex:1;font-size:12px" onclick="openCompanyModal('${c.company_id}')">✏ Edit</button>
@@ -8255,10 +8675,35 @@ function pgCompanies(){
           `:`<span style="font-size:11px;color:var(--muted)">✅ Platform owner</span>`}
         </div>
       </div>
-    </div>`).join('')}
+    </div>`;}).join('')}
     ${companies.length===0?`<div class="card" style="text-align:center;color:var(--muted);padding:2rem;grid-column:1/-1">No companies yet. Add your first client company!</div>`:''}
   </div>
   <div id="company-modal-wrap"></div>`;
+}
+
+function copyCompanyCode(code, name){
+  const portalUrl = location.origin;
+  const msg = `Welcome to ${name}!
+
+To join our company portal:
+
+1. Visit: ${portalUrl}
+2. Click "Sign Up" in the top-right
+3. Choose "Join my company"
+4. Select "${name}" from the company dropdown
+5. Fill in your details and create a password
+
+You'll then have access to the ${name} portal to mark attendance, apply for leave, view payslips, and more.`;
+
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(msg).then(()=>{
+      showToast(`✅ Invite message copied! Share with your team`, 'success');
+    }).catch(()=>{
+      prompt('Copy this invite:', msg);
+    });
+  } else {
+    prompt('Copy this invite:', msg);
+  }
 }
 
 function openCompanyModal(editId=null){
