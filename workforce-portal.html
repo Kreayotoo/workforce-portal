@@ -377,11 +377,13 @@ function initData(){
     settings:{company:'Kreayotoo Solutions',email:'claudekreayotoo@gmail.com',tz:'Asia/Kolkata',currency:'INR',hours:9,officeRadius:500,officeLat:17.3850,officeLng:78.4867},
     officeLocations:[{id:'LOC-1',name:'Head Office — Hyderabad',lat:17.3850,lng:78.4867,radius:500,color:'#3b82f6'}],
     loginLogs:[],loggedIn:false,
-    companies:[]
+    companies:[],
+    teams:[]
   };
 }
 
 let D = loadData() || initData();
+if(!D.teams) D.teams=[];
 let currentRole='admin', currentEmployee=null, SB_READY=false;
 let currentCompany = null;
 
@@ -437,6 +439,7 @@ async function syncFromSupabase(){
     const notifs = await sb('notifications','GET',null,notifQuery).catch(()=>null);
     const sets = await sb('settings','GET',null,'?select=*&limit=1').catch(()=>null);
     const companies = await sb('companies','GET',null,'?select=*').catch(()=>null);
+    const teams = await sb('teams','GET',null,`?select=*${cFilter}&order=name.asc`).catch(()=>null);
     const hols = await sb('holidays','GET',null,`?select=*${cFilter}&order=date.asc`).catch(()=>null);
     const locs = await sb('office_locations','GET',null,`?select=*${cFilter}`).catch(()=>null);
     const sessions = await sb('attendance_sessions','GET',null,`?select=*${cFilter}&order=check_in.desc&limit=200`).catch(()=>null);
@@ -461,7 +464,7 @@ async function syncFromSupabase(){
       bloodGroup:e.blood_group||'',
       photoUrl:e.photo_url||'',
       teamLeadEmail:e.team_lead_email||'',
-      teamLeadEmail:e.team_lead_email||''
+      teamId:e.team_id||null
     }));
     if(att!==null) D.attendance=att.map(a=>({_uuid:a.id,empId:a.employee_id,empName:a.employee_name,date:a.date,status:a.status,in:a.in_time,out:a.out_time}));
     if(lvs!==null) D.leaves=lvs.map(l=>({
@@ -476,6 +479,13 @@ async function syncFromSupabase(){
     if(notifs!==null&&notifs.length) D.notifications=notifs.map(n=>({_uuid:n.id,id:n.id,type:n.type,msg:n.message,time:new Date(n.created_at).toLocaleString('en-IN'),read:n.is_read}));
     if(sets!==null&&sets.length){const s=sets[0];D.settings={...D.settings,company:s.company_name||D.settings.company,email:s.company_email||D.settings.email,tz:s.timezone||D.settings.tz,currency:s.currency||D.settings.currency,hours:s.work_hours||D.settings.hours,officeLat:s.office_lat||D.settings.officeLat,officeLng:s.office_lng||D.settings.officeLng,officeRadius:s.office_radius||D.settings.officeRadius,_uuid:s.id};}
     if(companies!==null) D.companies=companies;
+    if(teams!==null) D.teams=teams.map(t=>({
+      _uuid:t.id, id:t.id,
+      name:t.name, department:t.department||'',
+      teamLeadEmail:t.team_lead_email||'',
+      description:t.description||'',
+      companyId:t.company_id
+    }));
     if(hols!==null&&hols.length) D.holidays=hols.map(h=>({_uuid:h.id,id:h.id,name:h.name,date:h.date,type:h.type||'National'}));
     if(locs!==null&&locs.length) D.officeLocations=locs.map(l=>({_uuid:l.id,id:l.location_id,name:l.name,lat:parseFloat(l.lat),lng:parseFloat(l.lng),radius:l.radius||500,color:l.color||'#3b82f6'}));
     if(sessions!==null){
@@ -534,7 +544,7 @@ async function sbSaveEmployee(emp){
   if(emp.bloodGroup) payload.blood_group=emp.bloodGroup;
   if(emp.photoUrl!==undefined) payload.photo_url=emp.photoUrl;
   if(emp.teamLeadEmail!==undefined) payload.team_lead_email=emp.teamLeadEmail||null;
-  if(emp.teamLeadEmail!==undefined) payload.team_lead_email=emp.teamLeadEmail||null;
+  if(emp.teamId!==undefined) payload.team_id=emp.teamId||null;
 
   try{
     if(emp._uuid){
@@ -920,6 +930,46 @@ async function sbSaveLocation(loc){
 }
 async function sbDeleteLocation(loc){if(loc._uuid)await sb('office_locations','DELETE',null,`?id=eq.${loc._uuid}`);}
 
+// ─── TEAMS ────────────────────────────────────────────────────────
+async function sbSaveTeam(t){
+  const cid=currentCompany?currentCompany.company_id:'KSPL';
+  const payload={
+    name:t.name,
+    department:t.department||null,
+    team_lead_email:t.teamLeadEmail||null,
+    description:t.description||null,
+    company_id:cid
+  };
+  if(t._uuid){
+    const res=await fetch(`${SB_URL}/rest/v1/teams?id=eq.${t._uuid}`,{method:'PATCH',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(payload)});
+    if(!res.ok){console.error('❌ Save team:',await res.text());return null;}
+    const r=await res.json(); return r;
+  }
+  const res=await fetch(`${SB_URL}/rest/v1/teams`,{method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(payload)});
+  if(!res.ok){console.error('❌ Save team POST:',await res.text());return null;}
+  const r=await res.json();
+  if(r&&r[0]){t._uuid=r[0].id; t.id=r[0].id;}
+  return r;
+}
+async function sbDeleteTeam(t){
+  if(!t._uuid) return;
+  // Unlink any employees from this team first
+  await fetch(`${SB_URL}/rest/v1/employees?team_id=eq.${t._uuid}`,{
+    method:'PATCH',headers:SB_HDR,body:JSON.stringify({team_id:null})
+  });
+  await sb('teams','DELETE',null,`?id=eq.${t._uuid}`);
+  // Unlink locally
+  D.employees.forEach(e=>{ if(e.teamId===t._uuid) e.teamId=null; });
+}
+async function sbUpdateEmpTeam(empUuid, teamId){
+  if(!empUuid) return;
+  const res=await fetch(`${SB_URL}/rest/v1/employees?id=eq.${empUuid}`,{
+    method:'PATCH',headers:SB_HDR,
+    body:JSON.stringify({team_id:teamId||null})
+  });
+  if(!res.ok) console.error('❌ Update emp team:',await res.text());
+}
+
 // ─── UNIVERSAL DATE PARSER ────────────────────────────────────────
 // Handles: YYYY-MM-DD, DD/MM/YYYY, MM/DD/YYYY, DD-MM-YYYY, DD MM YYYY,
 //          MM-DD-YYYY, DD.MM.YYYY, "Jan 15 2000", "15 Jan 2000", "January 15 2000" etc.
@@ -1042,7 +1092,7 @@ function renderApp(){
     </div>
     <div class="body-row">
       <div class="sidebar">
-        ${[['⊞','dashboard','Dashboard'],['👥','employees','Employees'],['📅','attendance','Attendance'],['🏖','leave','Leave'],['💰','payroll','Payroll'],['🧾','expenses','Expenses'],['⭐','performance','Performance'],['📆','holidays','Holidays'],['🏢','orgchart','Org Chart'],['🪪','idcards','ID Cards'],['🗺','locations','Locations'],['🔔','notifications','Notifications'],['⚙','settings','Settings'],...(!currentCompany?[['🏭','companies','Companies']]:[])]
+        ${[['⊞','dashboard','Dashboard'],['👥','employees','Employees'],['👨‍👩‍👧','teams','Teams'],['📅','attendance','Attendance'],['🏖','leave','Leave'],['💰','payroll','Payroll'],['🧾','expenses','Expenses'],['⭐','performance','Performance'],['📆','holidays','Holidays'],['🏢','orgchart','Org Chart'],['🪪','idcards','ID Cards'],['🗺','locations','Locations'],['🔔','notifications','Notifications'],['⚙','settings','Settings'],...(!currentCompany?[['🏭','companies','Companies']]:[])]
         .map(([ic,pg,tt])=>`
         <div class="si ${currentPage===pg?'act':''}" title="${tt}" onclick="nav('${pg}')">
           <div class="si-icon">${ic}</div>
@@ -1053,7 +1103,7 @@ function renderApp(){
       <div class="main" id="main-content"></div>
     </div>
   </div>`;
-  const pages = {dashboard:pgDashboard,employees:pgEmployees,attendance:pgAttendance,leave:pgLeave,payroll:pgPayroll,expenses:pgExpenses,performance:pgPerformance,notifications:pgNotifications,settings:pgSettings,locations:pgLocations,holidays:pgHolidays,orgchart:pgOrgChart,idcards:pgIDCards,companies:pgCompanies,kycrequests:pgKYCRequests,'setup-wizard':pgSetupWizard,worklogs:pgWorkLogs};
+  const pages = {dashboard:pgDashboard,employees:pgEmployees,teams:pgTeams,attendance:pgAttendance,leave:pgLeave,payroll:pgPayroll,expenses:pgExpenses,performance:pgPerformance,notifications:pgNotifications,settings:pgSettings,locations:pgLocations,holidays:pgHolidays,orgchart:pgOrgChart,idcards:pgIDCards,companies:pgCompanies,kycrequests:pgKYCRequests,'setup-wizard':pgSetupWizard,worklogs:pgWorkLogs};
   if(pages[currentPage]){
     try{
       $('main-content').innerHTML = pages[currentPage]();
@@ -5974,7 +6024,14 @@ function openEmpModal(id){
       ${['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bg=>`<option value="${bg}" ${e.bloodGroup===bg?'selected':''}>${bg}</option>`).join('')}
     </select>
   </div></div>
-  <div class="fld"><label>👥 Team Lead <span style="color:var(--muted);font-weight:400">(leave requests go here first)</span></label>
+  <div class="fld"><label>👨‍👩‍👧 Team <span style="color:var(--muted);font-weight:400">(determines approval flow)</span></label>
+    <select id="ef-team" onchange="onTeamSelect(this.value)">
+      <option value="">— No team —</option>
+      ${(D.teams||[]).map(t=>`<option value="${t._uuid}" data-tl="${t.teamLeadEmail||''}" ${e.teamId===t._uuid?'selected':''}>${t.name}${t.department?` — ${t.department}`:''}${t.teamLeadEmail?` · TL: ${t.teamLeadEmail}`:''}</option>`).join('')}
+    </select>
+    <div style="font-size:11px;color:var(--muted);margin-top:3px">Picking a team auto-sets the Team Lead below. You can override it.</div>
+  </div>
+  <div class="fld"><label>👑 Team Lead <span style="color:var(--muted);font-weight:400">(leave requests go here first)</span></label>
     <select id="ef-tl">
       <option value="">— No team lead (leaves go directly to HR) —</option>
       ${D.employees.filter(x=>x.id!==e.id&&x.status==='Active').map(x=>`<option value="${x.email}" ${e.teamLeadEmail===x.email?'selected':''}>${x.name} (${x.role||'Employee'})</option>`).join('')}
@@ -5983,8 +6040,19 @@ function openEmpModal(id){
   <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('emp-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="saveEmp()">${id?'Save changes':'Add employee'}</button></div>
   </div></div>`;
 }
+
+// When a team is picked in Edit Employee form, auto-fill the TL dropdown
+function onTeamSelect(teamUuid){
+  const tlSelect=$('ef-tl');
+  if(!tlSelect) return;
+  if(!teamUuid){ return; } // don't clear if "No team" picked — keep current TL
+  const team=D.teams.find(t=>t._uuid===teamUuid);
+  if(team && team.teamLeadEmail){
+    tlSelect.value = team.teamLeadEmail;
+  }
+}
 async function saveEmp(){
-  const data={name:$('ef-name').value,email:$('ef-email').value,phone:$('ef-ph').value,dob:$('ef-dob-birth').value,joined:$('ef-doj').value,dept:$('ef-dept').value,role:$('ef-role').value,salary:parseInt($('ef-sal').value)||0,status:$('ef-st').value,empType:$('ef-type').value||'office',bloodGroup:$('ef-bg')?.value||'',teamLeadEmail:$('ef-tl')?.value||''};
+  const data={name:$('ef-name').value,email:$('ef-email').value,phone:$('ef-ph').value,dob:$('ef-dob-birth').value,joined:$('ef-doj').value,dept:$('ef-dept').value,role:$('ef-role').value,salary:parseInt($('ef-sal').value)||0,status:$('ef-st').value,empType:$('ef-type').value||'office',bloodGroup:$('ef-bg')?.value||'',teamLeadEmail:$('ef-tl')?.value||'',teamId:$('ef-team')?.value||null};
   if(!data.name||!data.email){alert('Name and email are required');return;}
   if(editingEmpId){
     const existing=D.employees.find(e=>e.id===editingEmpId);
@@ -8265,6 +8333,248 @@ async function submitPerf(){
 }
 
 // ─── LOCATION LOGS ───────────────────────────────────────────────
+// ─── TEAMS MODULE ────────────────────────────────────────────────
+function pgTeams(){
+  const teams=D.teams||[];
+  const emps=D.employees||[];
+
+  return `
+  <div class="page-hd">
+    <div>
+      <div class="pg-title">👨‍👩‍👧 Teams</div>
+      <div class="pg-sub">${teams.length} team${teams.length!==1?'s':''} · Organize employees and assign leaders</div>
+    </div>
+    <button class="btn btn-primary" onclick="openTeamModal()">+ New team</button>
+  </div>
+
+  ${teams.length===0 ? `
+  <div class="card" style="text-align:center;padding:2.5rem 1rem">
+    <div style="font-size:56px;margin-bottom:12px">👨‍👩‍👧</div>
+    <div style="font-weight:700;font-size:17px;margin-bottom:6px">No teams created yet</div>
+    <div style="color:var(--muted);font-size:13px;margin-bottom:18px;max-width:420px;margin-left:auto;margin-right:auto">Create teams to group employees under a Team Lead. Leave requests, attendance, and reports will automatically follow team structure.</div>
+    <button class="btn btn-primary" onclick="openTeamModal()">+ Create your first team</button>
+  </div>` : `
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:1rem">
+    ${teams.map(t=>{
+      const tl = t.teamLeadEmail ? emps.find(e=>e.email&&e.email.toLowerCase()===t.teamLeadEmail.toLowerCase()) : null;
+      const members = emps.filter(e=>e.teamId===t._uuid && e.status==='Active');
+      return `<div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:14px 16px;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff">
+          <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:16px;font-weight:800;margin-bottom:2px">${t.name}</div>
+              <div style="font-size:11px;opacity:.85">${t.department||'No department'}</div>
+            </div>
+            <div style="background:rgba(255,255,255,.15);padding:4px 10px;border-radius:12px;font-size:11px;font-weight:700">👥 ${members.length}</div>
+          </div>
+        </div>
+        <div style="padding:14px 16px">
+          ${tl ? `
+            <div style="display:flex;align-items:center;gap:9px;padding:8px 10px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;margin-bottom:10px">
+              ${av(tl.name,32)}
+              <div style="flex:1;min-width:0">
+                <div style="font-size:11px;color:#92400e;font-weight:700;text-transform:uppercase;letter-spacing:.5px">👑 Team Lead</div>
+                <div style="font-size:13px;font-weight:700;color:#78350f">${tl.name}</div>
+              </div>
+            </div>` : `
+            <div style="padding:8px 10px;background:#fee2e2;border:1px solid #fecaca;border-radius:8px;margin-bottom:10px;font-size:12px;color:#991b1b;text-align:center;font-weight:600">
+              ⚠️ No Team Lead assigned
+            </div>`}
+          ${t.description ? `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;font-style:italic">"${t.description}"</div>` : ''}
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Members</div>
+          ${members.length===0 ? `
+            <div style="padding:12px;text-align:center;color:var(--muted);font-size:12px;background:#f8fafc;border-radius:6px">No members yet</div>` : `
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">
+              ${members.slice(0,6).map(m=>`<span style="background:#f1f5f9;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:600">${m.name}</span>`).join('')}
+              ${members.length>6?`<span style="background:#e2e8f0;padding:3px 9px;border-radius:12px;font-size:11px;color:var(--muted)">+${members.length-6} more</span>`:''}
+            </div>`}
+          <div style="display:flex;gap:6px;margin-top:10px">
+            <button class="btn btn-sec" style="flex:1;font-size:12px;padding:7px" onclick="openTeamModal('${t._uuid}')">✏️ Edit</button>
+            <button class="btn btn-sec" style="flex:1;font-size:12px;padding:7px" onclick="openTeamMembers('${t._uuid}')">👥 Members</button>
+            <button class="btn btn-sec" style="font-size:12px;padding:7px;color:#dc2626;border-color:#fecaca" onclick="deleteTeam('${t._uuid}')" title="Delete team">🗑</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`}
+
+  <div id="team-modal-wrap"></div>
+  <div id="team-members-modal-wrap"></div>`;
+}
+
+function openTeamModal(uuid){
+  const existing = uuid ? D.teams.find(t=>t._uuid===uuid) : null;
+  const emps = D.employees.filter(e=>e.status==='Active');
+  const wrap = $('team-modal-wrap');
+  wrap.innerHTML = `<div class="modal-bg" onclick="if(event.target===this)closeModal('team-modal-wrap')">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-hd">
+        <h3>${existing?'Edit team':'New team'}</h3>
+        <button class="xbtn" onclick="closeModal('team-modal-wrap')">×</button>
+      </div>
+      <div id="team-err"></div>
+      <div class="fld"><label>Team name *</label><input type="text" id="tm-name" value="${existing?.name||''}" placeholder="e.g. Frontend Squad" autocomplete="off"></div>
+      <div class="frow">
+        <div class="fld"><label>Department</label>
+          <select id="tm-dept">
+            <option value="">— Any —</option>
+            ${DEPTS.map(d=>`<option value="${d}" ${existing?.department===d?'selected':''}>${d}</option>`).join('')}
+          </select>
+        </div>
+        <div class="fld"><label>👑 Team Lead</label>
+          <select id="tm-tl">
+            <option value="">— No TL (leaves go to HR) —</option>
+            ${emps.map(e=>`<option value="${e.email}" ${existing?.teamLeadEmail===e.email?'selected':''}>${e.name} — ${e.role||'Employee'}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="fld"><label>Description <span style="color:var(--muted);font-weight:400">(optional)</span></label>
+        <textarea id="tm-desc" rows="2" placeholder="What does this team do?" style="resize:vertical">${existing?.description||''}</textarea>
+      </div>
+      <div class="modal-ftr">
+        <button class="btn btn-sec" onclick="closeModal('team-modal-wrap')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveTeam('${uuid||''}')">${existing?'Save changes':'Create team'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function saveTeam(uuid){
+  const name=$('tm-name').value.trim();
+  const dept=$('tm-dept').value;
+  const tlEmail=$('tm-tl').value;
+  const desc=$('tm-desc').value.trim();
+  const err=$('team-err');
+
+  if(!name){ if(err) err.innerHTML='<div class="alert alert-e">Team name is required</div>'; return; }
+
+  if(err) err.innerHTML='<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">💾 Saving…</div>';
+
+  const team = uuid ? D.teams.find(t=>t._uuid===uuid) : { name:'', department:'', teamLeadEmail:'', description:'' };
+  team.name=name;
+  team.department=dept;
+  team.teamLeadEmail=tlEmail;
+  team.description=desc;
+
+  const result = await sbSaveTeam(team);
+  if(!result){
+    if(err) err.innerHTML='<div class="alert alert-e">Save failed. Check console for details.</div>';
+    return;
+  }
+
+  if(!uuid){
+    // New team
+    if(result[0]){ team._uuid=result[0].id; team.id=result[0].id; team.companyId=result[0].company_id; }
+    D.teams.push(team);
+  }
+  save();
+
+  // Also update team_lead_email for all employees on this team
+  if(tlEmail){
+    for(const emp of D.employees){
+      if(emp.teamId === team._uuid){
+        emp.teamLeadEmail = tlEmail;
+        sbSaveEmployee(emp);
+      }
+    }
+  }
+
+  closeModal('team-modal-wrap');
+  nav('teams');
+  showToast(`✅ Team "${name}" ${uuid?'updated':'created'}`, 'success');
+}
+
+async function deleteTeam(uuid){
+  const t=D.teams.find(x=>x._uuid===uuid);
+  if(!t) return;
+  const memberCount=D.employees.filter(e=>e.teamId===uuid).length;
+  if(!confirm(`Delete team "${t.name}"? ${memberCount>0?`Its ${memberCount} member${memberCount>1?'s':''} will be unassigned.`:''}`)) return;
+  await sbDeleteTeam(t);
+  D.teams=D.teams.filter(x=>x._uuid!==uuid);
+  save();
+  nav('teams');
+  showToast(`🗑 Team "${t.name}" deleted`, 'info');
+}
+
+function openTeamMembers(uuid){
+  const t=D.teams.find(x=>x._uuid===uuid);
+  if(!t) return;
+  window._openTeamMembersId = uuid;
+  const emps=D.employees.filter(e=>e.status==='Active');
+  const members=emps.filter(e=>e.teamId===uuid);
+  const available=emps.filter(e=>!e.teamId || e.teamId!==uuid);
+
+  const wrap=$('team-members-modal-wrap');
+  wrap.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeModal('team-members-modal-wrap')">
+    <div class="modal" style="max-width:820px;max-height:90vh;overflow-y:auto">
+      <div class="modal-hd">
+        <h3>👥 Manage members — ${t.name}</h3>
+        <button class="xbtn" onclick="closeModal('team-members-modal-wrap')">×</button>
+      </div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:12px;color:#1e40af;margin-bottom:1rem">
+        💡 Click <strong>→ Add</strong> to move someone into this team, or <strong>← Remove</strong> to unassign them. Changes save automatically.
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Available <span style="color:#dc2626">(${available.length})</span></div>
+          <div style="border:1px solid var(--border);border-radius:8px;max-height:420px;overflow-y:auto" id="tm-available">
+            ${available.length===0?'<div style="padding:1rem;color:var(--muted);text-align:center;font-size:12px">No one else to add</div>':available.map(e=>{
+              const curTeam = e.teamId ? D.teams.find(x=>x._uuid===e.teamId) : null;
+              return `<div style="padding:8px 12px;border-bottom:1px solid #f1f5f9;display:flex;align-items:center;gap:8px;justify-content:space-between">
+                <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+                  ${av(e.name,28)}
+                  <div style="min-width:0;flex:1">
+                    <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.name}</div>
+                    <div style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.role||'—'}${curTeam?` · in ${curTeam.name}`:''}</div>
+                  </div>
+                </div>
+                <button class="btn btn-primary" style="font-size:11px;padding:4px 10px;background:#16a34a" onclick="assignEmpToTeam('${e._uuid||e.id}','${uuid}')">→ Add</button>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+        <div>
+          <div style="font-weight:700;font-size:13px;margin-bottom:8px;color:#166534;text-transform:uppercase;letter-spacing:.5px">In this team <span style="color:#64748b">(${members.length})</span></div>
+          <div style="border:1px solid #bbf7d0;background:#f0fdf4;border-radius:8px;max-height:420px;overflow-y:auto" id="tm-members">
+            ${members.length===0?'<div style="padding:1rem;color:var(--muted);text-align:center;font-size:12px">No members yet — add some from the left</div>':members.map(e=>`<div style="padding:8px 12px;border-bottom:1px solid #dcfce7;display:flex;align-items:center;gap:8px;justify-content:space-between">
+              <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+                ${av(e.name,28)}
+                <div style="min-width:0;flex:1">
+                  <div style="font-size:13px;font-weight:600">${e.name}</div>
+                  <div style="font-size:10px;color:var(--muted)">${e.role||'—'}${t.teamLeadEmail && e.email && e.email.toLowerCase()===t.teamLeadEmail.toLowerCase()?' · <strong style="color:#92400e">👑 TL</strong>':''}</div>
+                </div>
+              </div>
+              <button class="btn btn-sec" style="font-size:11px;padding:4px 10px;color:#dc2626;border-color:#fecaca" onclick="assignEmpToTeam('${e._uuid||e.id}',null)">← Remove</button>
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>
+      <div class="modal-ftr">
+        <button class="btn btn-primary" onclick="closeModal('team-members-modal-wrap');nav('teams')">Done</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function assignEmpToTeam(empIdOrUuid, teamUuid){
+  const emp=D.employees.find(e=>e._uuid===empIdOrUuid || e.id===empIdOrUuid);
+  if(!emp) return;
+  emp.teamId=teamUuid||null;
+  // Also update teamLeadEmail from the team's TL
+  if(teamUuid){
+    const team=D.teams.find(t=>t._uuid===teamUuid);
+    if(team && team.teamLeadEmail){
+      emp.teamLeadEmail = team.teamLeadEmail;
+    }
+  }
+  save();
+  await sbSaveEmployee(emp);
+  // Re-render members modal
+  if(teamUuid) openTeamMembers(teamUuid);
+  else if(window._openTeamMembersId) openTeamMembers(window._openTeamMembersId);
+  showToast(teamUuid?`✓ Added to team`:`✓ Removed from team`,'success');
+}
+
 function pgLocations(){
   if(!D.loginLogs)D.loginLogs=[];
   if(!D.officeLocations)D.officeLocations=[];
