@@ -883,7 +883,7 @@ function renderApp(){
   $('root').innerHTML = `
   <div class="app">
     <div class="topbar">
-      <div class="tb-logo" style="display:flex;align-items:center;gap:8px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42 42" width="28" height="28"><polygon points="21,2 38,11 38,31 21,40 4,31 4,11" fill="#1a3a5c" stroke="#4ecdc4" stroke-width="2"/><polyline points="10,16 18,21 10,26" fill="none" stroke="#4ecdc4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="22,16 14,21 22,26" fill="none" stroke="#4ecdc4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>KREAYOTOO<span> Solutions</span></div>
+      <div class="tb-logo" onclick="nav('dashboard')" title="Go to Dashboard" style="display:flex;align-items:center;gap:8px;cursor:pointer"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42 42" width="28" height="28"><polygon points="21,2 38,11 38,31 21,40 4,31 4,11" fill="#1a3a5c" stroke="#4ecdc4" stroke-width="2"/><polyline points="10,16 18,21 10,26" fill="none" stroke="#4ecdc4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="22,16 14,21 22,26" fill="none" stroke="#4ecdc4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>KREAYOTOO<span> Solutions</span></div>
       ${currentPage!=='dashboard'?`
       <div style="display:flex;gap:4px;margin-left:8px">
         <button onclick="navBack()" title="Go back" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:13px">← Back</button>
@@ -904,10 +904,12 @@ function renderApp(){
       <div style="position:relative;cursor:pointer;font-size:16px;color:#fff" onclick="nav('notifications')">
         🔔${uc>0?`<div class="si-dot" style="top:-2px;right:-2px"></div>`:''}
       </div>
-      <div style="width:30px;height:30px;border-radius:50%;background:#60a5fa;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#1e3a8a">${initials(currentCompany?(currentCompany.admin_name||currentCompany.name):D.user.name)}</div>
-      <div style="display:flex;flex-direction:column;line-height:1.1">
-        <span style="font-size:12px;color:#fff;font-weight:600">${currentCompany?(currentCompany.admin_name||currentCompany.name):D.user.name}</span>
-        <span style="font-size:10px;color:rgba(255,255,255,.6)">${currentCompany?currentCompany.admin_email:D.user.email}</span>
+      <div onclick="nav('settings')" title="Go to Settings" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:2px 4px;border-radius:6px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='transparent'">
+        <div style="width:30px;height:30px;border-radius:50%;background:#60a5fa;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#1e3a8a">${initials(currentCompany?(currentCompany.admin_name||currentCompany.name):D.user.name)}</div>
+        <div style="display:flex;flex-direction:column;line-height:1.1">
+          <span style="font-size:12px;color:#fff;font-weight:600">${currentCompany?(currentCompany.admin_name||currentCompany.name):D.user.name}</span>
+          <span style="font-size:10px;color:rgba(255,255,255,.6)">${currentCompany?currentCompany.admin_email:D.user.email}</span>
+        </div>
       </div>
       <div style="background:#fbbf24;color:#78350f;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:800;letter-spacing:1px">🛡 ADMIN</div>
       <button class="btn btn-sec" style="font-size:12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff" onclick="logout()">Log out</button>
@@ -2834,7 +2836,7 @@ function renderEmployeeApp(){
   $('root').innerHTML = `
   <div class="app">
     <div class="topbar" style="background:#0f766e">
-      <div class="tb-logo" style="display:flex;align-items:center;gap:8px"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42 42" width="28" height="28"><polygon points="21,2 38,11 38,31 21,40 4,31 4,11" fill="#0d4d40" stroke="#a7f3d0" stroke-width="2"/><polyline points="10,16 18,21 10,26" fill="none" stroke="#a7f3d0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="22,16 14,21 22,26" fill="none" stroke="#a7f3d0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>KREAYOTOO<span style="color:#a7f3d0"> Solutions</span></div>
+      <div class="tb-logo" onclick="navEmp('emp-dashboard')" title="Go to Dashboard" style="display:flex;align-items:center;gap:8px;cursor:pointer"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42 42" width="28" height="28"><polygon points="21,2 38,11 38,31 21,40 4,31 4,11" fill="#0d4d40" stroke="#a7f3d0" stroke-width="2"/><polyline points="10,16 18,21 10,26" fill="none" stroke="#a7f3d0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="22,16 14,21 22,26" fill="none" stroke="#a7f3d0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>KREAYOTOO<span style="color:#a7f3d0"> Solutions</span></div>
       ${empPage!=='emp-dashboard'?`
       <div style="display:flex;gap:4px;margin-left:8px">
         <button onclick="navEmpBack()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:13px">← Back</button>
@@ -2845,10 +2847,12 @@ function renderEmployeeApp(){
       <div style="position:relative;cursor:pointer;font-size:16px;color:#fff;padding:0 4px" onclick="navEmp('emp-notifications')" title="Notifications">
         🔔${unreadCount()>0?`<div style="position:absolute;top:-2px;right:-2px;width:8px;height:8px;border-radius:50%;background:#ef4444"></div>`:''}
       </div>
-      <div style="width:30px;height:30px;border-radius:50%;background:#a7f3d0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#065f46">${initials(emp.name)}</div>
-      <div style="display:flex;flex-direction:column;line-height:1.1">
-        <span style="font-size:12px;color:#fff;font-weight:600">${emp.name}</span>
-        <span style="font-size:10px;color:rgba(255,255,255,.6)">${currentCompany?currentCompany.name:D.settings.company||''}</span>
+      <div onclick="navEmp('emp-profile')" title="Go to My Profile" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:2px 4px;border-radius:6px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='transparent'">
+        <div style="width:30px;height:30px;border-radius:50%;background:#a7f3d0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#065f46">${initials(emp.name)}</div>
+        <div style="display:flex;flex-direction:column;line-height:1.1">
+          <span style="font-size:12px;color:#fff;font-weight:600">${emp.name}</span>
+          <span style="font-size:10px;color:rgba(255,255,255,.6)">${currentCompany?currentCompany.name:D.settings.company||''}</span>
+        </div>
       </div>
       <span style="font-size:10px;background:rgba(255,255,255,.15);padding:2px 8px;border-radius:20px;color:#fff">${emp.dept}</span>
       <div style="background:#a7f3d0;color:#065f46;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:800;letter-spacing:1px">👤 EMPLOYEE</div>
