@@ -563,7 +563,8 @@ async function sbSaveAttendance(rec){
 async function sbSaveLeave(lv){
   const cid=currentCompany?currentCompany.company_id:'KSPL';
   const emp=D.employees.find(e=>e.name===lv.emp);
-  const payload={
+  // Full payload (includes new TL/HR columns)
+  const fullPayload={
     employee_id:emp?emp._uuid:null,
     employee_name:lv.emp,
     leave_type:lv.type,
@@ -580,11 +581,42 @@ async function sbSaveLeave(lv){
     hr_note:lv.hrNote||null,
     requires_hr:!!lv.requiresHr
   };
-  if(lv._uuid){return await sb('leaves','PATCH',payload,`?id=eq.${lv._uuid}`);}
-  const res=await fetch(`${SB_URL}/rest/v1/leaves`,{method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(payload)});
-  if(!res.ok){console.error('❌ SB leave:',await res.text());return null;}
-  const t=await res.text();const r=t?JSON.parse(t):true;
-  if(r&&r[0])lv._uuid=r[0].id;return r;
+  // Fallback payload (only existing columns, for DBs without the migration)
+  const basicPayload={
+    employee_id:emp?emp._uuid:null,
+    employee_name:lv.emp,
+    leave_type:lv.type,
+    from_date:lv.from,to_date:lv.to,days:lv.days,
+    reason:lv.reason||'',
+    status:(lv.status||'Pending TL').includes('TL')||(lv.status||'').includes('HR')?'Pending':(lv.status||'Pending'),
+    company_id:cid
+  };
+
+  async function tryWrite(payload){
+    if(lv._uuid){
+      const res=await fetch(`${SB_URL}/rest/v1/leaves?id=eq.${lv._uuid}`,{method:'PATCH',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(payload)});
+      if(!res.ok){ const t=await res.text(); console.error('❌ SB leave PATCH:',res.status,t); return {ok:false,status:res.status,text:t}; }
+      const t=await res.text(); return {ok:true,data:t?JSON.parse(t):true};
+    }
+    const res=await fetch(`${SB_URL}/rest/v1/leaves`,{method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(payload)});
+    if(!res.ok){ const t=await res.text(); console.error('❌ SB leave POST:',res.status,t); return {ok:false,status:res.status,text:t}; }
+    const t=await res.text(); return {ok:true,data:t?JSON.parse(t):true};
+  }
+
+  // First try full payload
+  let result=await tryWrite(fullPayload);
+
+  // If it failed with "column does not exist" error, retry with basic payload
+  if(!result.ok && result.text && (result.text.includes('column') || result.text.includes('schema'))){
+    console.warn('⚠️ Leave table missing new columns — saving without TL/HR fields. Run SQL migration for full feature support.');
+    showToast('⚠️ Leave saved (basic mode). Ask admin to run DB migration for TL/HR flow.', 'info');
+    result=await tryWrite(basicPayload);
+  }
+
+  if(!result.ok) return null;
+  const r=result.data;
+  if(r&&r[0])lv._uuid=r[0].id;
+  return r;
 }
 async function sbUpdateLeaveStatus(lv){ if(lv._uuid)await sb('leaves','PATCH',{status:lv.status},`?id=eq.${lv._uuid}`); }
 async function sbSaveExpense(exp){
@@ -2864,8 +2896,24 @@ function showToast(msg, type='info'){
 let empPage = 'emp-dashboard';
 
 function renderEmployeeApp(){
-  const emp = currentEmployee;
-  if(!emp){ logout(); return; }
+  let emp = currentEmployee;
+  // Try to re-hydrate from D.employees by email if current ref is missing
+  if(!emp && D._currentEmployee){
+    try{ currentEmployee = JSON.parse(D._currentEmployee); emp = currentEmployee; }catch(e){}
+  }
+  if(!emp && D.employees && D.employees.length){
+    // Fall back: pick from D by saved email if possible
+    const savedEmail = (()=>{ try{ const s=JSON.parse(D._currentEmployee||'{}'); return s.email; }catch(e){return null;} })();
+    if(savedEmail){
+      const found = D.employees.find(x=>x.email && x.email.toLowerCase()===savedEmail.toLowerCase());
+      if(found){ currentEmployee = found; emp = found; }
+    }
+  }
+  if(!emp){
+    console.warn('[renderEmployeeApp] No currentEmployee — falling back to login');
+    logout();
+    return;
+  }
   // Kill any stray auto-refresh timer that existed from previous versions
   if(window._empRefreshTimer){clearInterval(window._empRefreshTimer);window._empRefreshTimer=null;}
   $('root').innerHTML = `
@@ -3608,10 +3656,18 @@ async function submitEmpAtt(){
 
 function empLeave(){
   const emp=currentEmployee;
-  const myLeaves=D.leaves.filter(l=>l.emp===emp.name);
+  if(!emp){
+    return `<div class="card" style="text-align:center;padding:2rem;color:var(--muted)">
+      <div style="font-size:40px;margin-bottom:10px">⚠️</div>
+      <div style="font-weight:700;margin-bottom:4px;color:#dc2626">Employee session not loaded</div>
+      <div style="font-size:13px">Try refreshing the page. If this persists, sign in again.</div>
+      <button class="btn btn-primary" style="margin-top:12px" onclick="location.reload()">↻ Reload</button>
+    </div>`;
+  }
+  const myLeaves=(D.leaves||[]).filter(l=>l && l.emp===emp.name);
   const approved=myLeaves.filter(l=>l.status==='Approved').reduce((s,l)=>s+(l.days||0),0);
   const pending=myLeaves.filter(l=>l.status && l.status.startsWith('Pending')).length;
-  const tl = emp.teamLeadEmail ? D.employees.find(e=>e.email&&e.email.toLowerCase()===emp.teamLeadEmail.toLowerCase()) : null;
+  const tl = emp.teamLeadEmail ? (D.employees||[]).find(e=>e && e.email && e.email.toLowerCase()===emp.teamLeadEmail.toLowerCase()) : null;
   return `
   <div class="page-hd"><div class="pg-title">My leaves</div></div>
 
@@ -3631,7 +3687,7 @@ function empLeave(){
   <div class="card" style="margin-bottom:1rem">
     <div class="card-hd"><h3>Apply for leave</h3></div>
     <div class="frow">
-      <div class="fld"><label>Leave type</label><select id="lv-type"><option>Casual</option><option>Sick</option><option>Earned</option><option>Maternity</option><option>Paternity</option></select></div>
+      <div class="fld"><label>Leave type</label><select id="lv-type">${getLeaveTypes().map(t=>`<option value="${t.name}">${t.icon} ${t.name}</option>`).join('')}</select></div>
       <div class="fld"><label>Reason</label><input type="text" id="lv-reason" placeholder="Brief reason"></div>
     </div>
     <div class="frow">
@@ -3814,59 +3870,70 @@ function empTeamRequests(){
 }
 
 async function submitEmpLeave(){
-  const emp=currentEmployee;
-  const from=$('lv-from').value,to=$('lv-to').value;
-  if(!from||!to) return;
-  const days=Math.max(1,Math.round((new Date(to)-new Date(from))/86400000)+1);
-  const type=$('lv-type').value;
-  const reason=$('lv-reason').value||'—';
-  const tlEmail=emp.teamLeadEmail||'';
-  const requiresHr=days>2;
-
-  const status = tlEmail ? 'Pending TL' : 'Pending HR';
-
-  const lv={
-    id:Date.now(),
-    emp:emp.name,
-    type, from, to, days, reason,
-    status,
-    tlEmail,
-    tlStatus: tlEmail ? 'Pending' : '',
-    tlActionAt: null,
-    tlNote: '',
-    hrStatus: '',
-    hrActionAt: null,
-    hrNote: '',
-    requiresHr
-  };
-  D.leaves.unshift(lv);
-  const saved=await sbSaveLeave(lv);
-  if(saved && saved[0]) lv._uuid=saved[0].id;
-  save();
-
-  // Notify first approver
   try{
-    if(tlEmail){
-      await sbSaveNotification({
-        msg: `🏖 New leave request from ${emp.name} (${days} day${days>1?'s':''}, ${from} to ${to}) awaits your approval`,
-        type:'info',
-        to: tlEmail
-      });
-      const tl=D.employees.find(e=>e.email&&e.email.toLowerCase()===tlEmail.toLowerCase());
-      if(tl) await sendApprovalEmail(tlEmail, tl.name, emp.name, type, from, to, days, reason, 'Team Lead');
-    } else {
-      const hrEmail = currentCompany?.admin_email || D.user.email;
-      await sbSaveNotification({
-        msg: `🏖 New leave request from ${emp.name} (${days} day${days>1?'s':''}, ${from} to ${to}) awaits your approval`,
-        type:'info',
-        to: hrEmail
-      });
-      if(hrEmail) await sendApprovalEmail(hrEmail, 'HR', emp.name, type, from, to, days, reason, 'HR');
-    }
-  }catch(e){ console.warn('leave notify failed:',e); }
+    const emp=currentEmployee;
+    if(!emp){ alert('Session lost. Please sign in again.'); return; }
+    const from=$('lv-from').value,to=$('lv-to').value;
+    if(!from||!to){ alert('Please pick both From and To dates'); return; }
+    const days=Math.max(1,Math.round((new Date(to)-new Date(from))/86400000)+1);
+    const type=$('lv-type').value;
+    const reason=$('lv-reason').value||'—';
+    const tlEmail=emp.teamLeadEmail||'';
+    const requiresHr=days>2;
 
-  showToast(tlEmail ? `📤 Leave submitted. Awaiting TL approval.` : `📤 Leave submitted. Awaiting HR approval.`, 'success');
-  navEmp('emp-leave');
+    const status = tlEmail ? 'Pending TL' : 'Pending HR';
+
+    const lv={
+      id:Date.now(),
+      emp:emp.name,
+      type, from, to, days, reason,
+      status,
+      tlEmail,
+      tlStatus: tlEmail ? 'Pending' : '',
+      tlActionAt: null,
+      tlNote: '',
+      hrStatus: '',
+      hrActionAt: null,
+      hrNote: '',
+      requiresHr
+    };
+    D.leaves.unshift(lv);
+    try{
+      const saved=await sbSaveLeave(lv);
+      if(saved && saved[0]) lv._uuid=saved[0].id;
+    }catch(e){
+      console.error('❌ sbSaveLeave failed:',e);
+      // Keep local copy so user doesn't lose it
+    }
+    save();
+
+    // Notify first approver (best-effort, never block)
+    try{
+      if(tlEmail){
+        await sbSaveNotification({
+          msg: `🏖 New leave request from ${emp.name} (${days} day${days>1?'s':''}, ${from} to ${to}) awaits your approval`,
+          type:'info',
+          to: tlEmail
+        });
+        const tl=D.employees.find(e=>e.email&&e.email.toLowerCase()===tlEmail.toLowerCase());
+        if(tl) await sendApprovalEmail(tlEmail, tl.name, emp.name, type, from, to, days, reason, 'Team Lead');
+      } else {
+        const hrEmail = currentCompany?.admin_email || D.user.email;
+        await sbSaveNotification({
+          msg: `🏖 New leave request from ${emp.name} (${days} day${days>1?'s':''}, ${from} to ${to}) awaits your approval`,
+          type:'info',
+          to: hrEmail
+        });
+        if(hrEmail) await sendApprovalEmail(hrEmail, 'HR', emp.name, type, from, to, days, reason, 'HR');
+      }
+    }catch(e){ console.warn('leave notify failed:',e); }
+
+    showToast(tlEmail ? `📤 Leave submitted. Awaiting TL approval.` : `📤 Leave submitted. Awaiting HR approval.`, 'success');
+    navEmp('emp-leave');
+  }catch(e){
+    console.error('❌ submitEmpLeave crashed:',e);
+    alert('Could not submit leave: ' + (e.message||e) + '\n\nOpen DevTools console for details.');
+  }
 }
 
 // ─── PAYROLL ENGINE ───────────────────────────────────────────────
@@ -7082,12 +7149,19 @@ async function saveAtt(){
 // Default leave types — kept simple: CL and EL only
 const DEFAULT_LEAVE_TYPES = [
   {code:'CL', name:'Casual Leave', icon:'🌿', color:'#3b82f6', annualQuota:12, accrual:'monthly', accrualRate:1, carryForward:true, encash:true, weekendsCount:false, holidaysCount:false, allowedInProbation:false, allowedInNotice:true, description:'Short notice, personal reasons'},
-  {code:'EL', name:'Earned Leave', icon:'🏖', color:'#10b981', annualQuota:12, accrual:'monthly', accrualRate:1, carryForward:true, encash:true, weekendsCount:false, holidaysCount:false, allowedInProbation:false, allowedInNotice:false, description:'Planned time off, carry-forward enabled'}
+  {code:'EL', name:'Earned Leave', icon:'🏖', color:'#10b981', annualQuota:12, accrual:'monthly', accrualRate:1, carryForward:true, encash:true, weekendsCount:false, holidaysCount:false, allowedInProbation:false, allowedInNotice:false, description:'Planned time off, carry-forward enabled'},
+  {code:'SL', name:'Sick Leave', icon:'🤒', color:'#ef4444', annualQuota:12, accrual:'yearly', accrualRate:12, carryForward:false, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:true, allowedInNotice:true, description:'Illness or medical reasons (doctor note may be required)'},
+  {code:'EM', name:'Emergency Leave', icon:'🚨', color:'#f97316', annualQuota:5, accrual:'yearly', accrualRate:5, carryForward:false, encash:false, weekendsCount:false, holidaysCount:false, allowedInProbation:true, allowedInNotice:true, description:'Urgent, unforeseen situations (family emergency, accident)'}
 ];
 
 function getLeaveTypes(){
   const saved=D.settings?.leaveTypes;
-  if(saved&&Array.isArray(saved)&&saved.length>0) return saved;
+  if(saved&&Array.isArray(saved)&&saved.length>0){
+    // Merge: keep saved types, but add any default types missing (so existing companies get new types auto)
+    const savedCodes=new Set(saved.map(t=>t.code));
+    const missing=DEFAULT_LEAVE_TYPES.filter(t=>!savedCodes.has(t.code));
+    return [...saved, ...missing];
+  }
   return DEFAULT_LEAVE_TYPES;
 }
 
@@ -7635,10 +7709,11 @@ async function submitLeave(){
   }catch(e){ console.warn('leave notify failed:',e); }
 
   showToast(tlEmail
-    ? `📤 Leave submitted. Awaiting your Team Lead's approval.`
+    ? `📤 Leave submitted. Awaiting Team Lead's approval.`
     : `📤 Leave submitted. Awaiting HR approval.`, 'success');
 
-  navEmp('emp-leave');
+  closeModal('leave-modal-wrap');
+  nav('leave');
 }
 
 // Send approval email (uses EmailJS)
