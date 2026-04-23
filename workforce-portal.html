@@ -428,10 +428,18 @@ async function syncFromSupabase(){
       uan:e.uan||'',
       salaryStructure:e.salary_structure||'A',
       bloodGroup:e.blood_group||'',
-      photoUrl:e.photo_url||''
+      photoUrl:e.photo_url||'',
+      teamLeadEmail:e.team_lead_email||'',
+      teamLeadEmail:e.team_lead_email||''
     }));
     if(att!==null) D.attendance=att.map(a=>({_uuid:a.id,empId:a.employee_id,empName:a.employee_name,date:a.date,status:a.status,in:a.in_time,out:a.out_time}));
-    if(lvs!==null) D.leaves=lvs.map(l=>({_uuid:l.id,id:l.id,emp:l.employee_name,type:l.leave_type,from:l.from_date,to:l.to_date,days:l.days,reason:l.reason,status:l.status}));
+    if(lvs!==null) D.leaves=lvs.map(l=>({
+      _uuid:l.id,id:l.id,emp:l.employee_name,type:l.leave_type,
+      from:l.from_date,to:l.to_date,days:l.days,reason:l.reason,status:l.status,
+      tlEmail:l.tl_email||'',tlStatus:l.tl_status||'',tlActionAt:l.tl_action_at||null,tlNote:l.tl_note||'',
+      hrStatus:l.hr_status||'',hrActionAt:l.hr_action_at||null,hrNote:l.hr_note||'',
+      requiresHr:!!l.requires_hr
+    }));
     if(exp!==null) D.expenses=exp.map(e=>({_uuid:e.id,id:e.id,emp:e.employee_name,cat:e.category,amount:e.amount,date:e.expense_date,desc:e.description,status:e.status}));
     if(perf!==null) D.performance=perf.map(p=>({_uuid:p.id,id:p.id,emp:p.employee_name,quarter:p.quarter,rating:p.rating,goals:p.goals_set,achieved:p.goals_achieved,notes:p.review_notes}));
     if(notifs!==null&&notifs.length) D.notifications=notifs.map(n=>({_uuid:n.id,id:n.id,type:n.type,msg:n.message,time:new Date(n.created_at).toLocaleString('en-IN'),read:n.is_read}));
@@ -494,6 +502,8 @@ async function sbSaveEmployee(emp){
   if(emp.empType) payload.emp_type=emp.empType;
   if(emp.bloodGroup) payload.blood_group=emp.bloodGroup;
   if(emp.photoUrl!==undefined) payload.photo_url=emp.photoUrl;
+  if(emp.teamLeadEmail!==undefined) payload.team_lead_email=emp.teamLeadEmail||null;
+  if(emp.teamLeadEmail!==undefined) payload.team_lead_email=emp.teamLeadEmail||null;
 
   try{
     if(emp._uuid){
@@ -553,7 +563,23 @@ async function sbSaveAttendance(rec){
 async function sbSaveLeave(lv){
   const cid=currentCompany?currentCompany.company_id:'KSPL';
   const emp=D.employees.find(e=>e.name===lv.emp);
-  const payload={employee_id:emp?emp._uuid:null,employee_name:lv.emp,leave_type:lv.type,from_date:lv.from,to_date:lv.to,days:lv.days,reason:lv.reason||'',status:lv.status||'Pending',company_id:cid};
+  const payload={
+    employee_id:emp?emp._uuid:null,
+    employee_name:lv.emp,
+    leave_type:lv.type,
+    from_date:lv.from,to_date:lv.to,days:lv.days,
+    reason:lv.reason||'',
+    status:lv.status||'Pending TL',
+    company_id:cid,
+    tl_email:lv.tlEmail||null,
+    tl_status:lv.tlStatus||null,
+    tl_action_at:lv.tlActionAt||null,
+    tl_note:lv.tlNote||null,
+    hr_status:lv.hrStatus||null,
+    hr_action_at:lv.hrActionAt||null,
+    hr_note:lv.hrNote||null,
+    requires_hr:!!lv.requiresHr
+  };
   if(lv._uuid){return await sb('leaves','PATCH',payload,`?id=eq.${lv._uuid}`);}
   const res=await fetch(`${SB_URL}/rest/v1/leaves`,{method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(payload)});
   if(!res.ok){console.error('❌ SB leave:',await res.text());return null;}
@@ -2869,12 +2895,22 @@ function renderEmployeeApp(){
     </div>
     <div class="body-row">
       <div class="sidebar" style="background:#065f46">
-        ${[['⊞','emp-dashboard','Dashboard'],['📅','emp-attendance','Mark Attendance'],['📝','emp-worklog','Work Log'],['🏖','emp-leave','My Leaves'],['💰','emp-payslip','My Payslip'],['📊','emp-performance','My Performance'],['📆','emp-holidays','Holiday Calendar'],['🔔','emp-notifications','Notifications'],['🪪','emp-idcard','My ID Card'],['🏢','emp-orgchart','Org Chart'],['👤','emp-profile','My Profile']].map(([ic,pg,tt])=>`
-        <div class="si ${empPage===pg?'act':''}" title="${tt}" onclick="navEmp('${pg}')">
-          <div class="si-icon">${ic}</div>
-          <span class="si-label">${tt}</span>
-          ${pg==='emp-notifications'&&unreadCount()>0?'<div class="si-dot"></div>':''}
-        </div>`).join('')}
+        ${(()=>{
+          // Check if this employee is a TL for others
+          const myEmail = (currentEmployee?.email||'').toLowerCase();
+          const isTL = myEmail && D.employees.some(e=>e.teamLeadEmail && e.teamLeadEmail.toLowerCase()===myEmail);
+          const pendingForTL = isTL ? D.leaves.filter(l=>l.tlEmail&&l.tlEmail.toLowerCase()===myEmail&&l.tlStatus==='Pending').length : 0;
+          const menu=[['⊞','emp-dashboard','Dashboard'],['📅','emp-attendance','Mark Attendance'],['📝','emp-worklog','Work Log'],['🏖','emp-leave','My Leaves']];
+          if(isTL) menu.push(['👥','emp-team','Team Requests',pendingForTL]);
+          menu.push(['💰','emp-payslip','My Payslip'],['📊','emp-performance','My Performance'],['📆','emp-holidays','Holiday Calendar'],['🔔','emp-notifications','Notifications'],['🪪','emp-idcard','My ID Card'],['🏢','emp-orgchart','Org Chart'],['👤','emp-profile','My Profile']);
+          return menu.map(([ic,pg,tt,badgeNum])=>`
+          <div class="si ${empPage===pg?'act':''}" title="${tt}" onclick="navEmp('${pg}')">
+            <div class="si-icon">${ic}</div>
+            <span class="si-label">${tt}</span>
+            ${pg==='emp-notifications'&&unreadCount()>0?'<div class="si-dot"></div>':''}
+            ${badgeNum>0?`<div style="position:absolute;top:4px;right:8px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:10px">${badgeNum}</div>`:''}
+          </div>`).join('');
+        })()}
       </div>
       <div class="main" id="emp-main"></div>
     </div>
@@ -2887,7 +2923,8 @@ function renderEmployeeApp(){
     'emp-idcard':empIDCard,
     'emp-orgchart':()=>pgOrgChart(true),
     'emp-notifications':pgNotifications,
-    'emp-worklog':empWorkLog
+    'emp-worklog':empWorkLog,
+    'emp-team':empTeamRequests
   };
   console.log('[EMP RENDER] empPage =', empPage, '| has page?', !!pages[empPage], '| D.employees.length =', (D.employees||[]).length, '| currentEmployee =', currentEmployee);
   if(pages[empPage]){
@@ -3573,9 +3610,19 @@ function empLeave(){
   const emp=currentEmployee;
   const myLeaves=D.leaves.filter(l=>l.emp===emp.name);
   const approved=myLeaves.filter(l=>l.status==='Approved').reduce((s,l)=>s+(l.days||0),0);
-  const pending=myLeaves.filter(l=>l.status==='Pending').length;
+  const pending=myLeaves.filter(l=>l.status && l.status.startsWith('Pending')).length;
+  const tl = emp.teamLeadEmail ? D.employees.find(e=>e.email&&e.email.toLowerCase()===emp.teamLeadEmail.toLowerCase()) : null;
   return `
   <div class="page-hd"><div class="pg-title">My leaves</div></div>
+
+  ${!emp.teamLeadEmail ? `
+  <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:12px 16px;margin-bottom:1rem;font-size:13px;color:#78350f">
+    ⚠️ <strong>No Team Lead assigned</strong> — your leave requests will go directly to HR. Ask your admin to assign a TL for you.
+  </div>` : `
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 14px;margin-bottom:1rem;font-size:13px;color:#1e40af">
+    👥 Your Team Lead: <strong>${tl?.name||emp.teamLeadEmail}</strong> · Leaves ≤ 2 days: TL approves alone · More than 2 days: TL → then HR
+  </div>`}
+
   <div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
     <div class="stat"><div class="stat-lbl">Days taken</div><div class="stat-val">${approved}</div></div>
     <div class="stat"><div class="stat-lbl">Pending</div><div class="stat-val">${pending}</div></div>
@@ -3588,31 +3635,237 @@ function empLeave(){
       <div class="fld"><label>Reason</label><input type="text" id="lv-reason" placeholder="Brief reason"></div>
     </div>
     <div class="frow">
-      <div class="fld"><label>From date</label><input type="date" id="lv-from" value="${todayStr()}"></div>
-      <div class="fld"><label>To date</label><input type="date" id="lv-to" value="${todayStr()}"></div>
+      <div class="fld"><label>From date</label><input type="date" id="lv-from" value="${todayStr()}" onchange="updateEmpLeavePreview()"></div>
+      <div class="fld"><label>To date</label><input type="date" id="lv-to" value="${todayStr()}" onchange="updateEmpLeavePreview()"></div>
+    </div>
+    <div id="emp-leave-preview" style="background:#f8fafc;border:1px dashed #cbd5e1;border-radius:8px;padding:10px 14px;margin:8px 0;font-size:12px;color:#475569">
+      Routing preview will appear here…
     </div>
     <button class="btn btn-primary" style="background:#0f766e" onclick="submitEmpLeave()">Submit leave request</button>
   </div>
   <div class="card" style="padding:0">
     <div class="card-hd" style="padding:1rem 1rem 0"><h3>My leave history</h3></div>
-    <table style="margin-top:8px"><thead><tr><th style="width:12%;padding-left:12px">Type</th><th style="width:16%">From</th><th style="width:16%">To</th><th style="width:8%">Days</th><th style="width:28%">Reason</th><th style="width:20%">Status</th></tr></thead>
-    <tbody>${myLeaves.map(l=>`<tr><td style="padding-left:12px">${badge(l.type)}</td><td>${l.from}</td><td>${l.to}</td><td>${l.days}</td><td>${l.reason}</td><td>${badge(l.status)}</td></tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:1rem;color:var(--muted)">No leave requests</td></tr>'}</tbody></table>
+    <div style="padding:0 1rem 1rem">
+      ${myLeaves.length===0 ? '<div style="text-align:center;padding:1.5rem;color:var(--muted);font-size:13px">No leave requests yet</div>' : myLeaves.map(l=>renderLeaveCard(l)).join('')}
+    </div>
   </div>`;
+}
+
+function renderLeaveCard(l){
+  const stage1 = l.tlEmail ? 'tl' : 'none';
+  const stage2 = l.requiresHr ? 'hr' : 'none';
+
+  // Determine stage states: submitted, tl, hr, final
+  let tlState='pending', hrState='pending';
+  if(l.tlStatus==='Approved') tlState='approved';
+  else if(l.tlStatus==='Rejected') tlState='rejected';
+  if(l.hrStatus==='Approved') hrState='approved';
+  else if(l.hrStatus==='Rejected') hrState='rejected';
+  else if(l.hrStatus && l.hrStatus.startsWith('Auto')) hrState='auto';
+
+  const stageColor = st => st==='approved'?'#16a34a':st==='rejected'?'#dc2626':st==='auto'?'#64748b':st==='pending'?'#f59e0b':'#e5e7eb';
+  const stageIcon = st => st==='approved'?'✓':st==='rejected'?'✕':st==='auto'?'—':st==='pending'?'⌛':'○';
+
+  return `<div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          ${badge(l.type)}
+          <strong style="font-size:14px">${l.from} → ${l.to}</strong>
+          <span style="font-size:11px;color:var(--muted)">(${l.days} day${l.days>1?'s':''})</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted)">${l.reason||'—'}</div>
+      </div>
+      <div>${badge(l.status||'Pending TL')}</div>
+    </div>
+
+    <!-- Progress tracker -->
+    <div style="display:flex;align-items:center;gap:4px;padding:6px 0">
+      <!-- Submitted -->
+      <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+        <div style="width:22px;height:22px;border-radius:50%;background:#16a34a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">✓</div>
+        <div style="font-size:9px;margin-top:2px;color:#16a34a;font-weight:600">Submitted</div>
+      </div>
+      <div style="flex:1;height:2px;background:${l.tlEmail?(tlState==='approved'||tlState==='rejected'?stageColor(tlState):'#e5e7eb'):'#16a34a'}"></div>
+      <!-- TL -->
+      ${l.tlEmail?`
+      <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+        <div style="width:22px;height:22px;border-radius:50%;background:${stageColor(tlState)};color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">${stageIcon(tlState)}</div>
+        <div style="font-size:9px;margin-top:2px;color:${stageColor(tlState)};font-weight:600">TL</div>
+      </div>
+      <div style="flex:1;height:2px;background:${l.requiresHr?(hrState==='approved'||hrState==='rejected'?stageColor(hrState):'#e5e7eb'):stageColor(tlState)}"></div>
+      `:''}
+      <!-- HR -->
+      ${l.requiresHr?`
+      <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+        <div style="width:22px;height:22px;border-radius:50%;background:${stageColor(hrState)};color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">${stageIcon(hrState)}</div>
+        <div style="font-size:9px;margin-top:2px;color:${stageColor(hrState)};font-weight:600">HR</div>
+      </div>
+      <div style="flex:1;height:2px;background:${hrState==='approved'?'#16a34a':hrState==='rejected'?'#dc2626':'#e5e7eb'}"></div>
+      `:''}
+      <!-- Final -->
+      <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+        <div style="width:22px;height:22px;border-radius:50%;background:${l.status==='Approved'?'#16a34a':(l.status&&l.status.startsWith('Rejected'))?'#dc2626':'#e5e7eb'};color:${l.status==='Approved'||(l.status&&l.status.startsWith('Rejected'))?'#fff':'#94a3b8'};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">${l.status==='Approved'?'✓':(l.status&&l.status.startsWith('Rejected'))?'✕':'○'}</div>
+        <div style="font-size:9px;margin-top:2px;color:${l.status==='Approved'?'#16a34a':(l.status&&l.status.startsWith('Rejected'))?'#dc2626':'#94a3b8'};font-weight:600">Done</div>
+      </div>
+    </div>
+
+    ${l.tlNote||l.hrNote ? `
+    <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--border);font-size:12px">
+      ${l.tlNote ? `<div style="color:#475569"><strong>TL note:</strong> ${l.tlNote}</div>` : ''}
+      ${l.hrNote ? `<div style="color:#475569;margin-top:3px"><strong>HR note:</strong> ${l.hrNote}</div>` : ''}
+    </div>` : ''}
+  </div>`;
+}
+
+function updateEmpLeavePreview(){
+  const emp=currentEmployee;
+  const from=$('lv-from')?.value, to=$('lv-to')?.value;
+  const preview=$('emp-leave-preview');
+  if(!preview) return;
+  if(!from||!to){ preview.innerHTML='Select dates above…'; return; }
+  const days=Math.max(1,Math.round((new Date(to)-new Date(from))/86400000)+1);
+  const tl = emp.teamLeadEmail ? D.employees.find(e=>e.email&&e.email.toLowerCase()===emp.teamLeadEmail.toLowerCase()) : null;
+  const requiresHr = days>2;
+  preview.innerHTML = `📅 <strong>${days} day${days>1?'s':''}</strong> · Routing: ${!emp.teamLeadEmail?'Directly to HR (no TL)':tl?.name||emp.teamLeadEmail} ${requiresHr?' → then HR':' (TL alone decides; HR gets info copy)'}`;
+}
+
+// Team Lead inbox — shown to employees who are TLs for others
+function empTeamRequests(){
+  const myEmail = (currentEmployee?.email||'').toLowerCase();
+  const myTeam = D.employees.filter(e=>e.teamLeadEmail && e.teamLeadEmail.toLowerCase()===myEmail);
+  const allRequests = D.leaves.filter(l=>l.tlEmail && l.tlEmail.toLowerCase()===myEmail);
+  const filter = window._tlFilter || 'pending';
+
+  const pending = allRequests.filter(l=>l.tlStatus==='Pending');
+  const approved = allRequests.filter(l=>l.tlStatus==='Approved');
+  const rejected = allRequests.filter(l=>l.tlStatus==='Rejected');
+
+  let rows;
+  if(filter==='pending') rows=pending;
+  else if(filter==='approved') rows=approved;
+  else if(filter==='rejected') rows=rejected;
+  else rows=allRequests;
+
+  return `
+  <div class="page-hd">
+    <div>
+      <div class="pg-title">👥 Team Requests</div>
+      <div class="pg-sub">Leave requests from your team members · You are TL for ${myTeam.length} employee${myTeam.length!==1?'s':''}</div>
+    </div>
+  </div>
+
+  ${myTeam.length===0 ? `
+  <div class="card" style="text-align:center;padding:2rem;color:var(--muted)">
+    <div style="font-size:40px;margin-bottom:10px">👥</div>
+    <div style="font-weight:700;font-size:15px;margin-bottom:6px;color:var(--text)">No team members assigned to you</div>
+    <div style="font-size:13px">If you're expecting to review leave requests, ask HR to assign team members to you as their Team Lead.</div>
+  </div>` : `
+
+  <div class="stat-grid" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+    <div class="stat"><div class="stat-lbl">Team size</div><div class="stat-val">${myTeam.length}</div></div>
+    <div class="stat"><div class="stat-lbl">Awaiting my action</div><div class="stat-val" style="color:#f59e0b">${pending.length}</div></div>
+    <div class="stat"><div class="stat-lbl">Approved by me</div><div class="stat-val" style="color:#16a34a">${approved.length}</div></div>
+    <div class="stat"><div class="stat-lbl">Rejected by me</div><div class="stat-val" style="color:#dc2626">${rejected.length}</div></div>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
+    ${[
+      ['pending','⌛ Pending',pending.length],
+      ['approved','✓ Approved',approved.length],
+      ['rejected','✗ Rejected',rejected.length],
+      ['all','All',allRequests.length]
+    ].map(([f,lbl,count])=>`
+      <button onclick="window._tlFilter='${f}';navEmp('emp-team')" style="padding:7px 14px;border-radius:20px;border:1px solid ${filter===f?'#065f46':'var(--border)'};background:${filter===f?'#065f46':'#fff'};color:${filter===f?'#fff':'var(--text)'};font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+        ${lbl} <span style="background:${filter===f?'rgba(255,255,255,.25)':'#f1f5f9'};padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700">${count}</span>
+      </button>`).join('')}
+  </div>
+
+  <div class="card" style="padding:0">
+    ${rows.length===0 ? `<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px">No requests in this tab</div>` : `
+    <table><thead><tr>
+      <th style="width:18%;padding-left:12px">Employee</th>
+      <th style="width:10%">Type</th>
+      <th style="width:12%">From</th>
+      <th style="width:12%">To</th>
+      <th style="width:6%">Days</th>
+      <th style="width:18%">Reason</th>
+      <th style="width:10%">Auto-HR?</th>
+      <th style="width:14%">Action</th>
+    </tr></thead>
+    <tbody>${rows.map(l=>{
+      const needsHr = l.requiresHr;
+      const canAct = l.tlStatus==='Pending';
+      return `<tr>
+        <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:7px">${av(l.emp,28)}<span style="font-weight:600">${l.emp}</span></div></td>
+        <td>${badge(l.type)}</td>
+        <td>${l.from}</td>
+        <td>${l.to}</td>
+        <td><strong>${l.days}</strong></td>
+        <td style="white-space:normal;font-size:12px">${l.reason||'—'}</td>
+        <td>${needsHr ? '<span style="background:#fef3c7;color:#92400e;padding:3px 8px;border-radius:10px;font-size:10px;font-weight:700">→ Needs HR too</span>' : '<span style="background:#dcfce7;color:#166534;padding:3px 8px;border-radius:10px;font-size:10px;font-weight:700">My call alone</span>'}</td>
+        <td>${canAct
+          ? `<div style="display:flex;gap:4px"><button class="btn-g" title="Approve" onclick="promptLeaveDecision('${l._uuid||l.id}','approve')">✓</button><button class="btn-r" title="Reject" onclick="promptLeaveDecision('${l._uuid||l.id}','reject')">✗</button></div>`
+          : `<span style="font-size:11px;color:var(--muted)">${l.tlStatus}</span>`}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`}
+  </div>
+  `}`;
 }
 
 async function submitEmpLeave(){
   const emp=currentEmployee;
   const from=$('lv-from').value,to=$('lv-to').value;
-  if(!from||!to)return;
+  if(!from||!to) return;
   const days=Math.max(1,Math.round((new Date(to)-new Date(from))/86400000)+1);
-  const lv={id:Date.now(),emp:emp.name,type:$('lv-type').value,from,to,days,status:'Pending',reason:$('lv-reason').value||'—'};
+  const type=$('lv-type').value;
+  const reason=$('lv-reason').value||'—';
+  const tlEmail=emp.teamLeadEmail||'';
+  const requiresHr=days>2;
+
+  const status = tlEmail ? 'Pending TL' : 'Pending HR';
+
+  const lv={
+    id:Date.now(),
+    emp:emp.name,
+    type, from, to, days, reason,
+    status,
+    tlEmail,
+    tlStatus: tlEmail ? 'Pending' : '',
+    tlActionAt: null,
+    tlNote: '',
+    hrStatus: '',
+    hrActionAt: null,
+    hrNote: '',
+    requiresHr
+  };
   D.leaves.unshift(lv);
-  await sbSaveLeave(lv);
-  const notif={msg:`${emp.name} applied for ${days}-day ${lv.type} leave`,type:'info',read:false};
-  D.notifications.unshift({id:Date.now()+1,...notif,time:'Just now'});
-  sbSaveNotification(notif);
+  const saved=await sbSaveLeave(lv);
+  if(saved && saved[0]) lv._uuid=saved[0].id;
   save();
-  alert('✅ Leave request submitted! Waiting for admin approval.');
+
+  // Notify first approver
+  try{
+    if(tlEmail){
+      await sbSaveNotification({
+        msg: `🏖 New leave request from ${emp.name} (${days} day${days>1?'s':''}, ${from} to ${to}) awaits your approval`,
+        type:'info',
+        to: tlEmail
+      });
+      const tl=D.employees.find(e=>e.email&&e.email.toLowerCase()===tlEmail.toLowerCase());
+      if(tl) await sendApprovalEmail(tlEmail, tl.name, emp.name, type, from, to, days, reason, 'Team Lead');
+    } else {
+      const hrEmail = currentCompany?.admin_email || D.user.email;
+      await sbSaveNotification({
+        msg: `🏖 New leave request from ${emp.name} (${days} day${days>1?'s':''}, ${from} to ${to}) awaits your approval`,
+        type:'info',
+        to: hrEmail
+      });
+      if(hrEmail) await sendApprovalEmail(hrEmail, 'HR', emp.name, type, from, to, days, reason, 'HR');
+    }
+  }catch(e){ console.warn('leave notify failed:',e); }
+
+  showToast(tlEmail ? `📤 Leave submitted. Awaiting TL approval.` : `📤 Leave submitted. Awaiting HR approval.`, 'success');
   navEmp('emp-leave');
 }
 
@@ -5564,11 +5817,17 @@ function openEmpModal(id){
       ${['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bg=>`<option value="${bg}" ${e.bloodGroup===bg?'selected':''}>${bg}</option>`).join('')}
     </select>
   </div></div>
+  <div class="fld"><label>👥 Team Lead <span style="color:var(--muted);font-weight:400">(leave requests go here first)</span></label>
+    <select id="ef-tl">
+      <option value="">— No team lead (leaves go directly to HR) —</option>
+      ${D.employees.filter(x=>x.id!==e.id&&x.status==='Active').map(x=>`<option value="${x.email}" ${e.teamLeadEmail===x.email?'selected':''}>${x.name} (${x.role||'Employee'})</option>`).join('')}
+    </select>
+  </div>
   <div class="modal-ftr"><button class="btn btn-sec" onclick="closeModal('emp-modal-wrap')">Cancel</button><button class="btn btn-primary" onclick="saveEmp()">${id?'Save changes':'Add employee'}</button></div>
   </div></div>`;
 }
 async function saveEmp(){
-  const data={name:$('ef-name').value,email:$('ef-email').value,phone:$('ef-ph').value,dob:$('ef-dob-birth').value,joined:$('ef-doj').value,dept:$('ef-dept').value,role:$('ef-role').value,salary:parseInt($('ef-sal').value)||0,status:$('ef-st').value,empType:$('ef-type').value||'office',bloodGroup:$('ef-bg')?.value||''};
+  const data={name:$('ef-name').value,email:$('ef-email').value,phone:$('ef-ph').value,dob:$('ef-dob-birth').value,joined:$('ef-doj').value,dept:$('ef-dept').value,role:$('ef-role').value,salary:parseInt($('ef-sal').value)||0,status:$('ef-st').value,empType:$('ef-type').value||'office',bloodGroup:$('ef-bg')?.value||'',teamLeadEmail:$('ef-tl')?.value||''};
   if(!data.name||!data.email){alert('Name and email are required');return;}
   if(editingEmpId){
     const existing=D.employees.find(e=>e.id===editingEmpId);
@@ -6835,7 +7094,7 @@ function getLeaveTypes(){
 function pgLeave(){
   const tab=window._leaveTab||'logs';
   const types=getLeaveTypes();
-  const pendingCount=D.leaves.filter(l=>l.status==='Pending').length;
+  const pendingCount=D.leaves.filter(l=>l.status && l.status.startsWith('Pending')).length;
   return `
   <div class="page-hd">
     <div><div class="pg-title">🏖 Leaves</div><div class="pg-sub">Leave management · ${types.length} leave types configured</div></div>
@@ -6864,45 +7123,72 @@ function pgLeaveLogs(){
   const filter=window._leaveLogFilter||'Pending';
   const search=(window._leaveLogSearch||'').toLowerCase();
   const all=D.leaves||[];
+
+  // For admin: show leaves they can act on (Pending HR) + leaves they can't (Pending TL)
+  const adminEmail = (currentCompany?.admin_email || D.user.email || '').toLowerCase();
+
+  const isPending = l => l.status && l.status.startsWith('Pending');
+  const isApproved = l => l.status === 'Approved';
+  const isRejected = l => l.status && l.status.startsWith('Rejected');
+  const needsHRAction = l => l.status === 'Pending HR' || (l.status === 'Pending TL' && !l.tlEmail);
+
   const counts={
-    Pending:all.filter(l=>l.status==='Pending').length,
-    Approved:all.filter(l=>l.status==='Approved').length,
-    Rejected:all.filter(l=>l.status==='Rejected').length,
+    Pending:all.filter(isPending).length,
+    PendingHR:all.filter(needsHRAction).length,
+    Approved:all.filter(isApproved).length,
+    Rejected:all.filter(isRejected).length,
     All:all.length
   };
-  let rows=filter==='All'?all:all.filter(l=>l.status===filter);
+
+  let rows;
+  if(filter==='PendingHR') rows=all.filter(needsHRAction);
+  else if(filter==='Pending') rows=all.filter(isPending);
+  else if(filter==='Approved') rows=all.filter(isApproved);
+  else if(filter==='Rejected') rows=all.filter(isRejected);
+  else rows=all;
   if(search) rows=rows.filter(l=>(l.emp||'').toLowerCase().includes(search)||(l.reason||'').toLowerCase().includes(search)||(l.type||'').toLowerCase().includes(search));
 
   return `
-  <div class="stat-grid" style="grid-template-columns:repeat(3,minmax(0,1fr))">
-    <div class="stat"><div class="stat-lbl">Pending</div><div class="stat-val">${counts.Pending}</div><div class="stat-sub">Awaiting approval</div></div>
+  <div class="stat-grid" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+    <div class="stat"><div class="stat-lbl">Awaiting my action (HR)</div><div class="stat-val" style="color:#dc2626">${counts.PendingHR}</div><div class="stat-sub">Ready for HR decision</div></div>
+    <div class="stat"><div class="stat-lbl">All pending</div><div class="stat-val">${counts.Pending}</div><div class="stat-sub">Includes at-TL stage</div></div>
     <div class="stat"><div class="stat-lbl">Approved</div><div class="stat-val">${counts.Approved}</div></div>
     <div class="stat"><div class="stat-lbl">Total days</div><div class="stat-val">${all.reduce((s,l)=>s+(l.days||0),0)}</div></div>
   </div>
 
   <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
     <input type="text" placeholder="🔍 Search by employee, reason, type…" value="${window._leaveLogSearch||''}" oninput="window._leaveLogSearch=this.value;nav('leave')" style="flex:1;min-width:240px;padding:8px 12px;font-size:13px">
-    ${['Pending','Approved','Rejected','All'].map(f=>`
+    ${[
+      ['PendingHR','🎯 Awaiting HR',counts.PendingHR],
+      ['Pending','All pending',counts.Pending],
+      ['Approved','Approved',counts.Approved],
+      ['Rejected','Rejected',counts.Rejected],
+      ['All','All',counts.All]
+    ].map(([f,lbl,count])=>`
       <button onclick="window._leaveLogFilter='${f}';nav('leave')" style="padding:7px 14px;border-radius:20px;border:1px solid ${filter===f?'var(--navy)':'var(--border)'};background:${filter===f?'var(--navy)':'#fff'};color:${filter===f?'#fff':'var(--text)'};font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px">
-        ${f} <span style="background:${filter===f?'rgba(255,255,255,.25)':'#f1f5f9'};padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700">${counts[f]}</span>
+        ${lbl} <span style="background:${filter===f?'rgba(255,255,255,.25)':'#f1f5f9'};padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700">${count}</span>
       </button>`).join('')}
-    ${counts.Pending>0?`<button class="btn btn-primary" style="background:#16a34a;font-size:12px;padding:7px 14px" onclick="bulkApproveAllPending()">✓ Bulk Approve (${counts.Pending})</button>`:''}
     <button class="btn btn-sec" style="font-size:12px;padding:7px 14px" onclick="exportLeaveLogsCSV()">⬇ Export CSV</button>
   </div>
 
   <div class="card" style="padding:0">
     <table><thead><tr>
-      <th style="width:16%;padding-left:12px">Employee</th>
+      <th style="width:14%;padding-left:12px">Employee</th>
       <th style="width:10%">Type</th>
-      <th style="width:11%">From</th>
-      <th style="width:11%">To</th>
-      <th style="width:6%">Days</th>
-      <th style="width:22%">Reason</th>
-      <th style="width:9%">Status</th>
-      <th style="width:15%">Action</th>
+      <th style="width:10%">From</th>
+      <th style="width:10%">To</th>
+      <th style="width:5%">Days</th>
+      <th style="width:16%">Reason</th>
+      <th style="width:11%">Stage</th>
+      <th style="width:11%">Status</th>
+      <th style="width:13%">Action</th>
     </tr></thead>
     <tbody>${rows.map(l=>{
       const typeInfo=getLeaveTypes().find(t=>t.code===l.type||t.name===l.type)||{icon:'📄',color:'#6b7280'};
+      const canHRAct = (l.status==='Pending HR') || (l.status==='Pending TL' && !l.tlEmail);
+      const tlName = l.tlEmail ? (D.employees.find(e=>e.email&&e.email.toLowerCase()===l.tlEmail.toLowerCase())?.name || l.tlEmail) : '—';
+      const stageLabel = l.status==='Pending TL' ? `⌛ TL: ${tlName}` : l.status==='Pending HR' ? `✓ TL approved · 🎯 Awaiting HR` : l.status==='Approved' ? `✅ Done` : l.status==='Rejected by TL' ? `✕ TL rejected` : l.status==='Rejected by HR' ? `✕ HR rejected` : l.status;
+      const statusColor = l.status==='Approved' ? '#16a34a' : (l.status||'').startsWith('Rejected') ? '#dc2626' : l.status==='Pending HR' ? '#f59e0b' : '#64748b';
       return `<tr>
         <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:7px">${av(l.emp,28)}<span style="font-weight:600">${l.emp}</span></div></td>
         <td><span style="display:inline-flex;align-items:center;gap:4px;background:${typeInfo.color}22;color:${typeInfo.color};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${typeInfo.icon} ${l.type}</span></td>
@@ -6910,11 +7196,21 @@ function pgLeaveLogs(){
         <td>${l.to}</td>
         <td><strong>${l.days}</strong></td>
         <td style="white-space:normal;font-size:12px">${l.reason||'—'}</td>
+        <td style="font-size:11px;color:${statusColor};font-weight:600">${stageLabel}</td>
         <td>${badge(l.status)}</td>
-        <td>${l.status==='Pending'?`<div style="display:flex;gap:4px"><button class="btn-g" onclick="updateLeave('${l._uuid||l.id}','Approved')">✓</button><button class="btn-r" onclick="updateLeave('${l._uuid||l.id}','Rejected')">✗</button></div>`:'<span style="color:var(--muted);font-size:11px">—</span>'}</td>
+        <td>${canHRAct
+          ? `<div style="display:flex;gap:4px"><button class="btn-g" title="Approve (HR)" onclick="promptLeaveDecision('${l._uuid||l.id}','approve')">✓</button><button class="btn-r" title="Reject" onclick="promptLeaveDecision('${l._uuid||l.id}','reject')">✗</button></div>`
+          : l.status==='Pending TL' ? '<span style="color:#f59e0b;font-size:11px;font-weight:600">⌛ At TL</span>' : '<span style="color:var(--muted);font-size:11px">—</span>'}</td>
       </tr>`;
-    }).join('')||'<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--muted)">No requests match filter</td></tr>'}</tbody></table>
+    }).join('')||'<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">No requests match filter</td></tr>'}</tbody></table>
   </div>`;
+}
+
+// Prompt for note before approving/rejecting
+async function promptLeaveDecision(uuid, action){
+  const note = prompt(`${action==='approve'?'✅ Approve':'❌ Reject'} this leave?\n\nAdd an optional note for the employee:`, '');
+  if(note===null) return; // cancelled
+  await leaveDecide(uuid, action, note||'');
 }
 
 // ── Tab 2: RULES (Kredily-style sidebar + panel) ───
@@ -7283,10 +7579,175 @@ async function submitLeave(){
   const from=$('lv-from').value,to=$('lv-to').value;
   if(!from||!to)return;
   const days=Math.max(1,Math.round((new Date(to)-new Date(from))/86400000)+1);
-  const lv={id:Date.now(),emp:$('lv-emp').value,type:$('lv-type').value,from,to,days,status:'Pending',reason:$('lv-reason').value||'—'};
+  const empName=$('lv-emp').value;
+  const emp=D.employees.find(e=>e.name===empName);
+  const tlEmail=emp?.teamLeadEmail||'';
+  const requiresHr=days>2; // TL-only for ≤2 days, otherwise must also go to HR
+  const type=$('lv-type').value;
+  const reason=$('lv-reason').value||'—';
+
+  // Initial status based on routing
+  let status='Pending HR';
+  if(tlEmail){
+    status='Pending TL';
+  }
+
+  const lv={
+    id:Date.now(),
+    emp:empName,
+    type, from, to, days, reason,
+    status,
+    tlEmail: tlEmail || '',
+    tlStatus: tlEmail ? 'Pending' : '',
+    tlActionAt: null,
+    tlNote: '',
+    hrStatus: '',
+    hrActionAt: null,
+    hrNote: '',
+    requiresHr
+  };
   D.leaves.unshift(lv);
   await sbSaveLeave(lv);
-  save();nav('leave');
+  save();
+
+  // Notify — first responder based on routing
+  try{
+    if(tlEmail){
+      // TL gets the request
+      await sbSaveNotification({
+        msg: `🏖 New leave request from ${empName} (${days} day${days>1?'s':''}, ${from} to ${to}) awaits your approval`,
+        type:'info',
+        to: tlEmail
+      });
+      // Send email to TL
+      const tl=D.employees.find(e=>e.email&&e.email.toLowerCase()===tlEmail.toLowerCase());
+      if(tl) await sendApprovalEmail(tlEmail, tl.name, empName, type, from, to, days, reason, 'Team Lead');
+    } else {
+      // Direct to HR
+      const hrEmail = currentCompany?.admin_email || D.user.email;
+      await sbSaveNotification({
+        msg: `🏖 New leave request from ${empName} (${days} day${days>1?'s':''}, ${from} to ${to}) awaits your approval`,
+        type:'info',
+        to: hrEmail
+      });
+      if(hrEmail) await sendApprovalEmail(hrEmail, 'HR', empName, type, from, to, days, reason, 'HR');
+    }
+  }catch(e){ console.warn('leave notify failed:',e); }
+
+  showToast(tlEmail
+    ? `📤 Leave submitted. Awaiting your Team Lead's approval.`
+    : `📤 Leave submitted. Awaiting HR approval.`, 'success');
+
+  navEmp('emp-leave');
+}
+
+// Send approval email (uses EmailJS)
+async function sendApprovalEmail(toEmail, toName, empName, type, from, to, days, reason, role){
+  try{
+    initEmailJS();
+    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
+      to_email: toEmail,
+      email: toEmail,
+      to_name: toName || 'Team Lead/HR',
+      name: toName || 'Team Lead/HR',
+      message: `New leave request:\n\nEmployee: ${empName}\nType: ${type}\nDates: ${from} to ${to} (${days} day${days>1?'s':''})\nReason: ${reason}\n\nPlease log in to the portal to approve or reject as ${role}.`,
+      otp: 'See portal'
+    });
+    console.log('✅ Approval email sent to',toEmail);
+  }catch(e){
+    console.warn('Approval email failed (non-critical):',e);
+  }
+}
+
+// Team Lead or HR approves a leave
+async function leaveDecide(leaveUuid, action, note){
+  const lv=D.leaves.find(l=>l._uuid===leaveUuid);
+  if(!lv){ showToast('Leave not found','info'); return; }
+
+  const actorEmail = currentRole==='employee'
+    ? (currentEmployee?.email||'').toLowerCase()
+    : (currentCompany?.admin_email || D.user.email || '').toLowerCase();
+  const isTL = lv.tlEmail && actorEmail === lv.tlEmail.toLowerCase();
+  const isHR = !isTL; // If not TL, assume admin (HR) is deciding
+
+  const now = new Date().toISOString();
+
+  if(isTL){
+    // TL decision
+    if(action==='approve'){
+      lv.tlStatus='Approved';
+      lv.tlActionAt=now;
+      lv.tlNote=note||'';
+      if(lv.requiresHr){
+        // Escalate to HR (leave > 2 days)
+        lv.status='Pending HR';
+      } else {
+        // TL alone approved (≤ 2 days) — final
+        lv.status='Approved';
+        lv.hrStatus='Auto (≤2d)';
+        lv.hrActionAt=now;
+
+        // Send info-only notification to HR
+        const hrEmail = currentCompany?.admin_email || D.user.email;
+        if(hrEmail){
+          try{
+            await sbSaveNotification({
+              msg:`ℹ️ ${lv.emp}'s leave (${lv.days}d, ${lv.from} to ${lv.to}) was approved by TL — no HR action needed`,
+              type:'info', to: hrEmail
+            });
+          }catch(e){/*ignore*/}
+        }
+      }
+    } else {
+      lv.tlStatus='Rejected';
+      lv.tlActionAt=now;
+      lv.tlNote=note||'';
+      lv.status='Rejected by TL';
+    }
+  } else if(isHR){
+    // HR decision
+    if(action==='approve'){
+      lv.hrStatus='Approved';
+      lv.hrActionAt=now;
+      lv.hrNote=note||'';
+      lv.status='Approved';
+    } else {
+      lv.hrStatus='Rejected';
+      lv.hrActionAt=now;
+      lv.hrNote=note||'';
+      lv.status='Rejected by HR';
+    }
+  }
+
+  await sbSaveLeave(lv);
+  save();
+
+  // Notify employee
+  const emp=D.employees.find(e=>e.name===lv.emp);
+  if(emp?.email){
+    const msg = lv.status==='Approved'
+      ? `✅ Your leave (${lv.from} to ${lv.to}) has been approved!`
+      : lv.status==='Pending HR'
+        ? `✓ Your Team Lead approved your leave. Awaiting HR final approval.`
+        : `❌ Your leave request was rejected${note?' — '+note:''}`;
+    await sbSaveNotification({msg, type: lv.status==='Approved'?'success':(lv.status==='Pending HR'?'info':'danger'), to: emp.email});
+  }
+
+  // If escalated to HR, notify them too
+  if(lv.status==='Pending HR'){
+    const hrEmail = currentCompany?.admin_email || D.user.email;
+    if(hrEmail){
+      await sbSaveNotification({
+        msg:`🏖 ${lv.emp}'s leave (${lv.days}d) approved by TL, needs your final approval`,
+        type:'info', to: hrEmail
+      });
+      await sendApprovalEmail(hrEmail, 'HR', lv.emp, lv.type, lv.from, lv.to, lv.days, lv.reason, 'HR');
+    }
+  }
+
+  showToast(`Leave ${action==='approve'?'approved':'rejected'}`, 'success');
+  if(currentRole==='employee') navEmp('emp-leave');
+  else nav('leave');
 }
 
 // ─── PAYROLL ─────────────────────────────────────────────────────
