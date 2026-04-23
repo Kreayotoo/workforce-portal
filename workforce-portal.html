@@ -8740,6 +8740,103 @@ async function assignEmpToTeam(empIdOrUuid, teamUuid){
   showToast(teamUuid?`✓ Added to team`:`✓ Removed from team`,'success');
 }
 
+// Load today's work logs across all employees (to show green dots on team cards)
+async function loadTodayWorkLogs(){
+  try{
+    const today = todayStr();
+    const q = `?log_date=eq.${today}&order=updated_at.desc&limit=500`;
+    const rows = await sb('work_logs','GET',null,q);
+    if(!rows) return;
+    window._todayWorkLogs = rows.map(r=>({
+      _uuid:r.id, empUuid:r.emp_uuid, empName:r.emp_name, empEmail:r.emp_email,
+      date:r.log_date, mode:r.mode, entries:r.entries||[], summary:r.summary||'',
+      tags:r.tags||[], totalHours:parseFloat(r.total_hours)||0
+    }));
+    if(currentPage==='teams') nav('teams');
+  }catch(e){console.error('Failed to load today logs:',e);}
+}
+
+// Drill into a single team member's work logs from the team view
+async function viewMemberWorkLogs(empIdOrUuid, teamUuid){
+  const emp = D.employees.find(e=>e._uuid===empIdOrUuid || e.id===empIdOrUuid);
+  if(!emp){ showToast('Employee not found','info'); return; }
+  showSyncBanner(`Loading ${emp.name}'s work logs…`);
+  const logs = await sbLoadWorkLogs({empUuid:emp._uuid});
+  hideSyncBanner();
+
+  const team = teamUuid ? D.teams.find(t=>t._uuid===teamUuid) : null;
+  // Filter out team summaries (those belong in the summary section)
+  const memberLogs = logs.filter(l => !(l.tags||[]).includes('team-summary'));
+
+  // Group by date
+  const byDate = {};
+  memberLogs.forEach(l=>{
+    if(!byDate[l.date]) byDate[l.date]=[];
+    byDate[l.date].push(l);
+  });
+  const sortedDates = Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
+
+  const wrap = document.createElement('div');
+  wrap.id='member-wl-overlay';
+  wrap.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow-y:auto';
+  wrap.onclick=(e)=>{if(e.target===wrap)wrap.remove();};
+  wrap.innerHTML = `
+  <div style="background:#fff;border-radius:14px;width:100%;max-width:720px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <!-- Header -->
+    <div style="padding:18px 20px;background:linear-gradient(135deg,var(--navy),var(--navy2));color:#fff;border-radius:14px 14px 0 0;display:flex;align-items:center;gap:12px;position:relative">
+      <button onclick="document.getElementById('member-wl-overlay').remove()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:18px">×</button>
+      ${av(emp.name,48)}
+      <div style="flex:1">
+        <div style="font-size:18px;font-weight:800">${emp.name}'s Work Logs</div>
+        <div style="font-size:12px;opacity:.85">${emp.role||'—'} · ${emp.dept||'—'}${team?` · Team: ${team.name}`:''}</div>
+        <div style="font-size:11px;opacity:.75;margin-top:2px">${memberLogs.length} total entries · ${sortedDates.length} day${sortedDates.length!==1?'s':''} logged</div>
+      </div>
+    </div>
+
+    <!-- Body -->
+    <div style="padding:1rem;max-height:calc(90vh - 120px);overflow-y:auto">
+      ${memberLogs.length===0 ? `
+      <div style="text-align:center;padding:2rem;color:var(--muted)">
+        <div style="font-size:42px;margin-bottom:8px">📭</div>
+        <div style="font-weight:700">No work logs yet</div>
+        <div style="font-size:12px;margin-top:4px">${emp.name} hasn't submitted any work updates.</div>
+      </div>` : sortedDates.map(d=>{
+        const dayLogs = byDate[d];
+        const dateLabel = new Date(d).toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'short',year:'numeric'});
+        const isToday = d === todayStr();
+        return `<div style="margin-bottom:12px">
+          <div style="font-size:12px;font-weight:800;color:${isToday?'#1e40af':'#64748b'};text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;padding:4px 8px;background:${isToday?'#dbeafe':'#f1f5f9'};border-radius:6px;display:inline-block">
+            ${isToday?'📅 Today — ':''}${dateLabel}
+          </div>
+          ${dayLogs.map(l=>{
+            const modeIcon = l.mode==='hourly'?'⏱':l.mode==='session'?'📍':'📋';
+            const modeLabel = l.mode==='hourly'?'Hourly':l.mode==='session'?'Session':'Daily';
+            return `<div style="padding:12px;border-left:3px solid ${l.mode==='hourly'?'#3b82f6':l.mode==='session'?'#10b981':'#f59e0b'};background:#fff;border:1px solid #f1f5f9;margin-bottom:6px;border-radius:0 8px 8px 0">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+                <span style="background:${l.mode==='hourly'?'#eff6ff':l.mode==='session'?'#f0fdf4':'#fef3c7'};color:${l.mode==='hourly'?'#1e40af':l.mode==='session'?'#166534':'#92400e'};padding:2px 10px;border-radius:12px;font-size:10px;font-weight:700">${modeIcon} ${modeLabel}</span>
+                ${(l.tags||[]).length>0?`<div style="display:flex;gap:3px;flex-wrap:wrap">${(l.tags||[]).map(t=>`<span style="background:#f1f5f9;color:#64748b;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600">#${t}</span>`).join('')}</div>`:''}
+              </div>
+              ${l.summary?`<div style="font-size:13px;color:#334155;line-height:1.5;white-space:pre-wrap">${l.summary}</div>`:''}
+              ${(l.entries||[]).length>0?`
+              <div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--border)">
+                ${(l.entries||[]).map(e=>{
+                  if(l.mode==='hourly'){
+                    return `<div style="font-size:11px;color:#475569;padding:2px 0"><strong>${e.startTime||''}${e.endTime?' - '+e.endTime:''}:</strong> ${e.task||e.description||''}</div>`;
+                  } else if(l.mode==='session'){
+                    return `<div style="font-size:11px;color:#475569;padding:2px 0"><strong>${e.session||''}:</strong> ${e.task||e.description||''}</div>`;
+                  }
+                  return `<div style="font-size:11px;color:#475569;padding:2px 0">${e.task||e.description||''}</div>`;
+                }).join('')}
+              </div>`:''}
+            </div>`;
+          }).join('')}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+}
+
 // Navigate to team work logs view
 async function viewTeamWorkLogs(teamUuid){
   window._teamWLTeamId = teamUuid;
@@ -8907,17 +9004,21 @@ function pgTeamWorkLogs(){
           const modeIcon = l.mode==='hourly'?'⏱':l.mode==='session'?'📍':l.mode==='daily'?'📋':'📊';
           const modeLabel = l.mode==='hourly'?'Hourly':l.mode==='session'?'Session':l.mode==='daily'?'Daily':l.mode;
           const isMemberTL = tl && l.empEmail && tl.email && l.empEmail.toLowerCase()===tl.email.toLowerCase();
+          const empRecord = D.employees.find(e=>e._uuid===l.empUuid || e.name===l.empName);
+          const clickableId = empRecord?(empRecord._uuid||empRecord.id):'';
           return `<div style="padding:12px;border-left:3px solid ${l.mode==='hourly'?'#3b82f6':l.mode==='session'?'#10b981':'#f59e0b'};background:#fff;margin-bottom:8px;border-radius:0 8px 8px 0;border-top:1px solid #f1f5f9;border-right:1px solid #f1f5f9;border-bottom:1px solid #f1f5f9">
             <!-- Employee header -->
+            <div ${clickableId?`onclick="viewMemberWorkLogs('${clickableId}','${teamUuid}')" style="cursor:pointer" title="Click to see all ${l.empName}'s work logs"`:'style=""'}>
             <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
               ${av(l.empName,32)}
               <div style="flex:1;min-width:0">
                 <div style="font-size:13px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                  ${l.empName}
+                  <span ${clickableId?'style="text-decoration:underline dotted;color:var(--navy2)"':''}>${l.empName}</span>
                   ${isMemberTL?'<span style="font-size:9px;background:#fbbf24;color:#78350f;padding:1px 7px;border-radius:8px;font-weight:700">👑 TL</span>':''}
                 </div>
               </div>
               <span style="background:${l.mode==='hourly'?'#eff6ff':l.mode==='session'?'#f0fdf4':'#fef3c7'};color:${l.mode==='hourly'?'#1e40af':l.mode==='session'?'#166534':'#92400e'};padding:2px 10px;border-radius:12px;font-size:10px;font-weight:700;flex-shrink:0">${modeIcon} ${modeLabel}</span>
+            </div>
             </div>
             <!-- Tags (if any) -->
             ${(l.tags||[]).length>0?`<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px">${(l.tags||[]).map(t=>`<span style="background:#f1f5f9;color:#64748b;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600">#${t}</span>`).join('')}</div>`:''}
@@ -9971,6 +10072,9 @@ async function saveMyWorkLog(){
   const idx=window._wlCache.findIndex(l=>l.empUuid===emp._uuid&&l.date===date);
   if(idx>=0) window._wlCache[idx]=log;
   else window._wlCache.unshift(log);
+
+  // Invalidate team activity cache so Teams page re-fetches fresh data on next view
+  window._teamsActivityLoaded = false;
 
   if(msg) msg.innerHTML=`<div class="alert alert-s">✅ Work log saved for ${date}</div>`;
   showToast(`✅ Work log saved for ${date}`,'success');
