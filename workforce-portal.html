@@ -264,14 +264,24 @@ function timeLabel(){
   return new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
 }
 
-// Live clock updater — refreshes any element with class="live-clock" every minute
+// Live clock updater — refreshes any element with class="live-clock" every 30 seconds
+// Also updates class="live-greeting" elements so greeting stays in sync as time flips
 (function startLiveClock(){
   if(window._liveClockTimer) return;
-  window._liveClockTimer = setInterval(()=>{
+  const update=()=>{
     document.querySelectorAll('.live-clock').forEach(el=>{
       el.textContent = timeLabel();
     });
-  }, 60000); // every 60 seconds
+    document.querySelectorAll('.live-greeting').forEach(el=>{
+      // Preserve the name portion (after ", ") and update only the greeting
+      const txt = el.textContent || '';
+      const match = txt.match(/^(Good (morning|afternoon|evening|night))(,.*)$/);
+      if(match){
+        el.textContent = greetingForTime() + match[3];
+      }
+    });
+  };
+  window._liveClockTimer = setInterval(update, 30000); // every 30 seconds
 })();
 const avColors = [['#eff6ff','#1e40af'],['#f0fdf4','#166534'],['#fdf4ff','#6b21a8'],['#fffbeb','#92400e'],['#fef2f2','#991b1b']];
 const av = (name,size=28) => {
@@ -3166,7 +3176,7 @@ function empDashboard(){
 
   return `
   <div class="page-hd">
-    <div><div class="pg-title">${greetingForTime()}, ${emp.name||'there'}! 👋</div><div class="pg-sub">${dateLabel()} · 🕐 <span class="live-clock">${timeLabel()}</span> · ${emp.role||'Employee'} · ${emp.dept||'—'}</div></div>
+    <div><div class="pg-title"><span class="live-greeting">${greetingForTime()}, ${emp.name||'there'}</span>! 👋</div><div class="pg-sub">${dateLabel()} · 🕐 <span class="live-clock">${timeLabel()}</span> · ${emp.role||'Employee'} · ${emp.dept||'—'}</div></div>
   </div>
 
   ${pct<100?`
@@ -5581,7 +5591,7 @@ function pgDashboard(){
 
   return `
   <div class="page-hd">
-    <div><div class="pg-title">${greetingForTime()}, ${currentCompany?(currentCompany.admin_name||currentCompany.name||'Admin'):(D.user&&D.user.name?D.user.name:'Admin')}! 👋</div><div class="pg-sub">${dateLabel()} · 🕐 <span class="live-clock">${timeLabel()}</span>${currentCompany?` · ${currentCompany.name}`:' · Super Admin'}</div></div>
+    <div><div class="pg-title"><span class="live-greeting">${greetingForTime()}, ${currentCompany?(currentCompany.admin_name||currentCompany.name||'Admin'):(D.user&&D.user.name?D.user.name:'Admin')}</span>! 👋</div><div class="pg-sub">${dateLabel()} · 🕐 <span class="live-clock">${timeLabel()}</span>${currentCompany?` · ${currentCompany.name}`:' · Super Admin'}</div></div>
     <div style="display:flex;gap:8px">
       ${currentCompany?`<button class="btn btn-sec" onclick="copyCompanyCode('${currentCompany.company_id}','${(currentCompany.name||'').replace(/'/g,'&apos;')}')" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #fbbf24;color:#78350f;font-weight:700">📋 Invite employees</button>`:''}
       <button class="btn btn-sec" onclick="nav('setup-wizard')" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;color:#1e40af;font-weight:700">⚡ Setup Wizard</button>
