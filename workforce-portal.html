@@ -833,13 +833,14 @@ async function viewKYCDocument(path, docLabel){
 }
 
 // ─── ROUTER ────────────────────────────────────────────────────────
-let currentPage = 'dashboard';
+let currentPage = localStorage.getItem('wf_last_page') || 'dashboard';
 
 let pageHistory = ['dashboard'];
 function nav(page){
   if(currentPage !== page) pageHistory.push(page);
   if(pageHistory.length > 20) pageHistory = pageHistory.slice(-20);
   currentPage = page;
+  try{ localStorage.setItem('wf_last_page', page); }catch(e){}
   renderApp();
 }
 function navBack(){
@@ -849,6 +850,7 @@ function navBack(){
   } else {
     currentPage = 'dashboard';
   }
+  try{ localStorage.setItem('wf_last_page', currentPage); }catch(e){}
   renderApp();
 }
 
@@ -859,6 +861,7 @@ function navEmp(page){
   if(empPage !== page) empPageHistory.push(page);
   if(empPageHistory.length > 20) empPageHistory = empPageHistory.slice(-20);
   empPage = page;
+  try{ localStorage.setItem('wf_last_emp_page', page); }catch(e){}
   renderEmployeeApp();
 }
 function navEmpBack(){
@@ -868,6 +871,7 @@ function navEmpBack(){
   } else {
     empPage = 'emp-dashboard';
   }
+  try{ localStorage.setItem('wf_last_emp_page', empPage); }catch(e){}
   renderEmployeeApp();
 }
 
@@ -2901,6 +2905,13 @@ function logout(){
   geoState={status:'idle'};frStopCamera();
   if(window._adminRefreshTimer){clearInterval(window._adminRefreshTimer);window._adminRefreshTimer=null;}
   if(window._empRefreshTimer){clearInterval(window._empRefreshTimer);window._empRefreshTimer=null;}
+  // Clear last-page memory so next login starts fresh on dashboard
+  try{
+    localStorage.removeItem('wf_last_page');
+    localStorage.removeItem('wf_last_emp_page');
+  }catch(e){}
+  currentPage = 'dashboard';
+  empPage = 'emp-dashboard';
   save();renderApp();
 }
 
@@ -2923,7 +2934,7 @@ function showToast(msg, type='info'){
 }
 
 // ─── EMPLOYEE PORTAL ─────────────────────────────────────────────
-let empPage = 'emp-dashboard';
+let empPage = localStorage.getItem('wf_last_emp_page') || 'emp-dashboard';
 
 function renderEmployeeApp(){
   let emp = currentEmployee;
