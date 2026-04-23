@@ -563,6 +563,8 @@ async function sbSaveAttendance(rec){
 async function sbSaveLeave(lv){
   const cid=currentCompany?currentCompany.company_id:'KSPL';
   const emp=D.employees.find(e=>e.name===lv.emp);
+  console.log('[sbSaveLeave] Starting save for:', {emp:lv.emp, type:lv.type, from:lv.from, to:lv.to, days:lv.days, status:lv.status, cid});
+
   // Full payload (includes new TL/HR columns)
   const fullPayload={
     employee_id:emp?emp._uuid:null,
@@ -594,13 +596,17 @@ async function sbSaveLeave(lv){
 
   async function tryWrite(payload){
     if(lv._uuid){
+      console.log('[sbSaveLeave] PATCHing existing row', lv._uuid);
       const res=await fetch(`${SB_URL}/rest/v1/leaves?id=eq.${lv._uuid}`,{method:'PATCH',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(payload)});
       if(!res.ok){ const t=await res.text(); console.error('❌ SB leave PATCH:',res.status,t); return {ok:false,status:res.status,text:t}; }
-      const t=await res.text(); return {ok:true,data:t?JSON.parse(t):true};
+      const t=await res.text(); console.log('[sbSaveLeave] PATCH ok'); return {ok:true,data:t?JSON.parse(t):true};
     }
+    console.log('[sbSaveLeave] POSTing new row with payload:', payload);
     const res=await fetch(`${SB_URL}/rest/v1/leaves`,{method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(payload)});
     if(!res.ok){ const t=await res.text(); console.error('❌ SB leave POST:',res.status,t); return {ok:false,status:res.status,text:t}; }
-    const t=await res.text(); return {ok:true,data:t?JSON.parse(t):true};
+    const t=await res.text();
+    console.log('[sbSaveLeave] POST ok, response:', t.substring(0,300));
+    return {ok:true,data:t?JSON.parse(t):true};
   }
 
   // First try full payload
@@ -613,9 +619,27 @@ async function sbSaveLeave(lv){
     result=await tryWrite(basicPayload);
   }
 
-  if(!result.ok) return null;
+  // If it failed with check-constraint or RLS error, retry with status='Pending' (the safe old value)
+  if(!result.ok && result.text && (result.text.includes('check') || result.text.includes('violat') || result.text.includes('constraint'))){
+    console.warn('⚠️ Status value rejected by DB constraint — retrying with status=Pending');
+    const retryFull={...fullPayload, status:'Pending'};
+    result=await tryWrite(retryFull);
+    if(!result.ok){
+      const retryBasic={...basicPayload, status:'Pending'};
+      result=await tryWrite(retryBasic);
+    }
+  }
+
+  if(!result.ok){
+    console.error('[sbSaveLeave] FINAL FAILURE, leave not saved to DB!', result);
+    showToast(`❌ Couldn't save: ${(result.text||'unknown error').substring(0,100)}`, 'danger');
+    return null;
+  }
   const r=result.data;
-  if(r&&r[0])lv._uuid=r[0].id;
+  if(r&&r[0]){
+    lv._uuid=r[0].id;
+    console.log('[sbSaveLeave] ✅ Leave saved with _uuid=', lv._uuid);
+  }
   return r;
 }
 async function sbUpdateLeaveStatus(lv){ if(lv._uuid)await sb('leaves','PATCH',{status:lv.status},`?id=eq.${lv._uuid}`); }
@@ -7204,7 +7228,8 @@ function pgLeaveLogs(){
   const isPending = l => l.status && l.status.startsWith('Pending');
   const isApproved = l => l.status === 'Approved';
   const isRejected = l => l.status && l.status.startsWith('Rejected');
-  const needsHRAction = l => l.status === 'Pending HR' || (l.status === 'Pending TL' && !l.tlEmail);
+  // HR can act when: status is 'Pending HR', OR it's legacy 'Pending' without TL, OR it's 'Pending TL' with no TL email
+  const needsHRAction = l => l.status === 'Pending HR' || l.status === 'Pending' || (l.status === 'Pending TL' && !l.tlEmail);
 
   const counts={
     Pending:all.filter(isPending).length,
@@ -7259,10 +7284,10 @@ function pgLeaveLogs(){
     </tr></thead>
     <tbody>${rows.map(l=>{
       const typeInfo=getLeaveTypes().find(t=>t.code===l.type||t.name===l.type)||{icon:'📄',color:'#6b7280'};
-      const canHRAct = (l.status==='Pending HR') || (l.status==='Pending TL' && !l.tlEmail);
+      const canHRAct = (l.status==='Pending HR') || l.status==='Pending' || (l.status==='Pending TL' && !l.tlEmail);
       const tlName = l.tlEmail ? (D.employees.find(e=>e.email&&e.email.toLowerCase()===l.tlEmail.toLowerCase())?.name || l.tlEmail) : '—';
-      const stageLabel = l.status==='Pending TL' ? `⌛ TL: ${tlName}` : l.status==='Pending HR' ? `✓ TL approved · 🎯 Awaiting HR` : l.status==='Approved' ? `✅ Done` : l.status==='Rejected by TL' ? `✕ TL rejected` : l.status==='Rejected by HR' ? `✕ HR rejected` : l.status;
-      const statusColor = l.status==='Approved' ? '#16a34a' : (l.status||'').startsWith('Rejected') ? '#dc2626' : l.status==='Pending HR' ? '#f59e0b' : '#64748b';
+      const stageLabel = l.status==='Pending TL' ? `⌛ TL: ${tlName}` : l.status==='Pending HR' ? `✓ TL approved · 🎯 Awaiting HR` : l.status==='Pending' ? `🎯 Awaiting HR` : l.status==='Approved' ? `✅ Done` : l.status==='Rejected by TL' ? `✕ TL rejected` : l.status==='Rejected by HR' ? `✕ HR rejected` : l.status;
+      const statusColor = l.status==='Approved' ? '#16a34a' : (l.status||'').startsWith('Rejected') ? '#dc2626' : (l.status==='Pending HR'||l.status==='Pending') ? '#f59e0b' : '#64748b';
       return `<tr>
         <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:7px">${av(l.emp,28)}<span style="font-weight:600">${l.emp}</span></div></td>
         <td><span style="display:inline-flex;align-items:center;gap:4px;background:${typeInfo.color}22;color:${typeInfo.color};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${typeInfo.icon} ${l.type}</span></td>
@@ -7736,7 +7761,7 @@ async function sendApprovalEmail(toEmail, toName, empName, type, from, to, days,
 
 // Team Lead or HR approves a leave
 async function leaveDecide(leaveUuid, action, note){
-  const lv=D.leaves.find(l=>l._uuid===leaveUuid);
+  const lv=D.leaves.find(l=>l._uuid===leaveUuid || String(l.id)===String(leaveUuid));
   if(!lv){ showToast('Leave not found','info'); return; }
 
   const actorEmail = currentRole==='employee'
