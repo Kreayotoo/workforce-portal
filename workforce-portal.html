@@ -361,7 +361,7 @@ async function sb(table,method='GET',body=null,query=''){
 
 // ─── DATA LAYER ───────────────────────────────────────────────────
 const STORE_KEY = 'wf_portal_v3'; // bumped version clears old cache automatically
-const DEPTS = ['Engineering','HR','Sales','Finance','Operations','Marketing','Legal'];
+const DEPTS = ['Engineering','Civil','HR','Sales','Finance','Operations','Marketing','Legal'];
 
 function loadData(){ try{return JSON.parse(localStorage.getItem(STORE_KEY))||null;}catch(e){return null;} }
 function saveData(d){ localStorage.setItem(STORE_KEY,JSON.stringify(d)); }
@@ -6493,7 +6493,7 @@ function showEmployeeDetail(empIdOrUuid){
         ${infoCard('Department',e.dept||'—')}
         ${infoCard('Role',e.role||'—')}
         ${infoCard('Status',e.status||'Active')}
-        ${infoCard('CTC (monthly)','₹'+fmt(e.salary||0))}
+        ${currentRole==='admin' ? infoCard('CTC (monthly)','₹'+fmt(e.salary||0)) : infoCard('Salary','<span style="color:var(--muted);font-size:11px;font-style:italic">🔒 Confidential</span>')}
       </div>
       <div style="background:#f8fafc;border-radius:8px;padding:10px 12px;margin-bottom:1rem">
         <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">📍 Address</div>
