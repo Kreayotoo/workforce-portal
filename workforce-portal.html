@@ -249,6 +249,15 @@ const fmt = n => new Intl.NumberFormat('en-IN').format(Math.round(n||0));
 const initials = name => (name||'').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
 const todayStr = () => new Date().toISOString().split('T')[0];
 const dateLabel = () => new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+// Time-of-day greeting
+function greetingForTime(){
+  const h = new Date().getHours();
+  if(h >= 5 && h < 12) return 'Good morning';
+  if(h >= 12 && h < 17) return 'Good afternoon';
+  if(h >= 17 && h < 21) return 'Good evening';
+  return 'Good night';
+}
 const avColors = [['#eff6ff','#1e40af'],['#f0fdf4','#166534'],['#fdf4ff','#6b21a8'],['#fffbeb','#92400e'],['#fef2f2','#991b1b']];
 const av = (name,size=28) => {
   const i=(name||'').charCodeAt(0)%avColors.length;
@@ -3016,7 +3025,7 @@ function empDashboard(){
 
   return `
   <div class="page-hd">
-    <div><div class="pg-title">Hi, ${(emp.name||'there').split(' ')[0]}! 👋</div><div class="pg-sub">${dateLabel()} · ${emp.role||'Employee'} · ${emp.dept||'—'}</div></div>
+    <div><div class="pg-title">${greetingForTime()}, ${emp.name||'there'}! 👋</div><div class="pg-sub">${dateLabel()} · ${emp.role||'Employee'} · ${emp.dept||'—'}</div></div>
   </div>
 
   ${pct<100?`
@@ -5196,7 +5205,7 @@ function pgDashboard(){
 
   return `
   <div class="page-hd">
-    <div><div class="pg-title">Hi, ${currentCompany?(currentCompany.name||'').split(' ')[0]:(D.user&&D.user.name?D.user.name.split(' ')[0]:'Admin')}! 👋</div><div class="pg-sub">${dateLabel()}${currentCompany?` · ${currentCompany.name}`:' · Super Admin'}</div></div>
+    <div><div class="pg-title">${greetingForTime()}, ${currentCompany?(currentCompany.admin_name||currentCompany.name||'Admin'):(D.user&&D.user.name?D.user.name:'Admin')}! 👋</div><div class="pg-sub">${dateLabel()}${currentCompany?` · ${currentCompany.name}`:' · Super Admin'}</div></div>
     <div style="display:flex;gap:8px">
       ${currentCompany?`<button class="btn btn-sec" onclick="copyCompanyCode('${currentCompany.company_id}','${(currentCompany.name||'').replace(/'/g,'&apos;')}')" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #fbbf24;color:#78350f;font-weight:700">📋 Invite employees</button>`:''}
       <button class="btn btn-sec" onclick="nav('setup-wizard')" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;color:#1e40af;font-weight:700">⚡ Setup Wizard</button>
