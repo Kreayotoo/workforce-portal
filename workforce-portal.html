@@ -258,6 +258,21 @@ function greetingForTime(){
   if(h >= 17 && h < 21) return 'Good evening';
   return 'Good night';
 }
+
+// Current time label (e.g., "4:47 PM")
+function timeLabel(){
+  return new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:true});
+}
+
+// Live clock updater — refreshes any element with class="live-clock" every minute
+(function startLiveClock(){
+  if(window._liveClockTimer) return;
+  window._liveClockTimer = setInterval(()=>{
+    document.querySelectorAll('.live-clock').forEach(el=>{
+      el.textContent = timeLabel();
+    });
+  }, 60000); // every 60 seconds
+})();
 const avColors = [['#eff6ff','#1e40af'],['#f0fdf4','#166534'],['#fdf4ff','#6b21a8'],['#fffbeb','#92400e'],['#fef2f2','#991b1b']];
 const av = (name,size=28) => {
   const i=(name||'').charCodeAt(0)%avColors.length;
@@ -3151,7 +3166,7 @@ function empDashboard(){
 
   return `
   <div class="page-hd">
-    <div><div class="pg-title">${greetingForTime()}, ${emp.name||'there'}! 👋</div><div class="pg-sub">${dateLabel()} · ${emp.role||'Employee'} · ${emp.dept||'—'}</div></div>
+    <div><div class="pg-title">${greetingForTime()}, ${emp.name||'there'}! 👋</div><div class="pg-sub">${dateLabel()} · 🕐 <span class="live-clock">${timeLabel()}</span> · ${emp.role||'Employee'} · ${emp.dept||'—'}</div></div>
   </div>
 
   ${pct<100?`
@@ -3894,7 +3909,7 @@ function empTeamRequests(){
       const needsHr = l.requiresHr;
       const canAct = l.tlStatus==='Pending';
       return `<tr>
-        <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:7px">${av(l.emp,28)}<span style="font-weight:600">${l.emp}</span></div></td>
+        <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:7px;cursor:pointer;padding:4px;border-radius:6px" onclick="showEmpPopupByName('${(l.emp||'').replace(/'/g,'&apos;')}')" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='transparent'" title="Click to view profile">${av(l.emp,28)}<span style="font-weight:600;text-decoration:underline dotted;color:var(--navy2)">${l.emp}</span></div></td>
         <td>${badge(l.type)}</td>
         <td>${l.from}</td>
         <td>${l.to}</td>
@@ -5566,7 +5581,7 @@ function pgDashboard(){
 
   return `
   <div class="page-hd">
-    <div><div class="pg-title">${greetingForTime()}, ${currentCompany?(currentCompany.admin_name||currentCompany.name||'Admin'):(D.user&&D.user.name?D.user.name:'Admin')}! 👋</div><div class="pg-sub">${dateLabel()}${currentCompany?` · ${currentCompany.name}`:' · Super Admin'}</div></div>
+    <div><div class="pg-title">${greetingForTime()}, ${currentCompany?(currentCompany.admin_name||currentCompany.name||'Admin'):(D.user&&D.user.name?D.user.name:'Admin')}! 👋</div><div class="pg-sub">${dateLabel()} · 🕐 <span class="live-clock">${timeLabel()}</span>${currentCompany?` · ${currentCompany.name}`:' · Super Admin'}</div></div>
     <div style="display:flex;gap:8px">
       ${currentCompany?`<button class="btn btn-sec" onclick="copyCompanyCode('${currentCompany.company_id}','${(currentCompany.name||'').replace(/'/g,'&apos;')}')" style="background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #fbbf24;color:#78350f;font-weight:700">📋 Invite employees</button>`:''}
       <button class="btn btn-sec" onclick="nav('setup-wizard')" style="background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #93c5fd;color:#1e40af;font-weight:700">⚡ Setup Wizard</button>
@@ -6415,6 +6430,12 @@ function toggleRevealIdentity(btn){
   });
   btn.setAttribute('data-revealed', revealed?'0':'1');
   btn.textContent = revealed ? '👁 Reveal' : '🔒 Hide';
+}
+
+function showEmpPopupByName(empName){
+  const e=D.employees.find(x=>x.name===empName);
+  if(!e){ showToast('Employee not found','info'); return; }
+  showEmpPopup(e.id);
 }
 
 function showEmpPopup(empId){
@@ -7330,7 +7351,7 @@ function pgLeaveLogs(){
       const stageLabel = l.status==='Pending TL' ? `⌛ TL: ${tlName}` : l.status==='Pending HR' ? `✓ TL approved · 🎯 Awaiting HR` : l.status==='Pending' ? `🎯 Awaiting HR` : l.status==='Approved' ? `✅ Done` : l.status==='Rejected by TL' ? `✕ TL rejected` : l.status==='Rejected by HR' ? `✕ HR rejected` : l.status;
       const statusColor = l.status==='Approved' ? '#16a34a' : (l.status||'').startsWith('Rejected') ? '#dc2626' : (l.status==='Pending HR'||l.status==='Pending') ? '#f59e0b' : '#64748b';
       return `<tr>
-        <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:7px">${av(l.emp,28)}<span style="font-weight:600">${l.emp}</span></div></td>
+        <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:7px;cursor:pointer;padding:4px;border-radius:6px" onclick="showEmpPopupByName('${(l.emp||'').replace(/'/g,'&apos;')}')" onmouseover="this.style.background='#eff6ff'" onmouseout="this.style.background='transparent'" title="Click to view profile">${av(l.emp,28)}<span style="font-weight:600;text-decoration:underline dotted;color:var(--navy2)">${l.emp}</span></div></td>
         <td><span style="display:inline-flex;align-items:center;gap:4px;background:${typeInfo.color}22;color:${typeInfo.color};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${typeInfo.icon} ${l.type}</span></td>
         <td>${l.from}</td>
         <td>${l.to}</td>
