@@ -396,12 +396,18 @@ async function syncFromSupabase(){
     const lvs = await sb('leaves','GET',null,`?select=*${cFilter}`).catch(()=>null);
     const exp = await sb('expenses','GET',null,`?select=*${cFilter}`).catch(()=>null);
     const perf = await sb('performance','GET',null,`?select=*${cFilter}`).catch(()=>null);
-    // Notifications: employees see only theirs (recipient_email matches), admins see untargeted (recipient_email is null)
+    // Notifications: employees see only theirs (recipient_email matches), admins see untargeted + those targeted to them
     let notifQuery=`?select=*&order=created_at.desc&limit=50${cFilter}`;
     if(currentRole==='employee' && currentEmployee && currentEmployee.email){
       notifQuery=`?select=*&order=created_at.desc&limit=50&recipient_email=eq.${encodeURIComponent(currentEmployee.email)}`;
     } else if(currentRole==='admin'){
-      notifQuery=`?select=*&order=created_at.desc&limit=50&recipient_email=is.null${cFilter}`;
+      // Admin sees: untargeted (broadcast) OR targeted to their email
+      const adminEmail = currentCompany?.admin_email || D.user.email;
+      if(adminEmail){
+        notifQuery=`?select=*&order=created_at.desc&limit=50&or=(recipient_email.is.null,recipient_email.eq.${encodeURIComponent(adminEmail)})${cFilter}`;
+      } else {
+        notifQuery=`?select=*&order=created_at.desc&limit=50&recipient_email=is.null${cFilter}`;
+      }
     }
     const notifs = await sb('notifications','GET',null,notifQuery).catch(()=>null);
     const sets = await sb('settings','GET',null,'?select=*&limit=1').catch(()=>null);
@@ -5569,16 +5575,40 @@ function pgDashboard(){
   </div>
 
   <div class="card">
-      <div class="card-hd"><h3>Notifications</h3><div style="display:flex;gap:8px;align-items:center">${unreadCount()>0?`<button class="btn-link" onclick="markAllRead()">Mark all read</button>`:''}${D.notifications.length>0?`<button class="btn-link" style="color:#991b1b" onclick="clearAllNotifs()">🗑 Clear all</button>`:''}<span class="muted">${unreadCount()} unread</span></div></div>
-      ${D.notifications.slice(0,5).map(n=>{
+      <div class="card-hd"><h3>🔔 Notifications</h3><div style="display:flex;gap:8px;align-items:center">${unreadCount()>0?`<button class="btn-link" onclick="markAllRead()">Mark all read</button>`:''}${D.notifications.length>0?`<button class="btn-link" style="color:#991b1b" onclick="clearAllNotifs()">🗑 Clear all</button>`:''}<span class="muted">${unreadCount()} unread · ${D.notifications.length} total</span></div></div>
+      ${D.notifications.slice(0,8).map(n=>{
         const nid=JSON.stringify(n.id||n._uuid||'').replace(/"/g,'&#34;');
-        return `<div class="notif-row" style="cursor:pointer;border-radius:6px;padding:8px;background:${n.read?'transparent':'#f8fafc'}" onmouseover="this.style.background='#f1f5f9'" onmouseout="this.style.background='${n.read?'transparent':'#f8fafc'}'" onclick="handleNotifClick(${nid})">
-          <div class="ni ni-${n.type||'info'}">${n.type==='warning'?'⚠':n.type==='success'?'✓':n.type==='danger'?'✕':'ℹ'}</div>
-          <div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:${n.read?400:600};line-height:1.35">${n.msg}</div><div style="font-size:11px;color:var(--muted);margin-top:2px">${n.time}</div></div>
-          <button title="Dismiss" onclick="event.stopPropagation();dismissNotif(${nid})" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:16px;padding:2px 6px;border-radius:4px;flex-shrink:0" onmouseover="this.style.background='#fee2e2';this.style.color='#991b1b'" onmouseout="this.style.background='none';this.style.color='#94a3b8'">×</button>
+        const msg=(n.msg||'').toLowerCase();
+        // Classify: actionable (requires user decision) vs info
+        const isActionable = msg.includes('awaits your approval') || msg.includes('needs your final approval') || msg.includes('action needed');
+        const isCritical = (n.type==='danger') || msg.includes('rejected');
+        const isSuccess = n.type==='success' || msg.includes('approved') || msg.includes('joined');
+        // Visual treatment
+        let bgColor, borderColor, iconBg, icon;
+        if(n.read){
+          bgColor='#fafafa'; borderColor='#e5e7eb'; iconBg='#e5e7eb'; icon='ℹ';
+        } else if(isActionable){
+          bgColor='#fef3c7'; borderColor='#f59e0b'; iconBg='#f59e0b'; icon='🎯';
+        } else if(isCritical){
+          bgColor='#fee2e2'; borderColor='#ef4444'; iconBg='#ef4444'; icon='✕';
+        } else if(isSuccess){
+          bgColor='#dcfce7'; borderColor='#22c55e'; iconBg='#22c55e'; icon='✓';
+        } else {
+          bgColor='#eff6ff'; borderColor='#3b82f6'; iconBg='#3b82f6'; icon='ℹ';
+        }
+        const opacity = n.read ? '0.55' : '1';
+        const fontWeight = n.read ? '400' : '600';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;margin-bottom:6px;background:${bgColor};border:1px solid ${borderColor};border-left:4px solid ${borderColor};border-radius:8px;cursor:pointer;opacity:${opacity};transition:.15s" onmouseover="this.style.transform='translateX(2px)'" onmouseout="this.style.transform='translateX(0)'" onclick="handleNotifClick(${nid})">
+          <div style="width:28px;height:28px;border-radius:50%;background:${iconBg};color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0">${icon}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:${fontWeight};line-height:1.35;color:#111">${n.msg}</div>
+            <div style="font-size:11px;color:#64748b;margin-top:2px">${n.time}${isActionable?` · <strong style="color:#92400e">🎯 Action needed</strong>`:''}</div>
+          </div>
+          ${isActionable && !n.read ? `<button style="background:#f59e0b;color:#fff;border:none;padding:5px 10px;border-radius:5px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0" onclick="event.stopPropagation();handleNotifClick(${nid})">Review →</button>` : ''}
+          ${!isActionable ? `<button title="Dismiss" onclick="event.stopPropagation();dismissNotif(${nid})" style="background:none;border:none;cursor:pointer;color:#94a3b8;font-size:18px;padding:2px 6px;border-radius:4px;flex-shrink:0" onmouseover="this.style.background='rgba(0,0,0,.05)';this.style.color='#991b1b'" onmouseout="this.style.background='none';this.style.color='#94a3b8'">×</button>` : ''}
         </div>`;
-      }).join('')||'<div style="text-align:center;color:var(--muted);padding:1.5rem;font-size:13px">No notifications</div>'}
-      ${D.notifications.length>5?`<div style="text-align:center;margin-top:8px"><button class="btn-link" onclick="nav('notifications')">View all ${D.notifications.length} →</button></div>`:''}
+      }).join('')||'<div style="text-align:center;color:var(--muted);padding:2rem;font-size:13px"><div style="font-size:32px;margin-bottom:6px">🔔</div>No notifications yet<div style="font-size:11px;margin-top:3px">You\'ll see alerts for leave requests, new joiners, etc.</div></div>'}
+      ${D.notifications.length>8?`<div style="text-align:center;margin-top:8px"><button class="btn-link" onclick="nav('notifications')">View all ${D.notifications.length} →</button></div>`:''}
     </div>
   <div id="emp-modal-wrap"></div>`;
 }
@@ -7827,6 +7857,20 @@ async function leaveDecide(leaveUuid, action, note){
       lv.status='Rejected by HR';
     }
   }
+
+  // Auto-dismiss the "awaits your approval" notification since action is being taken
+  try{
+    const matching = D.notifications.filter(n=>{
+      if(n.read) return false;
+      const m = (n.msg||'').toLowerCase();
+      return m.includes((lv.emp||'').toLowerCase()) &&
+             (m.includes('awaits your approval') || m.includes('needs your final approval') || m.includes('action needed'));
+    });
+    for(const n of matching){
+      n.read = true;
+      if(n._uuid) await sbMarkNotifRead(n);
+    }
+  }catch(e){ console.warn('auto-dismiss notif failed:',e); }
 
   await sbSaveLeave(lv);
   save();
