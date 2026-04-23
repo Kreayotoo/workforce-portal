@@ -904,8 +904,12 @@ function renderApp(){
       <div style="position:relative;cursor:pointer;font-size:16px;color:#fff" onclick="nav('notifications')">
         🔔${uc>0?`<div class="si-dot" style="top:-2px;right:-2px"></div>`:''}
       </div>
-      <div style="width:30px;height:30px;border-radius:50%;background:#60a5fa;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#1e3a8a">${initials(D.user.name)}</div>
-      <span style="font-size:12px;color:rgba(255,255,255,.7)">${D.user.email}</span>
+      <div style="width:30px;height:30px;border-radius:50%;background:#60a5fa;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#1e3a8a">${initials(currentCompany?(currentCompany.admin_name||currentCompany.name):D.user.name)}</div>
+      <div style="display:flex;flex-direction:column;line-height:1.1">
+        <span style="font-size:12px;color:#fff;font-weight:600">${currentCompany?(currentCompany.admin_name||currentCompany.name):D.user.name}</span>
+        <span style="font-size:10px;color:rgba(255,255,255,.6)">${currentCompany?currentCompany.admin_email:D.user.email}</span>
+      </div>
+      <div style="background:#fbbf24;color:#78350f;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:800;letter-spacing:1px">🛡 ADMIN</div>
       <button class="btn btn-sec" style="font-size:12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff" onclick="logout()">Log out</button>
     </div>
     <div class="body-row">
@@ -2842,8 +2846,12 @@ function renderEmployeeApp(){
         🔔${unreadCount()>0?`<div style="position:absolute;top:-2px;right:-2px;width:8px;height:8px;border-radius:50%;background:#ef4444"></div>`:''}
       </div>
       <div style="width:30px;height:30px;border-radius:50%;background:#a7f3d0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#065f46">${initials(emp.name)}</div>
-      <span style="font-size:12px;color:rgba(255,255,255,.8)">${emp.name}</span>
+      <div style="display:flex;flex-direction:column;line-height:1.1">
+        <span style="font-size:12px;color:#fff;font-weight:600">${emp.name}</span>
+        <span style="font-size:10px;color:rgba(255,255,255,.6)">${currentCompany?currentCompany.name:D.settings.company||''}</span>
+      </div>
       <span style="font-size:10px;background:rgba(255,255,255,.15);padding:2px 8px;border-radius:20px;color:#fff">${emp.dept}</span>
+      <div style="background:#a7f3d0;color:#065f46;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:800;letter-spacing:1px">👤 EMPLOYEE</div>
       <button class="btn btn-sec" style="font-size:12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff" onclick="logout()">Log out</button>
     </div>
     <div class="body-row">
