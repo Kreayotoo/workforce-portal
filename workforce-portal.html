@@ -7742,16 +7742,25 @@ async function submitLeave(){
 }
 
 // Send approval email (uses EmailJS)
+const EJS_TEMPLATE_LEAVE = 'template_azrk58m'; // Dedicated leave notification template
+
 async function sendApprovalEmail(toEmail, toName, empName, type, from, to, days, reason, role){
   try{
     initEmailJS();
-    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
+    await emailjs.send(EJS_SERVICE, EJS_TEMPLATE_LEAVE, {
       to_email: toEmail,
       email: toEmail,
       to_name: toName || 'Team Lead/HR',
       name: toName || 'Team Lead/HR',
-      message: `New leave request:\n\nEmployee: ${empName}\nType: ${type}\nDates: ${from} to ${to} (${days} day${days>1?'s':''})\nReason: ${reason}\n\nPlease log in to the portal to approve or reject as ${role}.`,
-      otp: 'See portal'
+      employee_name: empName,
+      leave_type: type,
+      from_date: from,
+      to_date: to,
+      days: `${days} day${days>1?'s':''}`,
+      reason: reason || '—',
+      approver_role: role,
+      // Generic fallbacks in case the template uses different variable names
+      message: `${empName} applied for ${days} day${days>1?'s':''} of ${type} (${from} to ${to}). Reason: ${reason||'—'}.`
     });
     console.log('✅ Approval email sent to',toEmail);
   }catch(e){
