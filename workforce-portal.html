@@ -8496,6 +8496,14 @@ function pgTeams(){
   const teams=D.teams||[];
   const emps=D.employees||[];
 
+  // Auto-load today's work-log activity across all employees (once per page visit)
+  if(!window._teamsActivityLoaded){
+    window._teamsActivityLoaded = true;
+    loadTodayWorkLogs();
+  }
+  const todayLogs = window._todayWorkLogs || [];
+  const today = todayStr();
+
   return `
   <div class="page-hd">
     <div>
@@ -8539,12 +8547,34 @@ function pgTeams(){
               ⚠️ No Team Lead assigned
             </div>`}
           ${t.description ? `<div style="font-size:12px;color:var(--muted);margin-bottom:10px;font-style:italic">"${t.description}"</div>` : ''}
-          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Members</div>
+          <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Members · Latest updates</div>
           ${members.length===0 ? `
             <div style="padding:12px;text-align:center;color:var(--muted);font-size:12px;background:#f8fafc;border-radius:6px">No members yet</div>` : `
-            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px">
-              ${members.slice(0,6).map(m=>`<span style="background:#f1f5f9;padding:3px 9px;border-radius:12px;font-size:11px;font-weight:600">${m.name}</span>`).join('')}
-              ${members.length>6?`<span style="background:#e2e8f0;padding:3px 9px;border-radius:12px;font-size:11px;color:var(--muted)">+${members.length-6} more</span>`:''}
+            <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px">
+              ${members.slice(0,6).map(m=>{
+                const latestLog = todayLogs.find(l=>l.empName===m.name);
+                const hasUpdate = !!latestLog;
+                const preview = latestLog ? (latestLog.summary || (latestLog.entries||[])[0]?.task || (latestLog.entries||[])[0]?.description || '') : '';
+                const modeIcon = latestLog ? (latestLog.mode==='hourly'?'⏱':latestLog.mode==='session'?'📍':'📋') : '';
+                // Format date as "23 Apr" or "Today"
+                let dateLabel = '';
+                if(latestLog){
+                  if(latestLog.date === today){
+                    dateLabel = 'Today';
+                  } else {
+                    dateLabel = new Date(latestLog.date).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+                  }
+                }
+                const isToday = latestLog && latestLog.date === today;
+                return `<div onclick="viewMemberWorkLogs('${m._uuid||m.id}','${t._uuid}')" style="padding:7px 10px;background:${isToday?'#f0fdf4':hasUpdate?'#f8fafc':'#fff'};border:1px solid ${isToday?'#bbf7d0':hasUpdate?'var(--border)':'#f1f5f9'};border-radius:8px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='${isToday?'#dcfce7':'#e2e8f0'}'" onmouseout="this.style.background='${isToday?'#f0fdf4':hasUpdate?'#f8fafc':'#fff'}'" title="Click to see all work logs from ${m.name}">
+                  <div style="width:8px;height:8px;border-radius:50%;background:${isToday?'#16a34a':hasUpdate?'#94a3b8':'#e2e8f0'};flex-shrink:0"></div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${m.name}</div>
+                    ${hasUpdate ? `<div style="font-size:11px;color:${isToday?'#166534':'#64748b'};margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><strong>${dateLabel}:</strong> ${modeIcon} ${preview || '(no summary)'}</div>` : `<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:1px">No updates yet</div>`}
+                  </div>
+                </div>`;
+              }).join('')}
+              ${members.length>6?`<div style="text-align:center;padding:4px;color:var(--muted);font-size:11px">+${members.length-6} more members — click View Work Logs to see all</div>`:''}
             </div>`}
           <div style="display:flex;gap:6px;margin-top:10px">
             <button class="btn btn-sec" style="flex:1;font-size:12px;padding:7px" onclick="openTeamModal('${t._uuid}')">✏️ Edit</button>
@@ -8740,20 +8770,27 @@ async function assignEmpToTeam(empIdOrUuid, teamUuid){
   showToast(teamUuid?`✓ Added to team`:`✓ Removed from team`,'success');
 }
 
-// Load today's work logs across all employees (to show green dots on team cards)
+// Load most recent work logs across all employees (to show latest-entry preview on team cards)
 async function loadTodayWorkLogs(){
   try{
-    const today = todayStr();
-    const q = `?log_date=eq.${today}&order=updated_at.desc&limit=500`;
+    // Get latest log per employee — fetch recent and sort/dedupe locally
+    const q = `?order=log_date.desc,updated_at.desc&limit=500`;
     const rows = await sb('work_logs','GET',null,q);
     if(!rows) return;
-    window._todayWorkLogs = rows.map(r=>({
+    // Keep only the most recent entry per employee (by name), excluding team summaries
+    const latestByEmp = {};
+    rows.forEach(r=>{
+      if((r.tags||[]).includes('team-summary')) return; // skip team summaries
+      if(!latestByEmp[r.emp_name]) latestByEmp[r.emp_name] = r;
+    });
+    window._todayWorkLogs = Object.values(latestByEmp).map(r=>({
       _uuid:r.id, empUuid:r.emp_uuid, empName:r.emp_name, empEmail:r.emp_email,
       date:r.log_date, mode:r.mode, entries:r.entries||[], summary:r.summary||'',
-      tags:r.tags||[], totalHours:parseFloat(r.total_hours)||0
+      tags:r.tags||[], totalHours:parseFloat(r.total_hours)||0,
+      updatedAt:r.updated_at||''
     }));
     if(currentPage==='teams') nav('teams');
-  }catch(e){console.error('Failed to load today logs:',e);}
+  }catch(e){console.error('Failed to load latest logs:',e);}
 }
 
 // Drill into a single team member's work logs from the team view
