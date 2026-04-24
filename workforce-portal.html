@@ -1092,7 +1092,7 @@ function renderApp(){
     </div>
     <div class="body-row">
       <div class="sidebar">
-        ${[['⊞','dashboard','Dashboard'],['👥','employees','Employees'],['👨‍👩‍👧','teams','Teams'],['📅','attendance','Attendance'],['🏖','leave','Leave'],['💰','payroll','Payroll'],['🧾','expenses','Expenses'],['⭐','performance','Performance'],['📆','holidays','Holidays'],['🏢','orgchart','Org Chart'],['🪪','idcards','ID Cards'],['🗺','locations','Locations'],['🔔','notifications','Notifications'],['⚙','settings','Settings'],...(!currentCompany?[['🏭','companies','Companies']]:[])]
+        ${[['⊞','dashboard','Dashboard'],['📊','analytics','Analytics'],['👥','employees','Employees'],['👨‍👩‍👧','teams','Teams'],['📅','attendance','Attendance'],['🏖','leave','Leave'],['💰','payroll','Payroll'],['🧾','expenses','Expenses'],['⭐','performance','Performance'],['📆','holidays','Holidays'],['🏢','orgchart','Org Chart'],['🪪','idcards','ID Cards'],['🗺','locations','Locations'],['🔔','notifications','Notifications'],['⚙','settings','Settings'],...(!currentCompany?[['🏭','companies','Companies']]:[])]
         .map(([ic,pg,tt])=>`
         <div class="si ${currentPage===pg?'act':''}" title="${tt}" onclick="nav('${pg}')">
           <div class="si-icon">${ic}</div>
@@ -1103,7 +1103,7 @@ function renderApp(){
       <div class="main" id="main-content"></div>
     </div>
   </div>`;
-  const pages = {dashboard:pgDashboard,employees:pgEmployees,teams:pgTeams,'team-worklogs':pgTeamWorkLogs,attendance:pgAttendance,leave:pgLeave,payroll:pgPayroll,expenses:pgExpenses,performance:pgPerformance,notifications:pgNotifications,settings:pgSettings,locations:pgLocations,holidays:pgHolidays,orgchart:pgOrgChart,idcards:pgIDCards,companies:pgCompanies,kycrequests:pgKYCRequests,'setup-wizard':pgSetupWizard,worklogs:pgWorkLogs};
+  const pages = {dashboard:pgDashboard,employees:pgEmployees,teams:pgTeams,'team-worklogs':pgTeamWorkLogs,analytics:pgAnalytics,attendance:pgAttendance,leave:pgLeave,payroll:pgPayroll,expenses:pgExpenses,performance:pgPerformance,notifications:pgNotifications,settings:pgSettings,locations:pgLocations,holidays:pgHolidays,orgchart:pgOrgChart,idcards:pgIDCards,companies:pgCompanies,kycrequests:pgKYCRequests,'setup-wizard':pgSetupWizard,worklogs:pgWorkLogs};
   if(pages[currentPage]){
     try{
       $('main-content').innerHTML = pages[currentPage]();
@@ -2975,6 +2975,326 @@ async function submitRegistration(){
   hideSyncBanner();
   renderEmployeeApp();
 }
+// ─── CHANGE PASSWORD (in-portal) ──────────────────────────
+function openChangePasswordModal(){
+  // Get modal wrapper
+  let wrap = $('change-pw-wrap');
+  if(!wrap){
+    wrap = document.createElement('div');
+    wrap.id = 'change-pw-wrap';
+    document.body.appendChild(wrap);
+  }
+  wrap.innerHTML = `<div class="modal-bg" onclick="if(event.target===this)closeChangePasswordModal()">
+    <div class="modal" style="max-width:440px">
+      <div class="modal-hd">
+        <h3>🔒 Change password</h3>
+        <button class="xbtn" onclick="closeChangePasswordModal()">×</button>
+      </div>
+      <div id="cp-msg"></div>
+      <div class="fld"><label>Current password *</label>
+        <input type="password" id="cp-old" autocomplete="current-password" placeholder="Enter your current password">
+      </div>
+      <div class="fld"><label>New password *</label>
+        <input type="password" id="cp-new" autocomplete="new-password" placeholder="At least 6 characters">
+      </div>
+      <div class="fld"><label>Confirm new password *</label>
+        <input type="password" id="cp-confirm" autocomplete="new-password" placeholder="Re-enter new password">
+      </div>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:8px 12px;font-size:11px;color:#1e40af;margin-bottom:12px">
+        💡 After changing, you'll stay signed in on this device. Use the new password next time you log in.
+      </div>
+      <div class="modal-ftr">
+        <button class="btn btn-sec" onclick="closeChangePasswordModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="doChangePassword()">Update password</button>
+      </div>
+    </div>
+  </div>`;
+}
+function closeChangePasswordModal(){
+  const wrap=$('change-pw-wrap');
+  if(wrap) wrap.innerHTML='';
+}
+async function doChangePassword(){
+  const oldPw = $('cp-old').value;
+  const newPw = $('cp-new').value;
+  const conf  = $('cp-confirm').value;
+  const msg   = $('cp-msg');
+
+  if(!oldPw || !newPw || !conf){
+    if(msg) msg.innerHTML = '<div class="alert alert-e">All fields are required.</div>';
+    return;
+  }
+  if(newPw.length < 6){
+    if(msg) msg.innerHTML = '<div class="alert alert-e">New password must be at least 6 characters.</div>';
+    return;
+  }
+  if(newPw !== conf){
+    if(msg) msg.innerHTML = '<div class="alert alert-e">New passwords do not match.</div>';
+    return;
+  }
+  if(newPw === oldPw){
+    if(msg) msg.innerHTML = '<div class="alert alert-e">New password must be different from current.</div>';
+    return;
+  }
+
+  if(msg) msg.innerHTML = '<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">🔄 Verifying…</div>';
+
+  try{
+    // Employee path
+    if(currentRole === 'employee' && currentEmployee){
+      if((currentEmployee.passwordHash||'') !== oldPw){
+        if(msg) msg.innerHTML = '<div class="alert alert-e">❌ Current password is incorrect.</div>';
+        return;
+      }
+      const res = await fetch(`${SB_URL}/rest/v1/employees?id=eq.${currentEmployee._uuid}`,{
+        method:'PATCH',
+        headers:{...SB_HDR,'Prefer':'return=representation'},
+        body: JSON.stringify({ password_hash: newPw })
+      });
+      if(!res.ok) throw new Error(`DB error ${res.status}`);
+      currentEmployee.passwordHash = newPw;
+      const empRec = D.employees.find(e=>e._uuid===currentEmployee._uuid);
+      if(empRec) empRec.passwordHash = newPw;
+      save();
+      await logAudit('password_change','employee',currentEmployee._uuid,currentEmployee.name,{self:true});
+    }
+    // Company admin path
+    else if(currentRole === 'admin' && currentCompany){
+      if(currentCompany.admin_password !== oldPw){
+        if(msg) msg.innerHTML = '<div class="alert alert-e">❌ Current password is incorrect.</div>';
+        return;
+      }
+      const res = await fetch(`${SB_URL}/rest/v1/companies?company_id=eq.${encodeURIComponent(currentCompany.company_id)}`,{
+        method:'PATCH',
+        headers:{...SB_HDR,'Prefer':'return=representation'},
+        body: JSON.stringify({ admin_password: newPw })
+      });
+      if(!res.ok) throw new Error(`DB error ${res.status}`);
+      currentCompany.admin_password = newPw;
+      await logAudit('password_change','company',currentCompany.company_id,currentCompany.name,{self:true});
+    }
+    // Super admin path
+    else if(currentRole === 'admin' && !currentCompany){
+      if(D.superAdminPassword && D.superAdminPassword !== oldPw){
+        if(msg) msg.innerHTML = '<div class="alert alert-e">❌ Current password is incorrect.</div>';
+        return;
+      }
+      if(!D.superAdminPassword && oldPw !== 'Kreayotoo@123'){
+        if(msg) msg.innerHTML = '<div class="alert alert-e">❌ Current password is incorrect.</div>';
+        return;
+      }
+      D.superAdminPassword = newPw;
+      save();
+      await logAudit('password_change','super_admin','claudekreayotoo@gmail.com','Super Admin',{self:true});
+    }
+
+    if(msg) msg.innerHTML = '<div class="alert alert-s">✅ Password updated successfully!</div>';
+    setTimeout(closeChangePasswordModal, 1200);
+    showToast('🔒 Password changed','success');
+  }catch(e){
+    console.error('Change password failed:',e);
+    if(msg) msg.innerHTML = `<div class="alert alert-e">❌ Save failed: ${e.message}</div>`;
+  }
+}
+
+// ─── AUDIT LOG ──────────────────────────────────────────────
+async function logAudit(action, entityType, entityId, entityName, details){
+  try{
+    const actor = currentEmployee ? {email:currentEmployee.email,name:currentEmployee.name} :
+                  currentCompany ? {email:currentCompany.admin_email,name:currentCompany.admin_name||currentCompany.name} :
+                  {email:'claudekreayotoo@gmail.com',name:'Super Admin'};
+    const cid = currentCompany ? currentCompany.company_id : (currentEmployee?.companyId || 'KSPL');
+    const payload = {
+      actor_email: actor.email || 'unknown',
+      actor_name: actor.name || 'Unknown',
+      action: action,
+      entity_type: entityType || null,
+      entity_id: (entityId||'').toString(),
+      entity_name: entityName || null,
+      details: details || {},
+      company_id: cid
+    };
+    await fetch(`${SB_URL}/rest/v1/audit_log`,{
+      method:'POST',
+      headers:SB_HDR,
+      body:JSON.stringify(payload)
+    });
+  }catch(e){
+    console.warn('Audit log failed (non-fatal):',e);
+  }
+}
+
+async function loadAuditLog(limit=200){
+  try{
+    const cid = currentCompany ? currentCompany.company_id : null;
+    const q = cid
+      ? `?company_id=eq.${encodeURIComponent(cid)}&order=created_at.desc&limit=${limit}`
+      : `?order=created_at.desc&limit=${limit}`;
+    const rows = await sb('audit_log','GET',null,q);
+    return rows || [];
+  }catch(e){
+    console.warn('Load audit failed:',e);
+    return [];
+  }
+}
+
+// ─── AUDIT LOG VIEWER ───────────────────────────────────────
+async function openAuditLogModal(){
+  let wrap = $('audit-wrap');
+  if(!wrap){
+    wrap=document.createElement('div');
+    wrap.id='audit-wrap';
+    document.body.appendChild(wrap);
+  }
+  wrap.innerHTML=`<div class="modal-bg" onclick="if(event.target===this)closeAuditModal()">
+    <div class="modal" style="max-width:820px;max-height:90vh;overflow-y:auto">
+      <div class="modal-hd">
+        <h3>📋 Audit log — who did what</h3>
+        <button class="xbtn" onclick="closeAuditModal()">×</button>
+      </div>
+      <div id="audit-body" style="padding:1rem 0"><div style="text-align:center;color:var(--muted);padding:2rem">Loading…</div></div>
+    </div>
+  </div>`;
+  const rows = await loadAuditLog(200);
+  renderAuditLog(rows);
+}
+function closeAuditModal(){ const w=$('audit-wrap'); if(w) w.innerHTML=''; }
+
+function renderAuditLog(rows){
+  const body = $('audit-body');
+  if(!body) return;
+  if(!rows || rows.length===0){
+    body.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--muted)"><div style="font-size:48px;margin-bottom:8px">📋</div><div>No audit entries yet. Actions will appear here once you start using the system.</div></div>';
+    return;
+  }
+
+  const actionIcons = {
+    create:'➕', update:'✏️', delete:'🗑',
+    approve:'✅', reject:'❌', cancel:'🚫',
+    password_change:'🔒', login:'🔑'
+  };
+  const actionColors = {
+    create:'#16a34a', update:'#0891b2',
+    delete:'#dc2626', approve:'#16a34a', reject:'#dc2626',
+    cancel:'#f59e0b', password_change:'#0891b2', login:'#64748b'
+  };
+
+  body.innerHTML = `
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+    <input type="text" id="audit-search" placeholder="🔍 Filter by name, action, or entity…" oninput="filterAuditLog()" style="flex:1;min-width:200px;padding:7px 10px;font-size:12px;border-radius:6px;border:1px solid var(--border)">
+    <button class="btn btn-sec" style="font-size:12px;padding:7px 12px" onclick="downloadAuditCSV()">⬇ Export CSV</button>
+  </div>
+  <div id="audit-rows" style="max-height:55vh;overflow-y:auto">
+    ${rows.map(r=>{
+      const icon = actionIcons[r.action] || '📌';
+      const color = actionColors[r.action] || '#64748b';
+      const when = new Date(r.created_at).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+      return `<div class="audit-row" data-search="${((r.actor_name||'')+' '+(r.action||'')+' '+(r.entity_name||'')+' '+(r.entity_type||'')).toLowerCase()}" style="display:flex;gap:10px;padding:10px 12px;border-bottom:1px solid #f1f5f9;align-items:flex-start">
+        <div style="width:32px;height:32px;border-radius:50%;background:${color}20;color:${color};display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">${icon}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px">
+            <strong>${r.actor_name||r.actor_email}</strong>
+            <span style="color:${color};font-weight:600;text-transform:capitalize;margin:0 4px">${r.action.replace(/_/g,' ')}</span>
+            ${r.entity_type?`<span style="color:var(--muted)">${r.entity_type}</span>`:''}
+            ${r.entity_name?` <strong>${r.entity_name}</strong>`:''}
+          </div>
+          ${r.details && Object.keys(r.details).length>0 ? `<div style="font-size:11px;color:var(--muted);margin-top:2px;font-family:monospace">${Object.entries(r.details).map(([k,v])=>`${k}: ${JSON.stringify(v)}`).join(' · ').slice(0,120)}</div>`:''}
+        </div>
+        <div style="font-size:11px;color:var(--muted);white-space:nowrap;flex-shrink:0">${when}</div>
+      </div>`;
+    }).join('')}
+  </div>
+  <div style="padding:8px;text-align:center;color:var(--muted);font-size:11px">Showing most recent ${rows.length} entries</div>`;
+  window._auditRows = rows;
+}
+
+function filterAuditLog(){
+  const q=($('audit-search').value||'').toLowerCase();
+  document.querySelectorAll('.audit-row').forEach(row=>{
+    const s = row.getAttribute('data-search');
+    row.style.display = (!q || s.includes(q)) ? 'flex' : 'none';
+  });
+}
+
+function downloadAuditCSV(){
+  const rows = window._auditRows || [];
+  if(rows.length===0){ showToast('No audit entries to export','info'); return; }
+  let csv='Date,Actor Name,Actor Email,Action,Entity Type,Entity Name,Details\n';
+  rows.forEach(r=>{
+    const safe=(s)=>'"'+(s||'').toString().replace(/"/g,'""')+'"';
+    csv+=`${r.created_at},${safe(r.actor_name)},${safe(r.actor_email)},${safe(r.action)},${safe(r.entity_type)},${safe(r.entity_name)},${safe(JSON.stringify(r.details||{}))}\n`;
+  });
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`audit_log_${todayStr()}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('⬇ Audit log exported','success');
+}
+
+// ─── FULL DATA BACKUP ─────────────────────────────────────
+async function downloadFullBackup(){
+  showSyncBanner('Preparing backup…');
+  try{
+    // Fetch fresh data from Supabase (includes what's not in local state)
+    const cid = currentCompany ? currentCompany.company_id : null;
+    const filter = cid ? `?company_id=eq.${encodeURIComponent(cid)}` : '';
+    const [employees, teams, leaves, attendance, workLogs, holidays, notifications, audit] = await Promise.all([
+      sb('employees','GET',null,filter+'&select=*'),
+      sb('teams','GET',null,filter+'&select=*'),
+      sb('leaves','GET',null,filter+'&select=*'),
+      sb('attendance','GET',null,filter+'&select=*'),
+      sb('work_logs','GET',null,filter+'&select=*'),
+      sb('holidays','GET',null,filter+'&select=*'),
+      sb('notifications','GET',null,filter+'&select=*'),
+      loadAuditLog(500)
+    ]);
+
+    const backup = {
+      _meta: {
+        exported_at: new Date().toISOString(),
+        exported_by: currentCompany?.admin_email || D.user.email || 'super-admin',
+        company: currentCompany?.name || 'All companies (super admin)',
+        company_id: cid || null,
+        portal_version: 'Kreayotoo Portal v1'
+      },
+      employees: employees || [],
+      teams: teams || [],
+      leaves: leaves || [],
+      attendance: attendance || [],
+      work_logs: workLogs || [],
+      holidays: holidays || [],
+      notifications: notifications || [],
+      audit_log: audit || [],
+      settings: D.settings || {},
+      office_locations: D.officeLocations || []
+    };
+
+    const json = JSON.stringify(backup, null, 2);
+    const blob = new Blob([json],{type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const tag = cid ? cid : 'all';
+    a.download = `kreayotoo_backup_${tag}_${todayStr()}.json`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    await logAudit('backup','system','data_export',`${tag}_${todayStr()}`,{
+      employees:backup.employees.length,
+      leaves:backup.leaves.length,
+      attendance:backup.attendance.length
+    });
+    hideSyncBanner();
+    showToast(`💾 Backup downloaded (${backup.employees.length} employees, ${backup.leaves.length} leaves)`, 'success');
+  }catch(e){
+    hideSyncBanner();
+    console.error('Backup failed:',e);
+    showToast('❌ Backup failed: '+e.message,'error');
+  }
+}
+
 function logout(){
   D.loggedIn=false;currentRole='admin';currentEmployee=null;currentCompany=null;
   geoState={status:'idle'};frStopCamera();
@@ -4586,6 +4906,7 @@ function empProfile(){
         <div style="font-weight:700;font-size:16px">${emp.name}</div>
         <div style="font-size:12px;color:var(--muted)">${emp.role||'—'} · ${emp.dept||'—'} · ${emp.id}</div>
       </div>
+      <button class="btn btn-sec" style="font-size:12px;padding:7px 12px" onclick="openChangePasswordModal()" title="Change password">🔒 Change password</button>
     </div>
 
     <!-- Tabs -->
@@ -5754,7 +6075,7 @@ function pgDashboard(){
   const active=D.employees.filter(e=>e.status==='Active').length;
   const pLeaves=D.leaves.filter(l=>l.status==='Pending').length;
   const pExp=D.expenses.filter(e=>e.status==='Pending').length;
-  const mods=[['👥','Directory','employees'],['👨‍👩‍👧','Teams','teams'],['📅','Attendance','attendance'],['📝','Work Logs','worklogs'],['🏖','Leave','leave'],['💰','Payroll','payroll'],['🧾','Expenses','expenses'],['⭐','Performance','performance'],['📆','Holidays','holidays'],['🏢','Org Chart','orgchart'],['🪪','ID Cards','idcards'],['🗺','Locations','locations'],['🔔','Notifications','notifications'],['⚙','Settings','settings'],...(!currentCompany?[['🏭','Companies','companies']]:[])];
+  const mods=[['👥','Directory','employees'],['📊','Analytics','analytics'],['👨‍👩‍👧','Teams','teams'],['📅','Attendance','attendance'],['📝','Work Logs','worklogs'],['🏖','Leave','leave'],['💰','Payroll','payroll'],['🧾','Expenses','expenses'],['⭐','Performance','performance'],['📆','Holidays','holidays'],['🏢','Org Chart','orgchart'],['🪪','ID Cards','idcards'],['🗺','Locations','locations'],['🔔','Notifications','notifications'],['⚙','Settings','settings'],...(!currentCompany?[['🏭','Companies','companies']]:[])];
 
   return `
   <div class="page-hd">
@@ -5884,7 +6205,8 @@ function empRows(list, start, end){
     <td>${e.empType==='field'?`<button class="btn-link" style="font-size:11px" onclick="event.stopPropagation();viewFieldTrail('${e.id}','${e.name}')">📍 Trail</button>`:badge(e.status||'Active')}</td>
     <td><div style="display:flex;gap:2px" onclick="event.stopPropagation()">
       <button class="btn-icon" title="Edit" onclick="openEmpModal('${e.id}')">✏</button>
-      <button class="btn-icon btn-del" title="Delete" onclick="delEmp('${e.id}','${e.name}')">🗑</button>
+      ${e.status==='Active'?`<button class="btn-icon" title="Offboard" style="color:#f59e0b" onclick="openOffboardModal('${e.id}')">🚪</button>`:''}
+      <button class="btn-icon btn-del" title="Delete permanently" onclick="delEmp('${e.id}','${e.name}')">🗑</button>
       <button class="btn-icon" title="Set password" onclick="setEmpPw('${e.id}','${e.name}')">🔑</button>
     </div></td>
   </tr>`).join('');
@@ -6213,13 +6535,167 @@ async function saveEmp(){
     }
   }
   save();
+  logAudit(editingEmpId?'update':'create','employee',editingEmpId||data.email,data.name,{dept:data.dept,role:data.role});
   nav(currentPage);
 }
 async function delEmp(id,name){
   if(!confirm(`Delete ${name}? This cannot be undone.`))return;
   const emp=D.employees.find(e=>e.id===id);
   if(emp)await sbDeleteEmployee(emp);
-  D.employees=D.employees.filter(e=>e.id!==id);save();nav(currentPage);
+  D.employees=D.employees.filter(e=>e.id!==id);
+  logAudit('delete','employee',id,name,{});
+  save();nav(currentPage);
+}
+
+// ─── OFFBOARDING FLOW ────────────────────────────────────
+function openOffboardModal(empId){
+  const emp = D.employees.find(e=>e.id===empId);
+  if(!emp){ showToast('Employee not found','info'); return; }
+
+  let wrap = $('offboard-wrap');
+  if(!wrap){ wrap=document.createElement('div'); wrap.id='offboard-wrap'; document.body.appendChild(wrap); }
+
+  const today = todayStr();
+  const team = emp.teamId ? D.teams.find(t=>t._uuid===emp.teamId) : null;
+  const isTL = (D.teams||[]).some(t=>t.teamLeadEmail && emp.email && t.teamLeadEmail.toLowerCase()===emp.email.toLowerCase());
+  const tlTeams = (D.teams||[]).filter(t=>t.teamLeadEmail && emp.email && t.teamLeadEmail.toLowerCase()===emp.email.toLowerCase());
+
+  wrap.innerHTML = `<div class="modal-bg" onclick="if(event.target===this)closeOffboardModal()">
+    <div class="modal" style="max-width:600px">
+      <div class="modal-hd">
+        <h3>🚪 Offboard employee</h3>
+        <button class="xbtn" onclick="closeOffboardModal()">×</button>
+      </div>
+
+      <div style="background:#fee2e2;border:1px solid #fecaca;border-radius:8px;padding:12px 14px;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:700;color:#991b1b;margin-bottom:4px">⚠️ You are offboarding ${emp.name}</div>
+        <div style="font-size:12px;color:#7f1d1d">Their account will be marked as inactive. They won't be able to log in, but their data (attendance, payslips, work logs) is preserved for records.</div>
+      </div>
+
+      <div class="fld">
+        <label>Last working day *</label>
+        <input type="date" id="off-lwd" value="${today}" max="${today}">
+      </div>
+
+      <div class="fld">
+        <label>Reason for leaving</label>
+        <select id="off-reason">
+          <option value="Resigned">Resigned</option>
+          <option value="Terminated">Terminated</option>
+          <option value="Contract ended">Contract ended</option>
+          <option value="Retired">Retired</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+
+      <div class="fld">
+        <label>Notes <span style="color:var(--muted);font-weight:400">(optional, visible only to admin)</span></label>
+        <textarea id="off-notes" rows="2" placeholder="e.g. Joining new company, retiring for health reasons…" style="resize:vertical;font-size:13px"></textarea>
+      </div>
+
+      <!-- What happens checklist -->
+      <div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px">This will automatically:</div>
+        <div style="font-size:12px;color:#334155;line-height:1.9">
+          ${isTL ? `⚠️ <strong style="color:#dc2626">Remove as Team Lead from:</strong> ${tlTeams.map(t=>t.name).join(', ')}<br>` : ''}
+          ${team ? `✓ Remove from team <strong>${team.name}</strong><br>` : ''}
+          ✓ Set status to <strong>Inactive</strong> (disables login)<br>
+          ✓ Cancel any pending leave requests<br>
+          ✓ Record the last working day for final payroll<br>
+          ✓ Log the action in the audit trail
+        </div>
+        ${isTL ? `<div style="margin-top:8px;font-size:11px;color:#dc2626;font-weight:600">⚠️ Assign a new Team Lead to ${tlTeams.length===1?'that team':'those teams'} after offboarding.</div>`:''}
+      </div>
+
+      <div id="off-err"></div>
+      <div class="modal-ftr">
+        <button class="btn btn-sec" onclick="closeOffboardModal()">Cancel</button>
+        <button class="btn btn-primary" style="background:linear-gradient(135deg,#dc2626,#b91c1c)" onclick="doOffboard('${empId}')">🚪 Offboard ${emp.name.split(' ')[0]}</button>
+      </div>
+    </div>
+  </div>`;
+}
+function closeOffboardModal(){ const w=$('offboard-wrap'); if(w) w.innerHTML=''; }
+
+async function doOffboard(empId){
+  const emp = D.employees.find(e=>e.id===empId);
+  if(!emp) return;
+  const lwd = $('off-lwd').value;
+  const reason = $('off-reason').value;
+  const notes = $('off-notes').value.trim();
+  const err = $('off-err');
+
+  if(!lwd){ if(err) err.innerHTML='<div class="alert alert-e">Last working day is required</div>'; return; }
+
+  if(err) err.innerHTML='<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">🔄 Offboarding…</div>';
+
+  try{
+    // 1. Remove as TL from any teams they lead
+    const tlTeams = (D.teams||[]).filter(t=>t.teamLeadEmail && emp.email && t.teamLeadEmail.toLowerCase()===emp.email.toLowerCase());
+    for(const t of tlTeams){
+      t.teamLeadEmail = '';
+      await sbSaveTeam(t);
+    }
+
+    // 2. Remove from their own team
+    emp.teamId = null;
+
+    // 3. Set status to Inactive + offboarding metadata
+    emp.status = 'Inactive';
+    emp.offboardedAt = new Date().toISOString();
+    emp.lastWorkingDay = lwd;
+    emp.offboardReason = reason;
+    emp.offboardNotes = notes;
+
+    // 4. Cancel pending leaves
+    const pendingLeaves = D.leaves.filter(l=>l.emp===emp.name && (l.status==='Pending TL' || l.status==='Pending HR' || l.status==='Pending'));
+    for(const lv of pendingLeaves){
+      lv.status = 'Rejected by HR';
+      lv.hrNote = 'Auto-cancelled — employee offboarded';
+      lv.hrActionAt = new Date().toISOString();
+      await sbSaveLeave(lv);
+    }
+
+    // 5. Save employee changes (include offboard metadata)
+    const payload = {
+      status: 'Inactive',
+      team_id: null
+    };
+    // Note: we persist metadata via the employees PATCH if DB has columns; otherwise local only
+    try{
+      await fetch(`${SB_URL}/rest/v1/employees?id=eq.${emp._uuid}`,{
+        method:'PATCH',
+        headers:SB_HDR,
+        body:JSON.stringify(payload)
+      });
+    }catch(e){console.warn('Emp status update failed:',e);}
+
+    // 6. Send farewell notification
+    if(emp.email){
+      await sbSaveNotification({
+        msg:`👋 Farewell, ${emp.name.split(' ')[0]}! Thank you for your contributions. Your account has been deactivated effective ${lwd}. Please contact HR for final settlement.`,
+        type:'info',
+        to:emp.email
+      });
+    }
+
+    // 7. Log audit
+    await logAudit('offboard','employee',empId,emp.name,{
+      reason,
+      last_working_day:lwd,
+      cancelled_leaves:pendingLeaves.length,
+      removed_tl_from:tlTeams.map(t=>t.name),
+      notes:notes||null
+    });
+
+    save();
+    closeOffboardModal();
+    showToast(`🚪 ${emp.name} has been offboarded`, 'info');
+    nav(currentPage);
+  }catch(e){
+    console.error('Offboard failed:',e);
+    if(err) err.innerHTML = `<div class="alert alert-e">❌ Failed: ${e.message}</div>`;
+  }
 }
 async function setEmpPw(id,name){
   const np=prompt(`Set password for ${name}:\n(Default is emp@123)`);
@@ -8141,6 +8617,10 @@ async function leaveDecide(leaveUuid, action, note){
   }catch(e){ console.warn('auto-dismiss notif failed:',e); }
 
   await sbSaveLeave(lv);
+  logAudit(action,'leave',lv._uuid||String(lv.id),lv.emp,{
+    type:lv.type, from:lv.from, to:lv.to, days:lv.days,
+    role:isTL?'TL':'HR', status:lv.status, note:note||''
+  });
   save();
 
   // Notify employee
@@ -8655,6 +9135,9 @@ async function saveTeam(uuid){
     // New team
     if(result[0]){ team._uuid=result[0].id; team.id=result[0].id; team.companyId=result[0].company_id; }
     D.teams.push(team);
+    logAudit('create','team',team._uuid,team.name,{department:dept,tl:tlEmail});
+  } else {
+    logAudit('update','team',team._uuid,team.name,{department:dept,tl:tlEmail});
   }
   save();
 
@@ -8680,6 +9163,7 @@ async function deleteTeam(uuid){
   if(!confirm(`Delete team "${t.name}"? ${memberCount>0?`Its ${memberCount} member${memberCount>1?'s':''} will be unassigned.`:''}`)) return;
   await sbDeleteTeam(t);
   D.teams=D.teams.filter(x=>x._uuid!==uuid);
+  logAudit('delete','team',uuid,t.name,{department:t.department,memberCount});
   save();
   nav('teams');
   showToast(`🗑 Team "${t.name}" deleted`, 'info');
@@ -9110,6 +9594,280 @@ function exportTeamWorkLogsCSV(teamUuid){
   showToast(`⬇ Exported ${filtered.length} log entries`,'success');
 }
 
+// ─── ANALYTICS DASHBOARD ──────────────────────────────────────
+function pgAnalytics(){
+  const emps = D.employees || [];
+  const activeEmps = emps.filter(e=>e.status==='Active');
+  const leaves = D.leaves || [];
+  const approvedLeaves = leaves.filter(l=>l.status==='Approved');
+  const expenses = D.expenses || [];
+  const approvedExp = expenses.filter(x=>x.status==='Approved');
+  const teams = D.teams || [];
+  const attendance = D.attendance || [];
+
+  // ── Headcount by department ──
+  const deptCounts = {};
+  activeEmps.forEach(e=>{
+    const d = e.dept || 'Unassigned';
+    deptCounts[d] = (deptCounts[d]||0)+1;
+  });
+  const deptSorted = Object.entries(deptCounts).sort((a,b)=>b[1]-a[1]);
+  const deptMax = Math.max(...Object.values(deptCounts),1);
+
+  // ── Leaves by month (last 6 months) ──
+  const now = new Date();
+  const months = [];
+  for(let i=5;i>=0;i--){
+    const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+    months.push({
+      key: d.toISOString().slice(0,7),
+      label: d.toLocaleDateString('en-IN',{month:'short',year:'2-digit'}),
+      count: 0, days: 0
+    });
+  }
+  approvedLeaves.forEach(l=>{
+    const m = (l.from||'').slice(0,7);
+    const target = months.find(x=>x.key===m);
+    if(target){ target.count++; target.days += (l.days||0); }
+  });
+  const leaveMax = Math.max(...months.map(m=>m.days),1);
+
+  // ── Leave type breakdown ──
+  const typeCounts = {};
+  approvedLeaves.forEach(l=>{
+    const t = l.type || 'Other';
+    typeCounts[t] = (typeCounts[t]||0) + (l.days||0);
+  });
+  const typeSorted = Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]);
+  const totalLeaveDays = Object.values(typeCounts).reduce((s,v)=>s+v,0);
+
+  // ── Attendance trend (last 14 days) ──
+  const attDays = [];
+  for(let i=13;i>=0;i--){
+    const d = new Date(now); d.setDate(d.getDate()-i);
+    const ds = d.toISOString().slice(0,10);
+    const att = attendance.filter(a=>a.date===ds);
+    attDays.push({
+      date: ds,
+      label: d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}),
+      weekday: d.toLocaleDateString('en-IN',{weekday:'short'}),
+      isWeekend: d.getDay()===0 || d.getDay()===6,
+      present: att.filter(a=>a.status==='Present'||a.status==='Late').length,
+      absent: att.filter(a=>a.status==='Absent').length,
+      total: activeEmps.length
+    });
+  }
+
+  // ── Expense summary ──
+  const totalExpenses = approvedExp.reduce((s,x)=>s+(x.amount||0),0);
+  const expByCategory = {};
+  approvedExp.forEach(x=>{
+    const c = x.category || 'Other';
+    expByCategory[c] = (expByCategory[c]||0) + (x.amount||0);
+  });
+  const expSorted = Object.entries(expByCategory).sort((a,b)=>b[1]-a[1]);
+
+  // ── Team utilization ──
+  const teamStats = teams.map(t=>{
+    const members = activeEmps.filter(e=>e.teamId===t._uuid);
+    const memberNames = new Set(members.map(m=>m.name));
+    const recentLogs = (window._todayWorkLogs||[]).filter(l=>memberNames.has(l.empName));
+    return {
+      name: t.name,
+      department: t.department,
+      members: members.length,
+      recentlyActive: recentLogs.length
+    };
+  }).sort((a,b)=>b.members-a.members);
+
+  // ── Gender diversity (if data exists) ──
+  const genderCounts = {};
+  activeEmps.forEach(e=>{ const g = e.gender||'Not set'; genderCounts[g]=(genderCounts[g]||0)+1; });
+
+  // ── Quick stats ──
+  const monthLeaves = months[months.length-1].days;
+  const weekAtt = attDays.slice(-7);
+  const avgAttendance = weekAtt.reduce((s,d)=>s+(d.total>0?d.present/d.total*100:0),0)/7;
+
+  return `
+  <div class="page-hd">
+    <div>
+      <div class="pg-title">📊 Analytics Dashboard</div>
+      <div class="pg-sub">At-a-glance health of your company · Updated live</div>
+    </div>
+    <button class="btn btn-sec" onclick="nav('analytics')">🔄 Refresh</button>
+  </div>
+
+  <!-- Top-level KPIs -->
+  <div class="stat-grid" style="grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:1rem">
+    <div class="stat">
+      <div class="stat-lbl">Headcount</div>
+      <div class="stat-val">${activeEmps.length}</div>
+      <div class="stat-sub">${emps.length-activeEmps.length} inactive</div>
+    </div>
+    <div class="stat">
+      <div class="stat-lbl">7-day avg attendance</div>
+      <div class="stat-val" style="color:${avgAttendance>=80?'#16a34a':avgAttendance>=60?'#f59e0b':'#dc2626'}">${avgAttendance.toFixed(0)}%</div>
+      <div class="stat-sub">Rolling week</div>
+    </div>
+    <div class="stat">
+      <div class="stat-lbl">Leaves this month</div>
+      <div class="stat-val">${monthLeaves}<span style="font-size:13px;color:var(--muted);font-weight:400"> days</span></div>
+      <div class="stat-sub">${months[months.length-1].count} requests</div>
+    </div>
+    <div class="stat">
+      <div class="stat-lbl">Expenses (approved)</div>
+      <div class="stat-val">₹${(totalExpenses/1000).toFixed(1)}k</div>
+      <div class="stat-sub">${approvedExp.length} claims</div>
+    </div>
+  </div>
+
+  <!-- Row 1: Attendance chart + Headcount -->
+  <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div class="card">
+      <div class="card-hd"><h3>📅 Attendance — last 14 days</h3></div>
+      <div style="padding:10px 0">
+        <div style="display:flex;align-items:flex-end;gap:4px;height:180px;padding:0 8px">
+          ${attDays.map(d=>{
+            const pct = d.total>0 ? Math.round((d.present/d.total)*100) : 0;
+            const h = Math.max(4, pct*1.5); // scale
+            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0">
+              <div style="font-size:9px;color:var(--muted);font-weight:700">${pct}%</div>
+              <div style="width:100%;background:${d.isWeekend?'#e2e8f0':pct>=80?'#86efac':pct>=60?'#fcd34d':'#fca5a5'};height:${h}px;border-radius:4px 4px 0 0;transition:all .2s;border:1px solid ${d.isWeekend?'#cbd5e1':pct>=80?'#16a34a':pct>=60?'#f59e0b':'#dc2626'}" title="${d.label}: ${d.present}/${d.total} present"></div>
+              <div style="font-size:9px;color:var(--muted);white-space:nowrap">${d.weekday}</div>
+              <div style="font-size:9px;color:var(--muted);white-space:nowrap">${d.label.split(' ')[0]}</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;gap:12px;justify-content:center;margin-top:14px;font-size:11px;color:var(--muted)">
+          <span><span style="display:inline-block;width:10px;height:10px;background:#86efac;border:1px solid #16a34a;border-radius:2px"></span> ≥80%</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#fcd34d;border:1px solid #f59e0b;border-radius:2px"></span> 60-80%</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#fca5a5;border:1px solid #dc2626;border-radius:2px"></span> &lt;60%</span>
+          <span><span style="display:inline-block;width:10px;height:10px;background:#e2e8f0;border:1px solid #cbd5e1;border-radius:2px"></span> Weekend</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-hd"><h3>🏢 By department</h3></div>
+      <div style="padding:4px 0">
+        ${deptSorted.length===0?'<div style="padding:1rem;text-align:center;color:var(--muted);font-size:12px">No employees yet</div>':deptSorted.map(([d,c])=>{
+          const pct = Math.round((c/deptMax)*100);
+          return `<div style="margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
+              <span style="font-weight:600">${d}</span><span style="color:var(--muted);font-weight:700">${c}</span>
+            </div>
+            <div style="background:#f1f5f9;height:6px;border-radius:3px;overflow:hidden">
+              <div style="background:linear-gradient(90deg,var(--navy),var(--navy2));height:100%;width:${pct}%;border-radius:3px"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 2: Leaves trend + Leave types -->
+  <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div class="card">
+      <div class="card-hd"><h3>🏖 Leaves — last 6 months</h3></div>
+      <div style="padding:10px 0">
+        <div style="display:flex;align-items:flex-end;gap:12px;height:160px;padding:0 8px">
+          ${months.map(m=>{
+            const h = Math.max(4,(m.days/leaveMax)*140);
+            return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:6px">
+              <div style="font-size:11px;font-weight:700;color:var(--navy2)">${m.days}d</div>
+              <div style="width:100%;background:linear-gradient(180deg,#f59e0b,#d97706);height:${h}px;border-radius:6px 6px 0 0;transition:all .2s" title="${m.count} requests"></div>
+              <div style="font-size:11px;color:var(--muted);font-weight:600">${m.label}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-hd"><h3>🎯 Leave types</h3></div>
+      <div style="padding:4px 0">
+        ${typeSorted.length===0?'<div style="padding:1rem;text-align:center;color:var(--muted);font-size:12px">No approved leaves yet</div>':typeSorted.map(([type,days])=>{
+          const pct = totalLeaveDays>0 ? Math.round((days/totalLeaveDays)*100) : 0;
+          const colors = {CL:'#3b82f6',EL:'#10b981',SL:'#ef4444',EM:'#f97316','Casual Leave':'#3b82f6','Earned Leave':'#10b981','Sick Leave':'#ef4444','Emergency':'#f97316'};
+          const color = colors[type] || '#64748b';
+          return `<div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+              <span style="font-weight:600">${type}</span>
+              <span style="color:var(--muted);font-weight:700">${days}d <span style="font-weight:400">(${pct}%)</span></span>
+            </div>
+            <div style="background:#f1f5f9;height:8px;border-radius:4px;overflow:hidden">
+              <div style="background:${color};height:100%;width:${pct}%;border-radius:4px"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 3: Teams + Expenses by category -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
+    <div class="card">
+      <div class="card-hd"><h3>👨‍👩‍👧 Team activity</h3></div>
+      ${teams.length===0?'<div style="padding:1rem;text-align:center;color:var(--muted);font-size:12px">No teams created yet. <button class="btn-link" onclick="nav(\'teams\')">Create one →</button></div>':`
+      <div style="padding:4px 0">
+        ${teamStats.map(t=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#f8fafc;border-radius:8px;margin-bottom:6px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700">${t.name}</div>
+            <div style="font-size:11px;color:var(--muted)">${t.department||'No dept'} · ${t.members} member${t.members!==1?'s':''}</div>
+          </div>
+          ${t.recentlyActive>0?`<span style="background:#dcfce7;color:#166534;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">🟢 ${t.recentlyActive} active</span>`:'<span style="color:var(--muted);font-size:11px">Quiet</span>'}
+        </div>`).join('')}
+      </div>`}
+    </div>
+
+    <div class="card">
+      <div class="card-hd"><h3>💸 Expenses by category</h3></div>
+      <div style="padding:4px 0">
+        ${expSorted.length===0?'<div style="padding:1rem;text-align:center;color:var(--muted);font-size:12px">No approved expenses yet</div>':expSorted.map(([cat,amt])=>{
+          const pct = totalExpenses>0 ? Math.round((amt/totalExpenses)*100) : 0;
+          return `<div style="margin-bottom:10px">
+            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+              <span style="font-weight:600">${cat}</span>
+              <span style="color:var(--muted);font-weight:700">₹${amt.toLocaleString('en-IN')} <span style="font-weight:400">(${pct}%)</span></span>
+            </div>
+            <div style="background:#f1f5f9;height:8px;border-radius:4px;overflow:hidden">
+              <div style="background:linear-gradient(90deg,#8b5cf6,#6366f1);height:100%;width:${pct}%;border-radius:4px"></div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 4: Top contributors / quick actions -->
+  <div class="card">
+    <div class="card-hd"><h3>📈 Quick insights</h3></div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:4px 0">
+      <div style="background:#eff6ff;padding:14px;border-radius:10px;border-left:4px solid #3b82f6">
+        <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px">Most active team</div>
+        <div style="font-size:14px;font-weight:700;margin-top:4px">${teamStats[0]?.name||'—'}</div>
+        <div style="font-size:11px;color:var(--muted)">${teamStats[0]?.members||0} members</div>
+      </div>
+      <div style="background:#f0fdf4;padding:14px;border-radius:10px;border-left:4px solid #16a34a">
+        <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px">Biggest dept</div>
+        <div style="font-size:14px;font-weight:700;margin-top:4px">${deptSorted[0]?.[0]||'—'}</div>
+        <div style="font-size:11px;color:var(--muted)">${deptSorted[0]?.[1]||0} employees</div>
+      </div>
+      <div style="background:#fef3c7;padding:14px;border-radius:10px;border-left:4px solid #f59e0b">
+        <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px">Most used leave</div>
+        <div style="font-size:14px;font-weight:700;margin-top:4px">${typeSorted[0]?.[0]||'—'}</div>
+        <div style="font-size:11px;color:var(--muted)">${typeSorted[0]?.[1]||0} days total</div>
+      </div>
+      <div style="background:#fae8ff;padding:14px;border-radius:10px;border-left:4px solid #a855f7">
+        <div style="font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px">Top expense category</div>
+        <div style="font-size:14px;font-weight:700;margin-top:4px">${expSorted[0]?.[0]||'—'}</div>
+        <div style="font-size:11px;color:var(--muted)">₹${expSorted[0]?.[1]?.toLocaleString('en-IN')||0}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
 function pgLocations(){
   if(!D.loginLogs)D.loginLogs=[];
   if(!D.officeLocations)D.officeLocations=[];
@@ -9409,6 +10167,28 @@ function pgSettings(){
       <div class="fld"><label>Email</label><input type="email" id="st-uemail" value="${D.user.email}"></div>
       <div class="fld"><label>New password</label><input type="password" id="st-pw" placeholder="Leave blank to keep current"></div>
       <button class="btn btn-primary" onclick="saveProfile()">Update profile</button>
+    </div>
+
+    <!-- 🔒 Security card -->
+    <div class="card" style="grid-column:1/-1;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe">
+      <div class="card-hd"><h3>🔒 Security & Data</h3></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+        <button class="btn btn-sec" style="padding:14px;text-align:left;background:#fff" onclick="openChangePasswordModal()">
+          <div style="font-size:22px;margin-bottom:4px">🔒</div>
+          <div style="font-weight:700;font-size:13px">Change password</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Update your account password</div>
+        </button>
+        <button class="btn btn-sec" style="padding:14px;text-align:left;background:#fff" onclick="openAuditLogModal()">
+          <div style="font-size:22px;margin-bottom:4px">📋</div>
+          <div style="font-weight:700;font-size:13px">Audit log</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Who did what & when</div>
+        </button>
+        <button class="btn btn-sec" style="padding:14px;text-align:left;background:#fff" onclick="downloadFullBackup()">
+          <div style="font-size:22px;margin-bottom:4px">💾</div>
+          <div style="font-weight:700;font-size:13px">Download backup</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px">Export all data as JSON</div>
+        </button>
+      </div>
     </div>
 
     <div class="card" style="grid-column:1/-1">
