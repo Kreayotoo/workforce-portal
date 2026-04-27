@@ -3417,7 +3417,7 @@ function renderEmployeeApp(){
   $('root').innerHTML = `
   <div class="app">
     <div class="topbar" style="background:#0f766e">
-      <div class="tb-logo" onclick="navEmp('emp-dashboard')" title="Go to Dashboard" style="display:flex;align-items:center;gap:8px;cursor:pointer"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 42 42" width="28" height="28"><polygon points="21,2 38,11 38,31 21,40 4,31 4,11" fill="#0d4d40" stroke="#a7f3d0" stroke-width="2"/><polyline points="10,16 18,21 10,26" fill="none" stroke="#a7f3d0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><polyline points="22,16 14,21 22,26" fill="none" stroke="#a7f3d0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>KREAYOTOO<span style="color:#a7f3d0"> Solutions</span></div>
+      <div class="tb-logo" onclick="navEmp('emp-dashboard')" title="Go to Dashboard" style="display:flex;align-items:center;cursor:pointer"><img src="kreayotoo-logo.png" alt="Kreayotoo" style="height:42px;width:auto;display:block"></div>
       ${empPage!=='emp-dashboard'?`
       <div style="display:flex;gap:4px;margin-left:8px">
         <button onclick="navEmpBack()" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:13px">← Back</button>
