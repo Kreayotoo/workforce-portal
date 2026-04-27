@@ -8009,40 +8009,138 @@ async function exportAttendanceExcel(){
   }
 
   if(typeof XLSX!=='undefined'){
-    const header=[
-      'Date','Employee','Employee ID','Department',
-      'First Check-in','Last Check-out','Hours Worked','Sessions','Status','Location','Source'
-    ];
-    const data=[header, ...rows.map(r=>[
-      r.date, r.employee, r.employeeId, r.department,
-      r.checkIn, r.checkOut, r.hoursWorked, r.sessionsCount, r.status, r.location, r.source
-    ])];
+    // Get company name for title
+    const companyName = (currentCompany?.name || D.settings?.company || 'Company').toUpperCase();
 
-    // Summary rows
-    const totalHours=rows.reduce((s,r)=>s+(typeof r.hoursWorked==='number'?r.hoursWorked:0),0);
-    const presentCount=rows.filter(r=>r.status==='Present').length;
-    const uniqueEmps=new Set(rows.map(r=>r.employee)).size;
+    // Build the rows in Punch Card format
+    const data = [];
+
+    // Title row
+    data.push(['Punch Card']);
+    data.push([]);
+
+    // Company + Site header row
+    data.push([companyName, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
+    data.push([]);
+
+    // Two-row column header (matching Punch Card template)
+    // Row 1: group headers
+    data.push([
+      'Date', 'Day',
+      'Shift', '', '',          // Shift > Code, Start, End
+      'Actual', '',             // Actual > In, Out
+      'Meal', '',               // Meal > Out, In
+      'Hrs',
+      'Late', 'Early',          // Late > In, Early > Out
+      'Meal Late', 'Meal Early',
+      'Short', 'Break', 'OT/',
+      'Reason/'
+    ]);
+    // Row 2: sub-headers
+    data.push([
+      '', '',
+      'Code', 'Start', 'End',
+      'In', 'Out',
+      'Out', 'In',
+      '',
+      'In', 'Out',
+      'In', 'Out',
+      'Hrs', 'Hrs', 'Coff Hrs',
+      'Exception'
+    ]);
+
+    // Group rows by employee
+    const byEmp = {};
+    rows.forEach(r=>{
+      const key = r.employee + '|' + r.employeeId;
+      if(!byEmp[key]) byEmp[key] = { name:r.employee, id:r.employeeId, dept:r.department, rows:[] };
+      byEmp[key].rows.push(r);
+    });
+
+    // For each employee, write Employee header row, then their attendance rows
+    Object.values(byEmp).forEach(emp=>{
+      // Employee row
+      data.push(['Employee:', `${emp.name} — ${emp.id}${emp.dept?' — '+emp.dept:''}`]);
+
+      emp.rows.forEach(r=>{
+        // Day name from date
+        let dayName = '';
+        try{
+          dayName = new Date(r.date).toLocaleDateString('en-IN',{weekday:'short'});
+        }catch(e){}
+
+        data.push([
+          r.date,                // Date
+          dayName,               // Day
+          '',                    // Shift Code (manual)
+          '',                    // Shift Start (manual)
+          '',                    // Shift End (manual)
+          r.checkIn || '',       // Actual In
+          r.checkOut || '',      // Actual Out
+          '',                    // Meal Out (manual)
+          '',                    // Meal In (manual)
+          (typeof r.hoursWorked==='number' ? r.hoursWorked.toFixed(2) : (r.hoursWorked || '')), // Hrs
+          '',                    // Late In (manual)
+          '',                    // Early Out (manual)
+          '',                    // Meal Late In (manual)
+          '',                    // Meal Early Out (manual)
+          '',                    // Short Hrs (manual)
+          '',                    // Break Hrs (manual)
+          '',                    // OT/Coff Hrs (manual)
+          r.status==='Present' ? '' : (r.status || '') // Reason/Exception (status if not Present)
+        ]);
+      });
+
+      // Blank row separator between employees
+      data.push([]);
+    });
+
+    // Summary section
+    const totalHours = rows.reduce((s,r)=>s+(typeof r.hoursWorked==='number'?r.hoursWorked:0),0);
+    const presentCount = rows.filter(r=>r.status==='Present').length;
+    const uniqueEmps = Object.keys(byEmp).length;
     data.push([]);
     data.push(['SUMMARY']);
     data.push(['Date range:', `${fromDate} to ${toDate}`]);
-    data.push(['Total days recorded:', rows.length]);
+    data.push(['Total day-records:', rows.length]);
     data.push(['Unique employees:', uniqueEmps]);
     data.push(['Present count:', presentCount]);
     data.push(['Total hours worked:', Math.round(totalHours*100)/100]);
     data.push(['Generated:', new Date().toLocaleString('en-IN')]);
 
-    const ws=XLSX.utils.aoa_to_sheet(data);
-    ws['!cols']=[
-      {wch:12},{wch:22},{wch:10},{wch:14},
-      {wch:14},{wch:14},{wch:12},{wch:10},{wch:12},{wch:28},{wch:10}
-    ];
-    ws['!freeze']={xSplit:0,ySplit:1};
+    const ws = XLSX.utils.aoa_to_sheet(data);
 
-    const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
-    const filename=`Attendance_${fromDate}_to_${toDate}${empFilter?'_'+(empMap[empFilter]?.name||'emp').replace(/\s+/g,'_'):''}.xlsx`;
+    // Merge cells for the Punch Card title (centered across columns)
+    ws['!merges'] = ws['!merges'] || [];
+    ws['!merges'].push({ s:{r:0,c:0}, e:{r:0,c:17} });   // "Punch Card"
+    ws['!merges'].push({ s:{r:2,c:0}, e:{r:2,c:17} });   // company name
+    // Group header merges (Shift, Actual, Meal, Late, Early, Meal Late, Meal Early)
+    const headerRow = 4; // row index of 'Date | Day | Shift...'
+    ws['!merges'].push({ s:{r:headerRow,c:2}, e:{r:headerRow,c:4} });   // Shift across Code/Start/End
+    ws['!merges'].push({ s:{r:headerRow,c:5}, e:{r:headerRow,c:6} });   // Actual across In/Out
+    ws['!merges'].push({ s:{r:headerRow,c:7}, e:{r:headerRow,c:8} });   // Meal across Out/In
+
+    // Column widths matching the Punch Card layout
+    ws['!cols'] = [
+      {wch:12}, {wch:6},                   // Date, Day
+      {wch:8}, {wch:8}, {wch:8},           // Shift Code/Start/End
+      {wch:8}, {wch:8},                    // Actual In/Out
+      {wch:8}, {wch:8},                    // Meal Out/In
+      {wch:6},                             // Hrs
+      {wch:8}, {wch:8},                    // Late In, Early Out
+      {wch:10}, {wch:10},                  // Meal Late In, Meal Early Out
+      {wch:8}, {wch:8}, {wch:10},          // Short, Break, OT/Coff
+      {wch:18}                             // Reason/Exception
+    ];
+
+    // Freeze top 6 rows (title + company + header rows)
+    ws['!freeze'] = { xSplit:0, ySplit:6 };
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Punch Card');
+    const filename = `Punch_Card_${fromDate}_to_${toDate}${empFilter?'_'+(empMap[empFilter]?.name||'emp').replace(/\s+/g,'_'):''}.xlsx`;
     XLSX.writeFile(wb, filename);
-    showToast(`✅ Downloaded ${rows.length} rows (${uniqueEmps} employees)`,'success');
+    showToast(`✅ Downloaded ${rows.length} rows (${uniqueEmps} employee${uniqueEmps!==1?'s':''})`,'success');
   }
 }
 
