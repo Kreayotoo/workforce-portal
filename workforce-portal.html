@@ -1559,10 +1559,12 @@ function renderLogin(){
         <div id="signup-employee-form" class="hidden">
           <button onclick="backToRolePicker()" style="background:none;border:none;color:#0f766e;font-size:13px;font-weight:600;cursor:pointer;padding:0;margin-bottom:12px">← Choose different option</button>
           <div id="signup-emp-err"></div>
-          <div class="fld"><label>Select your company *</label>
-            <select id="su-emp-company" style="background:#f0fdf4;border:none;font-weight:600">
-              <option value="">Loading companies…</option>
-            </select>
+          <div class="fld" style="position:relative">
+            <label>Search your company *</label>
+            <input type="text" id="su-emp-company-search" placeholder="Type 2+ letters of your company name…" autocomplete="off" oninput="filterCompanyDropdown(this.value)" onfocus="filterCompanyDropdown(this.value)" onblur="setTimeout(()=>{const d=document.getElementById('su-emp-company-list');if(d)d.style.display='none'},200)" style="background:#f0fdf4;border:none;font-weight:600">
+            <input type="hidden" id="su-emp-company" value="">
+            <div id="su-emp-company-list" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,.08);max-height:240px;overflow-y:auto;z-index:50;margin-top:2px"></div>
+            <div id="su-emp-company-selected" style="display:none;margin-top:6px;padding:6px 10px;background:#dcfce7;border:1px solid #86efac;border-radius:6px;font-size:12px;color:#166534;font-weight:600"></div>
           </div>
           <div style="font-size:11px;color:#64748b;margin-top:-10px;margin-bottom:14px">Your company not listed? Ask your HR to register it first.</div>
           <div class="fld"><label>Full name *</label><input type="text" id="su-emp-name" placeholder="Your name" style="background:#f1f5fb;border:none"></div>
@@ -1807,27 +1809,83 @@ function showSignupCompany(){
 async function showSignupEmployee(){
   const rp=$('signup-role-picker'); if(rp) rp.classList.add('hidden');
   const ef=$('signup-employee-form'); if(ef) ef.classList.remove('hidden');
-  // Load companies into dropdown
-  const sel=$('su-emp-company');
-  if(!sel) return;
-  sel.innerHTML='<option value="">Loading companies…</option>';
+  // Reset the search box and selection
+  const search = $('su-emp-company-search');
+  const hidden = $('su-emp-company');
+  const list = $('su-emp-company-list');
+  const sel = $('su-emp-company-selected');
+  if(search) search.value = '';
+  if(hidden) hidden.value = '';
+  if(list){ list.innerHTML = ''; list.style.display = 'none'; }
+  if(sel){ sel.style.display = 'none'; sel.innerHTML = ''; }
+  // Pre-load companies into a cache (used by filterCompanyDropdown)
   try{
     const companies=await sb('companies','GET',null,'?select=company_id,name,status&order=name.asc');
-    if(!companies||!companies.length){
-      sel.innerHTML='<option value="">No companies registered yet</option>';
-      return;
-    }
-    const active=companies.filter(c=>(c.status||'Active')==='Active'&&c.company_id!=='KSPL');
-    if(!active.length){
-      sel.innerHTML='<option value="">No active companies — ask your HR to register one</option>';
-      return;
-    }
-    sel.innerHTML='<option value="">— Select your company —</option>'+
-      active.map(c=>`<option value="${c.company_id}">${c.name}</option>`).join('');
+    const active=(companies||[]).filter(c=>(c.status||'Active')==='Active'&&c.company_id!=='KSPL');
+    window._signupCompanies = active;
   }catch(e){
     console.error('Could not load companies:',e);
-    sel.innerHTML='<option value="">Failed to load companies — check your connection</option>';
+    window._signupCompanies = [];
   }
+}
+
+// Filter companies as the user types (no list shown until 2+ chars)
+function filterCompanyDropdown(query){
+  const list = $('su-emp-company-list');
+  const sel  = $('su-emp-company-selected');
+  const hidden = $('su-emp-company');
+  if(!list) return;
+  const q = (query||'').trim().toLowerCase();
+  // Clear selection if user starts typing again
+  if(hidden && hidden.value && (!q || (q && !q.startsWith((sel?.dataset?.name||'').toLowerCase().slice(0,q.length))))){
+    hidden.value = '';
+    if(sel){ sel.style.display = 'none'; sel.innerHTML = ''; sel.dataset.name=''; }
+  }
+  // Don't show anything until at least 2 characters typed
+  if(q.length < 2){
+    list.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+  const all = window._signupCompanies || [];
+  const matches = all.filter(c => (c.name||'').toLowerCase().includes(q));
+  if(matches.length === 0){
+    list.innerHTML = '<div style="padding:10px 14px;color:#64748b;font-size:12px;font-style:italic">No company found matching "'+escapeHtml(query)+'". Ask your HR to register it first.</div>';
+    list.style.display = 'block';
+    return;
+  }
+  list.innerHTML = matches.slice(0,10).map(c=>{
+    // Highlight the matched portion
+    const lower = (c.name||'').toLowerCase();
+    const idx = lower.indexOf(q);
+    let display;
+    if(idx >= 0){
+      display = escapeHtml(c.name.slice(0,idx)) + '<strong style="background:#fef08a;color:#78350f;padding:0 2px;border-radius:3px">' + escapeHtml(c.name.slice(idx,idx+q.length)) + '</strong>' + escapeHtml(c.name.slice(idx+q.length));
+    } else {
+      display = escapeHtml(c.name);
+    }
+    return `<div onmousedown="pickCompanyForSignup('${c.company_id}','${escapeHtml(c.name).replace(/'/g,'&apos;')}')" style="padding:9px 14px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:13px" onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background='#fff'">${display}<div style="font-size:10px;color:#94a3b8;margin-top:1px">${c.company_id}</div></div>`;
+  }).join('');
+  list.style.display = 'block';
+}
+
+function pickCompanyForSignup(code, name){
+  const hidden = $('su-emp-company');
+  const search = $('su-emp-company-search');
+  const list   = $('su-emp-company-list');
+  const sel    = $('su-emp-company-selected');
+  if(hidden) hidden.value = code;
+  if(search) search.value = name;
+  if(list){ list.style.display = 'none'; list.innerHTML = ''; }
+  if(sel){
+    sel.dataset.name = name;
+    sel.innerHTML = '✓ Selected: <strong>'+name+'</strong> ('+code+')';
+    sel.style.display = 'block';
+  }
+}
+
+function escapeHtml(s){
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function revealSuperAdmin(){
   const v1=$('signin-view'); if(v1) v1.classList.add('hidden');
