@@ -7994,50 +7994,108 @@ async function exportAttendanceExcel(){
     return;
   }
 
-  // Build Excel via SheetJS CDN
-  if(typeof XLSX==='undefined'){
+  // Build Excel via SheetJS-with-styles CDN (xlsx-js-style supports borders/alignment)
+  if(typeof XLSX==='undefined' || !window._xlsxStylesLoaded){
     await new Promise((resolve,reject)=>{
       const s=document.createElement('script');
-      s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-      s.onload=resolve; s.onerror=()=>reject(new Error('Could not load Excel library'));
+      s.src='https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+      s.onload=()=>{ window._xlsxStylesLoaded=true; resolve(); };
+      s.onerror=()=>reject(new Error('Could not load Excel library'));
       document.head.appendChild(s);
     }).catch(e=>{
-      console.error('SheetJS load failed:',e);
+      console.error('xlsx-js-style load failed:',e);
       showToast('❌ Could not load Excel library — downloading CSV instead','info');
       return downloadAttendanceCSV(rows, fromDate, toDate);
     });
   }
 
   if(typeof XLSX!=='undefined'){
-    // Get company name for title
     const companyName = (currentCompany?.name || D.settings?.company || 'Company').toUpperCase();
 
-    // Build the rows in Punch Card format
-    const data = [];
+    // Style helpers
+    const border = { style:'thin', color:{rgb:'000000'} };
+    const allBorders = { top:border, bottom:border, left:border, right:border };
+    const headerStyle = {
+      font:{ bold:true, sz:11, name:'Calibri' },
+      alignment:{ horizontal:'center', vertical:'center', wrapText:true },
+      border:allBorders,
+      fill:{ fgColor:{rgb:'F2F2F2'} }
+    };
+    const titleStyle = {
+      font:{ bold:true, sz:14, name:'Calibri' },
+      alignment:{ horizontal:'center', vertical:'center' }
+    };
+    const companyStyle = {
+      font:{ bold:true, italic:true, sz:11, name:'Calibri' },
+      alignment:{ horizontal:'center', vertical:'center' }
+    };
+    const empHeaderStyle = {
+      font:{ bold:true, sz:11, name:'Calibri' },
+      alignment:{ horizontal:'left', vertical:'center' },
+      fill:{ fgColor:{rgb:'FFF8DC'} }
+    };
+    const dataCellStyle = {
+      font:{ sz:10, name:'Calibri' },
+      alignment:{ horizontal:'center', vertical:'center' },
+      border:allBorders
+    };
+    const dataCellLeftStyle = {
+      font:{ sz:10, name:'Calibri' },
+      alignment:{ horizontal:'left', vertical:'center' },
+      border:allBorders
+    };
 
-    // Title row
-    data.push(['Punch Card']);
-    data.push([]);
+    const NUM_COLS = 18; // Date, Day, Shift(3), Actual(2), Meal(2), Hrs, Late, Early, MealLate, MealEarly, Short, Break, OT/Coff, Reason
+    const COL_LETTERS = 'ABCDEFGHIJKLMNOPQR'; // 18 columns
 
-    // Company + Site header row
-    data.push([companyName, '', '', '', '', '', '', '', '', '', '', '', '', '', '', '']);
-    data.push([]);
+    // Helper to set a cell with value + style
+    const ws = {};
+    const merges = [];
+    let currentRow = 0; // 0-indexed
 
-    // Two-row column header (matching Punch Card template)
-    // Row 1: group headers
-    data.push([
+    function setCell(row, col, value, style){
+      const addr = XLSX.utils.encode_cell({r:row, c:col});
+      const cell = { v: value==null?'':value, t: typeof value==='number'?'n':'s' };
+      if(style) cell.s = style;
+      ws[addr] = cell;
+    }
+    function setRow(row, values, style){
+      for(let c=0; c<NUM_COLS; c++){
+        setCell(row, c, values[c]==null?'':values[c], style);
+      }
+    }
+
+    // ── Row 0: "Punch Card" title (merged across all 18 cols) ──
+    setCell(0, 0, 'Punch Card', titleStyle);
+    for(let c=1; c<NUM_COLS; c++) setCell(0, c, '', titleStyle);
+    merges.push({ s:{r:0,c:0}, e:{r:0,c:NUM_COLS-1} });
+
+    // ── Row 1: blank ──
+    currentRow = 2;
+
+    // ── Row 2: company name (merged left half) + site name (right half) ──
+    setRow(2, ['','','','','','','','','','','','','','','','','',''], companyStyle);
+    setCell(2, 0, companyName, { ...companyStyle, alignment:{horizontal:'left',vertical:'center'} });
+    merges.push({ s:{r:2,c:0}, e:{r:2,c:8} });
+    setCell(2, 9, 'Ascent', { ...companyStyle, alignment:{horizontal:'right',vertical:'center'} });
+    merges.push({ s:{r:2,c:9}, e:{r:2,c:NUM_COLS-1} });
+
+    // ── Rows 3-4: two-row column header with merges ──
+    // Row 3 (group headers)
+    const groupRow = [
       'Date', 'Day',
-      'Shift', '', '',          // Shift > Code, Start, End
-      'Actual', '',             // Actual > In, Out
-      'Meal', '',               // Meal > Out, In
+      'Shift', '', '',
+      'Actual', '',
+      'Meal', '',
       'Hrs',
-      'Late', 'Early',          // Late > In, Early > Out
+      'Late', 'Early',
       'Meal Late', 'Meal Early',
       'Short', 'Break', 'OT/',
       'Reason/'
-    ]);
-    // Row 2: sub-headers
-    data.push([
+    ];
+    setRow(3, groupRow, headerStyle);
+    // Row 4 (sub-headers)
+    const subRow = [
       '', '',
       'Code', 'Start', 'End',
       'In', 'Out',
@@ -8047,7 +8105,20 @@ async function exportAttendanceExcel(){
       'In', 'Out',
       'Hrs', 'Hrs', 'Coff Hrs',
       'Exception'
-    ]);
+    ];
+    setRow(4, subRow, headerStyle);
+
+    // Vertical merges for single-column headers (Date, Day, Hrs, Late, Early, Meal Late, Meal Early, Short Hrs, Break Hrs, OT/Coff Hrs, Reason)
+    // These take both rows 3 & 4
+    [0, 1, 9, 10, 11, 12, 13, 14, 15, 16, 17].forEach(c=>{
+      merges.push({ s:{r:3,c:c}, e:{r:4,c:c} });
+    });
+    // Horizontal merges for the group headers in row 3
+    merges.push({ s:{r:3,c:2}, e:{r:3,c:4} });   // Shift across Code/Start/End
+    merges.push({ s:{r:3,c:5}, e:{r:3,c:6} });   // Actual across In/Out
+    merges.push({ s:{r:3,c:7}, e:{r:3,c:8} });   // Meal across Out/In
+
+    currentRow = 5;
 
     // Group rows by employee
     const byEmp = {};
@@ -8057,84 +8128,83 @@ async function exportAttendanceExcel(){
       byEmp[key].rows.push(r);
     });
 
-    // For each employee, write Employee header row, then their attendance rows
     Object.values(byEmp).forEach(emp=>{
-      // Employee row
-      data.push(['Employee:', `${emp.name} — ${emp.id}${emp.dept?' — '+emp.dept:''}`]);
+      // Employee header row (full-width merged)
+      setCell(currentRow, 0, `Employee:  ${emp.name} — ${emp.id}${emp.dept?' — '+emp.dept:''}`, empHeaderStyle);
+      for(let c=1; c<NUM_COLS; c++) setCell(currentRow, c, '', empHeaderStyle);
+      merges.push({ s:{r:currentRow,c:0}, e:{r:currentRow,c:NUM_COLS-1} });
+      currentRow++;
 
       emp.rows.forEach(r=>{
-        // Day name from date
         let dayName = '';
-        try{
-          dayName = new Date(r.date).toLocaleDateString('en-IN',{weekday:'short'});
-        }catch(e){}
+        try{ dayName = new Date(r.date).toLocaleDateString('en-IN',{weekday:'short'}); }catch(e){}
 
-        data.push([
-          r.date,                // Date
-          dayName,               // Day
-          '',                    // Shift Code (manual)
-          '',                    // Shift Start (manual)
-          '',                    // Shift End (manual)
-          r.checkIn || '',       // Actual In
-          r.checkOut || '',      // Actual Out
-          '',                    // Meal Out (manual)
-          '',                    // Meal In (manual)
-          (typeof r.hoursWorked==='number' ? r.hoursWorked.toFixed(2) : (r.hoursWorked || '')), // Hrs
-          '',                    // Late In (manual)
-          '',                    // Early Out (manual)
-          '',                    // Meal Late In (manual)
-          '',                    // Meal Early Out (manual)
-          '',                    // Short Hrs (manual)
-          '',                    // Break Hrs (manual)
-          '',                    // OT/Coff Hrs (manual)
-          r.status==='Present' ? '' : (r.status || '') // Reason/Exception (status if not Present)
-        ]);
+        const vals = [
+          r.date,
+          dayName,
+          '', '', '',
+          r.checkIn || '',
+          r.checkOut === 'Active' ? '' : (r.checkOut || ''),
+          '', '',
+          (typeof r.hoursWorked==='number' ? r.hoursWorked.toFixed(2) : (r.hoursWorked && r.hoursWorked!=='—' ? r.hoursWorked : '')),
+          '', '', '', '',
+          '', '', '',
+          (r.status==='Present' || r.status==='Late') ? '' : (r.status || '')
+        ];
+        for(let c=0; c<NUM_COLS; c++){
+          setCell(currentRow, c, vals[c]==null?'':vals[c], dataCellStyle);
+        }
+        currentRow++;
       });
 
-      // Blank row separator between employees
-      data.push([]);
+      // blank separator
+      currentRow++;
     });
 
     // Summary section
     const totalHours = rows.reduce((s,r)=>s+(typeof r.hoursWorked==='number'?r.hoursWorked:0),0);
     const presentCount = rows.filter(r=>r.status==='Present').length;
     const uniqueEmps = Object.keys(byEmp).length;
-    data.push([]);
-    data.push(['SUMMARY']);
-    data.push(['Date range:', `${fromDate} to ${toDate}`]);
-    data.push(['Total day-records:', rows.length]);
-    data.push(['Unique employees:', uniqueEmps]);
-    data.push(['Present count:', presentCount]);
-    data.push(['Total hours worked:', Math.round(totalHours*100)/100]);
-    data.push(['Generated:', new Date().toLocaleString('en-IN')]);
 
-    const ws = XLSX.utils.aoa_to_sheet(data);
+    currentRow++;
+    setCell(currentRow, 0, 'SUMMARY', { font:{bold:true,sz:11}, alignment:{horizontal:'left'} });
+    currentRow++;
+    [
+      ['Date range:', `${fromDate} to ${toDate}`],
+      ['Total day-records:', rows.length],
+      ['Unique employees:', uniqueEmps],
+      ['Present count:', presentCount],
+      ['Total hours worked:', Math.round(totalHours*100)/100],
+      ['Generated:', new Date().toLocaleString('en-IN')]
+    ].forEach(([k,v])=>{
+      setCell(currentRow, 0, k, { font:{bold:true,sz:10}, alignment:{horizontal:'left'} });
+      setCell(currentRow, 1, v, { font:{sz:10}, alignment:{horizontal:'left'} });
+      currentRow++;
+    });
 
-    // Merge cells for the Punch Card title (centered across columns)
-    ws['!merges'] = ws['!merges'] || [];
-    ws['!merges'].push({ s:{r:0,c:0}, e:{r:0,c:17} });   // "Punch Card"
-    ws['!merges'].push({ s:{r:2,c:0}, e:{r:2,c:17} });   // company name
-    // Group header merges (Shift, Actual, Meal, Late, Early, Meal Late, Meal Early)
-    const headerRow = 4; // row index of 'Date | Day | Shift...'
-    ws['!merges'].push({ s:{r:headerRow,c:2}, e:{r:headerRow,c:4} });   // Shift across Code/Start/End
-    ws['!merges'].push({ s:{r:headerRow,c:5}, e:{r:headerRow,c:6} });   // Actual across In/Out
-    ws['!merges'].push({ s:{r:headerRow,c:7}, e:{r:headerRow,c:8} });   // Meal across Out/In
-
-    // Column widths matching the Punch Card layout
+    // Set the worksheet's range
+    ws['!ref'] = `A1:${COL_LETTERS[NUM_COLS-1]}${currentRow}`;
+    ws['!merges'] = merges;
     ws['!cols'] = [
-      {wch:12}, {wch:6},                   // Date, Day
-      {wch:8}, {wch:8}, {wch:8},           // Shift Code/Start/End
-      {wch:8}, {wch:8},                    // Actual In/Out
-      {wch:8}, {wch:8},                    // Meal Out/In
-      {wch:6},                             // Hrs
-      {wch:8}, {wch:8},                    // Late In, Early Out
-      {wch:10}, {wch:10},                  // Meal Late In, Meal Early Out
-      {wch:8}, {wch:8}, {wch:10},          // Short, Break, OT/Coff
-      {wch:18}                             // Reason/Exception
+      {wch:12}, {wch:6},               // Date, Day
+      {wch:8}, {wch:8}, {wch:8},       // Shift Code/Start/End
+      {wch:9}, {wch:9},                // Actual In/Out
+      {wch:8}, {wch:8},                // Meal Out/In
+      {wch:6},                         // Hrs
+      {wch:8}, {wch:8},                // Late In, Early Out
+      {wch:11}, {wch:11},              // Meal Late In, Meal Early Out
+      {wch:8}, {wch:8}, {wch:10},      // Short, Break, OT/Coff
+      {wch:18}                         // Reason/Exception
     ];
-
-    // Freeze top 6 rows (title + company + header rows)
-    ws['!freeze'] = { xSplit:0, ySplit:6 };
+    // Set row heights for header rows
+    ws['!rows'] = [
+      {hpt:24},  // row 1 (title)
+      {hpt:8},   // row 2 (blank)
+      {hpt:18},  // row 3 (company)
+      {hpt:18},  // row 4 (group header)
+      {hpt:32}   // row 5 (sub-header, taller)
+    ];
+    ws['!freeze'] = { xSplit:0, ySplit:5 };
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Punch Card');
