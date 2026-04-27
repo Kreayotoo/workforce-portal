@@ -7995,7 +7995,9 @@ async function exportAttendanceExcel(){
   }
 
   // Build Excel via SheetJS-with-styles CDN (xlsx-js-style supports borders/alignment)
-  if(typeof XLSX==='undefined' || !window._xlsxStylesLoaded){
+  // We MUST load this even if plain XLSX is already defined, because plain SheetJS
+  // ignores cell styles. Loading xlsx-js-style overrides the global XLSX with one that supports styles.
+  if(!window._xlsxStylesLoaded){
     await new Promise((resolve,reject)=>{
       const s=document.createElement('script');
       s.src='https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
@@ -8209,7 +8211,7 @@ async function exportAttendanceExcel(){
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Punch Card');
     const filename = `Punch_Card_${fromDate}_to_${toDate}${empFilter?'_'+(empMap[empFilter]?.name||'emp').replace(/\s+/g,'_'):''}.xlsx`;
-    XLSX.writeFile(wb, filename);
+    XLSX.writeFile(wb, filename, { cellStyles: true });
     showToast(`✅ Downloaded ${rows.length} rows (${uniqueEmps} employee${uniqueEmps!==1?'s':''})`,'success');
   }
 }
