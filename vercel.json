@@ -4,12 +4,14 @@
     {
       "src": "workforce-portal.html",
       "use": "@vercel/static"
+    },
+    {
+      "src": "*.png",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/workforce-portal.html"
-    }
+    { "src": "/(.*\\.png)", "dest": "/$1" },
+    { "src": "/(.*)", "dest": "/workforce-portal.html" }
   ]
 }
