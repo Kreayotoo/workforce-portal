@@ -3513,7 +3513,7 @@ function renderEmployeeApp(){
     setTimeout(()=>{
       initAttGeo();
       loadAttHistory();
-      frStopCamera(); // ensure camera is off when landing on this page
+      frStopCamera();
     },300);
   }
 }
@@ -4152,13 +4152,13 @@ function empAttendance(){
           <div style="font-size:12px;color:#166534;margin-top:2px">Since ${new Date(activeSession.checkIn).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</div>
           ${activeSession.location?`<div style="font-size:11px;color:#166534;margin-top:2px">📍 ${activeSession.location}</div>`:''}
         </div>
-        <button class="btn" style="background:#ef4444;color:#fff;font-weight:700;padding:10px 20px;font-size:14px" onclick="checkOutNow()">Check Out</button>
+        <button class="btn" style="background:#ef4444;color:#fff;font-weight:700;padding:10px 20px;font-size:14px" onclick="openCheckOutModal()">Check Out</button>
       </div>
     </div>`:`
     <div style="background:#f8fafc;border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:1rem">
       <div style="font-weight:600;font-size:13px;margin-bottom:4px;color:var(--muted)">Not checked in yet</div>
       <div id="att-location-status" style="font-size:12px;color:var(--muted);margin-bottom:10px">📍 Getting your location…</div>
-      <button class="btn btn-primary" style="width:100%;background:#0f766e;padding:12px;font-size:15px;font-weight:700" onclick="checkInNow()">✅ Check In</button>
+      <button class="btn btn-primary" style="width:100%;background:#0f766e;padding:12px;font-size:15px;font-weight:700" onclick="openCheckInModal()">✅ Check In</button>
     </div>`}
 
     ${sessions.length>0?`
@@ -4190,34 +4190,6 @@ function empAttendance(){
     </div>`:''}
   </div>
 
-  <div class="card" style="max-width:520px;margin-bottom:1rem;${activeSession?'display:none':''}">
-    <div class="card-hd"><h3>🎭 Face scan attendance</h3></div>
-    <div id="att-face-toggle" style="text-align:center">
-      <p style="font-size:13px;color:var(--muted);margin:0 0 12px">${isEnrolled?'Use face recognition to check in/out':'Enroll your face once to enable face check-in'}</p>
-      <button class="btn btn-sec" style="width:100%;background:#0f766e;color:#fff;border:none;padding:11px;font-size:14px;font-weight:600" onclick="openFaceScan()">📷 ${isEnrolled?'Use Face Scan':'Enroll My Face'}</button>
-    </div>
-    <div id="att-face-content" style="display:none">
-    ${!isEnrolled?`
-    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px;margin-bottom:1rem;font-size:12px;color:#92400e">
-      ⚠️ Enroll your face first to use face check-in
-    </div>
-    <div style="position:relative;width:100%;max-width:300px;margin:0 auto">
-      <video id="att-enroll-video" autoplay muted playsinline style="width:100%;border-radius:8px;background:#000"></video>
-      <canvas id="att-enroll-canvas" style="position:absolute;top:0;left:0;width:100%;border-radius:8px"></canvas>
-    </div>
-    <div id="att-enroll-status" style="font-size:12px;color:var(--muted);text-align:center;margin:8px 0">Position your face</div>
-    <button class="btn btn-primary" style="width:100%;background:#0f766e" onclick="attEnrollFace()">📸 Enroll Face</button>`:`
-    <div style="position:relative;width:100%;max-width:300px;margin:0 auto">
-      <video id="att-scan-video" autoplay muted playsinline style="width:100%;border-radius:8px;background:#000"></video>
-      <canvas id="att-scan-canvas" style="position:absolute;top:0;left:0;width:100%;border-radius:8px"></canvas>
-    </div>
-    <div id="att-scan-status" style="font-size:13px;font-weight:600;text-align:center;margin:8px 0;color:var(--muted)">Loading camera…</div>
-    <div style="text-align:center;font-size:11px;color:var(--muted);margin-top:4px">
-      <span style="cursor:pointer;color:#ef4444;text-decoration:underline" onclick="deleteEnrolledFace('${emp.name}')">Remove enrolled face</span>
-    </div>`}
-    </div>
-  </div>
-
   <div class="card" style="max-width:520px;padding:0">
     <div class="card-hd" style="padding:1rem 1rem 0"><h3>My attendance history</h3></div>
     <table style="margin-top:8px"><thead><tr>
@@ -4230,6 +4202,24 @@ function empAttendance(){
     <tbody id="att-history-body">
       <tr><td colspan="5" style="text-align:center;padding:1rem;color:var(--muted)">Loading…</td></tr>
     </tbody></table>
+  </div>
+
+  <!-- Face capture modal (hidden by default, opened by Check In/Out) -->
+  <div id="att-face-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;padding:1rem">
+    <div style="background:#fff;border-radius:14px;padding:1.25rem;width:100%;max-width:380px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <h3 id="att-modal-title" style="margin:0;font-size:17px">📷 Face Check-In</h3>
+        <button onclick="closeFaceModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;padding:0;line-height:1">×</button>
+      </div>
+      <div style="position:relative;width:100%;max-width:320px;margin:0 auto">
+        <video id="att-modal-video" autoplay muted playsinline style="width:100%;border-radius:10px;background:#000;aspect-ratio:4/3;object-fit:cover"></video>
+        <canvas id="att-modal-canvas" style="position:absolute;top:0;left:0;width:100%;border-radius:10px"></canvas>
+      </div>
+      <div id="att-modal-status" style="font-size:13px;font-weight:600;text-align:center;margin:12px 0;color:var(--muted);min-height:20px">Loading camera…</div>
+      <div id="att-modal-actions" style="display:none">
+        <button class="btn btn-primary" id="att-modal-action-btn" style="width:100%;background:#0f766e;padding:11px;font-size:14px;font-weight:600">📸 Capture & Enroll</button>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -4258,6 +4248,183 @@ function initAttGeo(callback){
     ()=>{_attGeoState={status:'error'};const el=$('att-location-status');if(el)el.textContent='📍 Location unavailable';if(callback)callback();},
     {timeout:8000,enableHighAccuracy:true}
   );
+}
+
+// ─── FACE CAPTURE MODAL FOR CHECK-IN/OUT ─────────────────────────
+let _attFaceMode=null; // 'checkin' | 'checkout' | 'enroll'
+
+function openFaceModal(mode, titleText){
+  _attFaceMode=mode;
+  const m=$('att-face-modal');
+  if(!m) return;
+  m.style.display='flex';
+  const t=$('att-modal-title'); if(t) t.textContent=titleText||'📷 Face Check-In';
+  const s=$('att-modal-status'); if(s){s.textContent='Loading camera…';s.style.color='var(--muted)';}
+  const ac=$('att-modal-actions'); if(ac) ac.style.display='none';
+}
+
+function closeFaceModal(){
+  frStopCamera();
+  const m=$('att-face-modal');
+  if(m) m.style.display='none';
+  _attFaceMode=null;
+}
+
+async function openCheckInModal(){
+  const emp=currentEmployee;
+  const today=todayStr();
+  const active=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
+  if(active){ showToast('⚠️ Already checked in!','info'); return; }
+
+  const isEnrolled=frGetEnrolled().some(e=>e.name.toLowerCase()===emp.name.toLowerCase());
+  if(!isEnrolled){
+    openFaceModal('enroll','📷 Enroll Your Face');
+    setTimeout(()=>startModalEnroll(),200);
+  } else {
+    openFaceModal('checkin','📷 Face Check-In');
+    setTimeout(()=>startModalScan('checkin'),200);
+  }
+}
+
+async function openCheckOutModal(){
+  const emp=currentEmployee;
+  const today=todayStr();
+  const active=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
+  if(!active){ showToast('No active session','info'); return; }
+
+  const isEnrolled=frGetEnrolled().some(e=>e.name.toLowerCase()===emp.name.toLowerCase());
+  if(!isEnrolled){ showToast('⚠️ Face not enrolled. Cannot verify checkout.','info'); return; }
+  openFaceModal('checkout','📷 Face Check-Out');
+  setTimeout(()=>startModalScan('checkout'),200);
+}
+
+function startModalEnroll(){
+  const s=$('att-modal-status');
+  if(s){s.textContent='Position your face in the frame';s.style.color='var(--muted)';}
+  const ac=$('att-modal-actions'); if(ac) ac.style.display='block';
+  const btn=$('att-modal-action-btn');
+  if(btn){
+    btn.textContent='📸 Capture & Enroll';
+    btn.style.background='#0f766e';
+    btn.onclick=async()=>{
+      const s=$('att-modal-status');
+      if(s){s.textContent='Capturing…';s.style.color='#0f766e';}
+      btn.disabled=true;
+      const desc=await frCaptureSingle('att-modal-video');
+      if(!desc){
+        if(s){s.textContent='No face detected. Try again.';s.style.color='#ef4444';}
+        btn.disabled=false;
+        return;
+      }
+      await frSaveFaceToSupabase(currentEmployee, desc);
+      if(s){s.textContent='✅ Face enrolled! Now checking you in…';s.style.color='#166534';}
+      // Auto-proceed to check-in with the just-enrolled face
+      setTimeout(async()=>{
+        const photoDataUrl=captureModalPhoto();
+        await doCheckInWithPhoto(photoDataUrl);
+        closeFaceModal();
+      },800);
+    };
+  }
+  frStartCamera('att-modal-video','att-modal-canvas',result=>{
+    const s=$('att-modal-status');
+    if(!s) return;
+    if(result.type==='cam-error'){s.textContent=result.msg;s.style.color='#ef4444';}
+    else if(result.type==='no-face'){s.textContent='No face detected — look at camera';s.style.color='var(--muted)';}
+    else if(result.type==='detected'){s.textContent='✅ Face detected! Click Capture below';s.style.color='#166534';}
+  });
+}
+
+async function startModalScan(mode){
+  const emp=currentEmployee;
+  const s=$('att-modal-status');
+  if(s){s.textContent='Loading your face data…';s.style.color='var(--muted)';}
+
+  const faceData=await frLoadFaceFromSupabase(emp.email);
+  if(!faceData){
+    if(s){s.textContent='Face not enrolled. Please re-enroll.';s.style.color='#ef4444';}
+    return;
+  }
+
+  let _scanned=false;
+  frStartCamera('att-modal-video','att-modal-canvas',result=>{
+    const s=$('att-modal-status');
+    if(!s||_scanned) return;
+    if(result.type==='cam-error'){s.textContent=result.msg;s.style.color='#ef4444';}
+    else if(result.type==='no-face'){s.textContent='No face detected — look at camera';s.style.color='var(--muted)';}
+    else if(result.type==='detected'){
+      s.textContent='🔍 Verifying your face…';s.style.color='#0f766e';
+      const isMatch=frMatchSingleEmployee(result.descriptor, faceData.descriptor);
+      if(isMatch){
+        _scanned=true;
+        const photoDataUrl=captureModalPhoto();
+        s.textContent=`✅ Verified! ${mode==='checkin'?'Checking in':'Checking out'}…`;
+        s.style.color='#166534';
+        setTimeout(async()=>{
+          if(mode==='checkin') await doCheckInWithPhoto(photoDataUrl);
+          else await doCheckOutWithPhoto(photoDataUrl);
+          closeFaceModal();
+        },700);
+      } else {
+        s.textContent='❌ Face does not match. Try again.';s.style.color='#ef4444';
+        setTimeout(()=>{ if(!_scanned){const s=$('att-modal-status');if(s){s.textContent='Look at camera';s.style.color='var(--muted)';}}},1500);
+      }
+    }
+  });
+}
+
+function captureModalPhoto(){
+  const vid=$('att-modal-video');
+  if(!vid) return '';
+  const canvas=document.createElement('canvas');
+  canvas.width=80; canvas.height=60;
+  canvas.getContext('2d').drawImage(vid,0,0,80,60);
+  return canvas.toDataURL('image/jpeg',0.5);
+}
+
+async function doCheckInWithPhoto(photoDataUrl){
+  const emp=currentEmployee;
+  const today=todayStr();
+  const now=new Date();
+  await new Promise(resolve=>initAttGeo(resolve));
+  const session={
+    _localId:Date.now(),empName:emp.name,empId:emp._uuid||emp.id,date:today,
+    checkIn:now.toISOString(),checkOut:null,
+    location:_attGeoState.address||'',lat:_attGeoState.lat||null,lng:_attGeoState.lng||null,
+    photo:photoDataUrl||null
+  };
+  const r=await sb('attendance_sessions','POST',{
+    employee_id:emp._uuid||null,employee_name:emp.name,date:today,
+    check_in:session.checkIn,location:session.location,
+    latitude:session.lat,longitude:session.lng,photo:photoDataUrl||null,
+    company_id:currentCompany?currentCompany.company_id:'KSPL'
+  });
+  if(r&&r[0]) session._uuid=r[0].id;
+  if(!D.attSessions) D.attSessions=[];
+  D.attSessions.unshift(session);
+  save();
+  showToast(`✅ Checked in at ${now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}${session.location?' — '+session.location:''}`,'success');
+  navEmp('emp-attendance');
+}
+
+async function doCheckOutWithPhoto(photoDataUrl){
+  const emp=currentEmployee;
+  const today=todayStr();
+  const now=new Date();
+  const active=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
+  if(!active){ showToast('No active session','info'); return; }
+  await new Promise(resolve=>initAttGeo(resolve));
+  active.checkOut=now.toISOString();
+  active.checkOutLocation=_attGeoState.address||'';
+  if(active._uuid){
+    await sb('attendance_sessions','PATCH',{
+      check_out:active.checkOut,
+      checkout_location:active.checkOutLocation
+    },`id=eq.${active._uuid}`);
+  }
+  save();
+  showToast(`✅ Checked out at ${now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`,'success');
+  navEmp('emp-attendance');
 }
 
 async function checkInNow(){
@@ -4450,15 +4617,6 @@ async function loadAttHistory(){
       <td style="font-size:12px;font-weight:600">${dur}</td>
     </tr>`;
   }).join('');
-}
-
-function openFaceScan(){
-  // Reveal face-scan UI and start the camera on user click
-  const toggle=$('att-face-toggle'); if(toggle) toggle.style.display='none';
-  const content=$('att-face-content'); if(content) content.style.display='block';
-  const emp=currentEmployee;
-  const isEnrolled=frGetEnrolled().some(e=>e.name.toLowerCase()===emp.name.toLowerCase());
-  setTimeout(()=>{ if(isEnrolled) startAttFaceScan(); else startAttFaceEnroll(); },100);
 }
 
 function startAttFaceEnroll(){
