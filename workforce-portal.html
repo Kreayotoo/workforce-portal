@@ -13059,7 +13059,6 @@ if ('serviceWorker' in navigator) {
 let _deferredInstallPrompt = null;
 
 function isPWAInstalled(){
-  // Check if running in standalone mode (already installed)
   return window.matchMedia('(display-mode: standalone)').matches ||
          window.navigator.standalone === true;
 }
@@ -13068,70 +13067,76 @@ function showInstallButton(){
   const btn = document.getElementById('pwa-install-btn');
   if(!btn) return;
   if(isPWAInstalled()) { btn.style.display='none'; return; }
-  // Show button with flex display
   btn.style.display='flex';
 }
 
-// Listen for the install prompt (Android/desktop Chrome+Edge)
+// Always show the button on login page (unless already installed)
+window.addEventListener('load', () => {
+  setTimeout(showInstallButton, 100);
+});
+
+// Capture native install prompt when browser fires it
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   _deferredInstallPrompt = e;
   showInstallButton();
 });
 
-// Detect iOS Safari (which doesn't fire beforeinstallprompt — needs manual instructions)
 function isIOS(){
   return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 }
-function isInStandaloneMode(){
-  return ('standalone' in window.navigator) && window.navigator.standalone;
+
+function isAndroid(){
+  return /Android/i.test(navigator.userAgent);
 }
 
-// Show button on iOS too (will trigger instructions)
-if(isIOS() && !isInStandaloneMode()){
-  setTimeout(showInstallButton, 500);
-}
-
-// Hide button after successful install
 window.addEventListener('appinstalled', () => {
   _deferredInstallPrompt = null;
   const btn = document.getElementById('pwa-install-btn');
   if(btn) btn.style.display='none';
-  showToast && showToast('✅ Kreayotoo installed!','success');
+  if(typeof showToast==='function') showToast('✅ Kreayotoo installed!','success');
 });
 
 async function handleInstallClick(){
-  // iOS Safari — show manual instructions
-  if(isIOS()){
-    alert(
-      '📱 To install Kreayotoo on iPhone:\n\n' +
-      '1. Make sure you are using Safari (not Chrome)\n' +
-      '2. Tap the Share button (square with arrow) at the bottom\n' +
-      '3. Scroll down and tap "Add to Home Screen"\n' +
-      '4. Tap "Add" in the top right\n\n' +
-      'The app icon will appear on your home screen.'
-    );
-    return;
-  }
-  // Android / desktop Chrome — use the deferred prompt
+  // If browser supports native install prompt, use it
   if(_deferredInstallPrompt){
     _deferredInstallPrompt.prompt();
     const result = await _deferredInstallPrompt.userChoice;
     if(result.outcome === 'accepted'){
-      console.log('PWA install accepted');
+      const btn = document.getElementById('pwa-install-btn');
+      if(btn) btn.style.display='none';
     }
     _deferredInstallPrompt = null;
-    const btn = document.getElementById('pwa-install-btn');
-    if(btn) btn.style.display='none';
-  } else {
-    // Fallback — show generic instructions
-    alert(
-      '📱 To install Kreayotoo:\n\n' +
-      '• Chrome/Edge desktop: Look for ⊕ install icon in the address bar\n' +
-      '• Android Chrome: Tap menu (⋮) → "Install app"\n' +
-      '• iPhone Safari: Tap Share → "Add to Home Screen"'
-    );
+    return;
   }
+
+  // Otherwise show platform-specific instructions
+  let message = '📱 How to install Kreayotoo:\n\n';
+  if(isIOS()){
+    message +=
+      '🍎 iPhone (Safari only):\n\n' +
+      '1. Make sure you are using Safari (not Chrome)\n' +
+      '2. Tap the Share button (square with ↑ arrow) at the bottom\n' +
+      '3. Scroll down and tap "Add to Home Screen"\n' +
+      '4. Tap "Add" in the top right corner\n\n' +
+      'The app icon will appear on your home screen.';
+  } else if(isAndroid()){
+    message +=
+      '📱 Android (Chrome):\n\n' +
+      '1. Tap the 3-dot menu (⋮) at the top right\n' +
+      '2. Tap "Install app" or "Add to Home screen"\n' +
+      '3. Confirm to install\n\n' +
+      'The app icon will appear on your home screen.';
+  } else {
+    message +=
+      '💻 Desktop (Chrome / Edge):\n\n' +
+      '• Look for the install icon (⊕) on the right side of the address bar — click it\n' +
+      '• Or open the 3-dot menu (⋮) → "Install Kreayotoo HR Portal..."\n\n' +
+      '📱 On phone:\n' +
+      '• Android Chrome: Menu (⋮) → "Install app"\n' +
+      '• iPhone Safari: Share → "Add to Home Screen"';
+  }
+  alert(message);
 }
 
 init();
