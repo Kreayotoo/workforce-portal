@@ -11276,8 +11276,12 @@ async function clearAllNotifs(){
   // Delete the Supabase-backed ones in parallel
   const uuids=D.notifications.filter(n=>n._uuid).map(n=>n._uuid);
   if(uuids.length){
-    const inList=uuids.map(u=>`"${u}"`).join(',');
-    await sb('notifications','DELETE',null,`?id=in.(${inList})`);
+    try{
+      // Supabase in.() doesn't use quotes around UUIDs
+      const inList=uuids.join(',');
+      const res = await sb('notifications','DELETE',null,`?id=in.(${inList})`);
+      if(res===null) console.warn('Notification delete may have failed');
+    }catch(e){console.error('Failed to delete notifications:',e);}
   }
   D.notifications=[];
   save();
