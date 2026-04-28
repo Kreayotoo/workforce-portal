@@ -2311,21 +2311,71 @@ async function doEmployeeSignup(prefilledData){
     }
     const finalCompany = fromOTP ? company : companyResolved;
 
-    // Check email not already used in same company (skip if from OTP — already checked)
-    if(!fromOTP){
-      const existing = await sb('employees','GET',null,`?email=eq.${encodeURIComponent(email)}&company_id=eq.${encodeURIComponent(code)}&select=id`);
-      if(existing && existing.length){
-        if(err) err.innerHTML = `<div class="alert alert-e">This email is already registered in ${finalCompany.name}. <a href="#" onclick="event.preventDefault();showSignin()" style="font-weight:700">Sign in instead?</a></div>`;
+    // Check if email already exists in this company
+    const existing = await sb('employees','GET',null,`?email=eq.${encodeURIComponent(email)}&company_id=eq.${encodeURIComponent(code)}&select=id,emp_id,status,name`);
+    if(existing && existing.length){
+      const row = existing[0];
+      // If they were previously offboarded, reactivate instead of blocking
+      if(row.status === 'Inactive'){
+        if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">🔄 Reactivating your previous account…</div>`;
+        const reactivatePayload = {
+          name,
+          phone: phone || null,
+          status: 'Active',
+          password_hash: pw,
+          self_registered: true,
+          date_of_joining: new Date().toISOString().slice(0,10)
+        };
+        const rRes = await fetch(`${SB_URL}/rest/v1/employees?id=eq.${row.id}`, {
+          method: 'PATCH',
+          headers: {...SB_HDR, 'Prefer': 'return=representation'},
+          body: JSON.stringify(reactivatePayload)
+        });
+        if(!rRes.ok){
+          const errText = await rRes.text();
+          if(err) err.innerHTML = `<div class="alert alert-e">Could not reactivate: ${errText.substring(0,200)}</div>`;
+          return;
+        }
+        if(err) err.innerHTML = `<div class="alert alert-s">✅ Welcome back to ${finalCompany.name}! Employee ID: <strong>${row.emp_id}</strong></div>`;
+        try{
+          await sbSaveNotification({
+            msg: `🔄 ${name} rejoined as an employee (ID: ${row.emp_id})`,
+            type: 'success',
+            to: finalCompany.admin_email,
+            company_id: code
+          });
+        }catch(e){}
+        setTimeout(()=>{
+          currentCompany = finalCompany;
+          currentRole = 'employee';
+          D.loggedIn = true;
+          D.settings = {...D.settings, company: finalCompany.name};
+          save();
+          syncFromSupabase().then(()=>{
+            const emp = D.employees.find(e => e.email && e.email.toLowerCase() === email);
+            if(emp){ currentEmployee = emp; renderEmployeeApp(); }
+            else { location.reload(); }
+          });
+        }, 1500);
         return;
       }
+      // Active account already exists — block
+      if(err) err.innerHTML = `<div class="alert alert-e">This email is already registered in ${finalCompany.name}. <a href="#" onclick="event.preventDefault();showSignin()" style="font-weight:700">Sign in instead?</a></div>`;
+      return;
     }
 
     if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">⚙️ Creating your account in ${finalCompany.name}…</div>`;
 
-    // Generate emp ID
-    const empCount = await sb('employees','GET',null,`?company_id=eq.${encodeURIComponent(code)}&select=id`);
-    const num = String((empCount?empCount.length:0)+1).padStart(3,'0');
-    const empId = `${code}-${num}`;
+    // Generate fresh emp ID — find next free number across all rows (active + inactive)
+    const allEmps = await sb('employees','GET',null,`?company_id=eq.${encodeURIComponent(code)}&select=emp_id`);
+    const usedNumbers = new Set();
+    (allEmps || []).forEach(e => {
+      const m = (e.emp_id || '').match(/-(\d+)$/);
+      if(m) usedNumbers.add(parseInt(m[1], 10));
+    });
+    let nextNum = 1;
+    while(usedNumbers.has(nextNum)) nextNum++;
+    const empId = `${code}-${String(nextNum).padStart(3,'0')}`;
 
     const payload = {
       emp_id: empId,
@@ -13143,3 +13193,4 @@ init();
 </script>
 </body>
 </html>
+Fix re-signup for offboarded employees
