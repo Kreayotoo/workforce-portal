@@ -159,7 +159,11 @@ tr:hover td{background:#fafafa}
 .step-dot.active{background:#0f766e;opacity:.5}
 
 /* ── RESPONSIVE ───────────────────────────────────────────── */
+.show-on-mobile{display:none}
+.hide-on-mobile{display:block}
 @media (max-width:768px){
+  .show-on-mobile{display:block!important}
+  .hide-on-mobile{display:none!important}
   /* Login */
   .login-wrap{flex-direction:column}
   .login-left{min-height:auto!important;padding:1.5rem!important;flex:none!important}
@@ -5088,6 +5092,8 @@ function empTeamRequests(){
 
   <div class="card" style="padding:0">
     ${rows.length===0 ? `<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px">No requests in this tab</div>` : `
+    <!-- Desktop table view -->
+    <div class="hide-on-mobile">
     <table><thead><tr>
       <th style="width:18%;padding-left:12px">Employee</th>
       <th style="width:10%">Type</th>
@@ -5113,7 +5119,45 @@ function empTeamRequests(){
           ? `<div style="display:flex;gap:4px"><button class="btn-g" title="Approve" onclick="promptLeaveDecision('${l._uuid||l.id}','approve')">✓</button><button class="btn-r" title="Reject" onclick="promptLeaveDecision('${l._uuid||l.id}','reject')">✗</button></div>`
           : `<span style="font-size:11px;color:var(--muted)">${l.tlStatus}</span>`}</td>
       </tr>`;
-    }).join('')}</tbody></table>`}
+    }).join('')}</tbody></table>
+    </div>
+    <!-- Mobile card view -->
+    <div class="show-on-mobile" style="padding:12px;display:flex;flex-direction:column;gap:10px">
+      ${rows.map(l=>{
+        const needsHr = l.requiresHr;
+        const canAct = l.tlStatus==='Pending';
+        return `
+        <div style="background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div style="display:flex;align-items:center;gap:8px;cursor:pointer" onclick="showEmpPopupByName('${(l.emp||'').replace(/'/g,'&apos;')}')">
+              ${av(l.emp,32)}
+              <div>
+                <div style="font-weight:700;font-size:14px;color:var(--navy2)">${l.emp}</div>
+                <div style="font-size:11px;color:var(--muted);margin-top:1px">${badge(l.type)}</div>
+              </div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-weight:800;font-size:18px;color:#0f766e">${l.days}</div>
+              <div style="font-size:10px;color:var(--muted)">day${l.days!==1?'s':''}</div>
+            </div>
+          </div>
+          <div style="background:#f8fafc;border-radius:8px;padding:9px 10px;font-size:12px;line-height:1.5;margin-bottom:10px">
+            <div><strong>From:</strong> ${l.from}</div>
+            <div><strong>To:</strong> ${l.to}</div>
+            ${l.reason ? `<div style="margin-top:4px"><strong>Reason:</strong> ${l.reason}</div>` : ''}
+          </div>
+          <div style="margin-bottom:10px">
+            ${needsHr ? '<span style="background:#fef3c7;color:#92400e;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:700">→ Needs HR approval too</span>' : '<span style="background:#dcfce7;color:#166534;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:700">✓ My call alone</span>'}
+          </div>
+          ${canAct
+            ? `<div style="display:flex;gap:8px">
+                <button class="btn-g" style="flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:700" onclick="promptLeaveDecision('${l._uuid||l.id}','approve')">✓ Approve</button>
+                <button class="btn-r" style="flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:700" onclick="promptLeaveDecision('${l._uuid||l.id}','reject')">✗ Reject</button>
+              </div>`
+            : `<div style="background:#f1f5f9;padding:8px;border-radius:8px;text-align:center;font-size:12px;color:var(--muted);font-weight:600">Status: ${l.tlStatus}</div>`}
+        </div>`;
+      }).join('')}
+    </div>`}
   </div>
   `}`;
 }
