@@ -5521,12 +5521,12 @@ function renderProfileTab(tab, emp){
       </div>
       <div style="flex:1">
         <div style="font-weight:700;font-size:14px;margin-bottom:2px">📷 Profile photo</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Used on ID card and directory. JPG or PNG, under 2 MB.</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Used on ID card and directory. JPG or PNG.</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-sec" style="font-size:12px;padding:6px 12px" onclick="document.getElementById('pf-photo-input').click()">📁 ${emp.photoUrl?'Replace':'Upload'} photo</button>
           ${emp.photoUrl?`<button class="btn btn-sec" style="font-size:12px;padding:6px 12px;color:#dc2626;border-color:#fecaca" onclick="removeProfilePhoto()">🗑 Remove</button>`:''}
         </div>
-        <input type="file" id="pf-photo-input" accept="image/jpeg,image/png" style="display:none" onchange="uploadProfilePhoto(this.files[0])">
+        <input type="file" id="pf-photo-input" accept="image/jpeg,image/png" style="display:none" onchange="openProfileCropper(this.files[0])">
       </div>
     </div>
 
@@ -5617,16 +5617,184 @@ function renderProfileTab(tab, emp){
 }
 
 // ─── PROFILE SAVE HANDLERS ───────────────────────────────────────
+// ─── PROFILE PHOTO CROPPER (move + zoom + circular crop) ─────────
+let _cropper={img:null, scale:1, offsetX:0, offsetY:0, dragging:false, startX:0, startY:0, startOffX:0, startOffY:0, fileName:'photo.jpg'};
+
+function openProfileCropper(file){
+  if(!file) return;
+  if(!['image/jpeg','image/png'].includes(file.type)){
+    showToast('Only JPG or PNG files allowed','info');
+    return;
+  }
+  _cropper.fileName = file.name || 'photo.jpg';
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      _cropper.img=img;
+      _cropper.scale=1;
+      _cropper.offsetX=0;
+      _cropper.offsetY=0;
+      showCropperModal();
+      // Auto-fit on first show
+      setTimeout(()=>fitImageToCircle(),50);
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function showCropperModal(){
+  let modal=$('pf-crop-modal');
+  if(!modal){
+    modal=document.createElement('div');
+    modal.id='pf-crop-modal';
+    modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:10000;display:flex;align-items:center;justify-content:center;padding:1rem;box-sizing:border-box';
+    modal.innerHTML=`
+      <div style="background:#fff;border-radius:14px;padding:1.25rem;width:calc(100% - 2rem);max-width:420px;max-height:92vh;overflow-y:auto;box-sizing:border-box">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <h3 style="margin:0;font-size:17px">✂️ Adjust your photo</h3>
+          <button onclick="closeCropper()" style="background:none;border:none;font-size:26px;cursor:pointer;color:#64748b;padding:0;line-height:1">×</button>
+        </div>
+        <div style="position:relative;width:100%;aspect-ratio:1;background:#1e293b;border-radius:12px;overflow:hidden;touch-action:none" id="pf-crop-stage">
+          <canvas id="pf-crop-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;cursor:grab"></canvas>
+          <div style="position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 9999px rgba(0,0,0,.55);pointer-events:none"></div>
+        </div>
+        <div style="margin:14px 0">
+          <label style="font-size:12px;color:var(--muted);font-weight:600">Zoom</label>
+          <input type="range" id="pf-crop-zoom" min="0.5" max="3" step="0.05" value="1" style="width:100%;margin-top:4px">
+        </div>
+        <div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:12px">Drag the image to position · Use slider to zoom</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sec" style="flex:1;font-size:13px" onclick="closeCropper()">Cancel</button>
+          <button class="btn btn-primary" style="flex:2;background:#0f766e;font-size:13px" onclick="applyCropAndUpload()">✅ Apply & Upload</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    bindCropperEvents();
+  } else {
+    modal.style.display='flex';
+    const z=$('pf-crop-zoom'); if(z) z.value='1';
+  }
+}
+
+function closeCropper(){
+  const m=$('pf-crop-modal');
+  if(m) m.style.display='none';
+  _cropper.img=null;
+}
+
+function fitImageToCircle(){
+  const canvas=$('pf-crop-canvas');
+  if(!canvas||!_cropper.img) return;
+  const stage=$('pf-crop-stage');
+  const w=stage.clientWidth, h=stage.clientHeight;
+  canvas.width=w; canvas.height=h;
+  // Initial scale so the smaller image dimension fits the circle
+  const img=_cropper.img;
+  _cropper.scale = Math.max(w/img.width, h/img.height);
+  _cropper.offsetX = (w - img.width*_cropper.scale)/2;
+  _cropper.offsetY = (h - img.height*_cropper.scale)/2;
+  const z=$('pf-crop-zoom'); if(z) z.value=_cropper.scale;
+  z.min = (_cropper.scale*0.6).toFixed(3);
+  z.max = (_cropper.scale*4).toFixed(3);
+  drawCropper();
+}
+
+function drawCropper(){
+  const canvas=$('pf-crop-canvas');
+  if(!canvas||!_cropper.img) return;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#1e293b';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(_cropper.img, _cropper.offsetX, _cropper.offsetY,
+    _cropper.img.width*_cropper.scale, _cropper.img.height*_cropper.scale);
+}
+
+function bindCropperEvents(){
+  const canvas=$('pf-crop-canvas');
+  const zoom=$('pf-crop-zoom');
+
+  function onDown(e){
+    _cropper.dragging=true;
+    canvas.style.cursor='grabbing';
+    const p=getPoint(e);
+    _cropper.startX=p.x; _cropper.startY=p.y;
+    _cropper.startOffX=_cropper.offsetX; _cropper.startOffY=_cropper.offsetY;
+    e.preventDefault();
+  }
+  function onMove(e){
+    if(!_cropper.dragging) return;
+    const p=getPoint(e);
+    _cropper.offsetX=_cropper.startOffX + (p.x - _cropper.startX);
+    _cropper.offsetY=_cropper.startOffY + (p.y - _cropper.startY);
+    drawCropper();
+    e.preventDefault();
+  }
+  function onUp(){
+    _cropper.dragging=false;
+    canvas.style.cursor='grab';
+  }
+  function getPoint(e){
+    const rect=canvas.getBoundingClientRect();
+    const t=e.touches?e.touches[0]:e;
+    return {x: (t.clientX-rect.left)*(canvas.width/rect.width), y: (t.clientY-rect.top)*(canvas.height/rect.height)};
+  }
+
+  canvas.addEventListener('mousedown', onDown);
+  canvas.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', onUp);
+  canvas.addEventListener('touchstart', onDown, {passive:false});
+  canvas.addEventListener('touchmove', onMove, {passive:false});
+  canvas.addEventListener('touchend', onUp);
+
+  zoom.addEventListener('input', e=>{
+    if(!_cropper.img) return;
+    const newScale=parseFloat(e.target.value);
+    const canvas=$('pf-crop-canvas');
+    // Zoom around center
+    const cx=canvas.width/2, cy=canvas.height/2;
+    const ratio=newScale/_cropper.scale;
+    _cropper.offsetX = cx - (cx - _cropper.offsetX)*ratio;
+    _cropper.offsetY = cy - (cy - _cropper.offsetY)*ratio;
+    _cropper.scale=newScale;
+    drawCropper();
+  });
+}
+
+async function applyCropAndUpload(){
+  if(!_cropper.img) return;
+  // Extract the circular crop area as a square 512x512 JPEG
+  const out=document.createElement('canvas');
+  out.width=512; out.height=512;
+  const ctx=out.getContext('2d');
+  // Fill background
+  ctx.fillStyle='#1e293b'; ctx.fillRect(0,0,512,512);
+  // Draw image at scale, mapped from the cropper canvas to 512px output
+  const stage=$('pf-crop-stage');
+  const stageSize=stage.clientWidth; // square, so width=height
+  const ratio=512/stageSize;
+  ctx.drawImage(_cropper.img,
+    _cropper.offsetX*ratio, _cropper.offsetY*ratio,
+    _cropper.img.width*_cropper.scale*ratio,
+    _cropper.img.height*_cropper.scale*ratio);
+  // Convert to JPEG blob (compressed)
+  out.toBlob(async blob=>{
+    if(!blob){ showToast('Could not process image','info'); return; }
+    // Wrap blob into a File so uploadProfilePhoto handles it normally
+    const newFile=new File([blob], _cropper.fileName.replace(/\.(png|jpe?g)$/i,'.jpg'), {type:'image/jpeg'});
+    closeCropper();
+    await uploadProfilePhoto(newFile);
+  }, 'image/jpeg', 0.9);
+}
+
 async function uploadProfilePhoto(file){
   const emp=currentEmployee;
   const msg=$('personal-msg');
   if(!file) return;
   if(!['image/jpeg','image/png'].includes(file.type)){
     if(msg)msg.innerHTML=`<div class="alert alert-e">Only JPG or PNG files allowed</div>`;
-    return;
-  }
-  if(file.size>2*1024*1024){
-    if(msg)msg.innerHTML=`<div class="alert alert-e">File too large (max 2 MB)</div>`;
     return;
   }
   if(msg)msg.innerHTML=`<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">📤 Uploading photo…</div>`;
