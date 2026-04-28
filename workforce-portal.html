@@ -550,7 +550,7 @@ async function syncFromSupabase(){
     }));
     if(exp!==null) D.expenses=exp.map(e=>({_uuid:e.id,id:e.id,emp:e.employee_name,cat:e.category,amount:e.amount,date:e.expense_date,desc:e.description,status:e.status}));
     if(perf!==null) D.performance=perf.map(p=>({_uuid:p.id,id:p.id,emp:p.employee_name,quarter:p.quarter,rating:p.rating,goals:p.goals_set,achieved:p.goals_achieved,notes:p.review_notes}));
-    if(notifs!==null&&notifs.length) D.notifications=notifs.map(n=>({_uuid:n.id,id:n.id,type:n.type,msg:n.message,time:new Date(n.created_at).toLocaleString('en-IN'),read:n.is_read}));
+    if(notifs!==null) D.notifications=notifs.map(n=>({_uuid:n.id,id:n.id,type:n.type,msg:n.message,time:new Date(n.created_at).toLocaleString('en-IN'),read:n.is_read}));
     if(sets!==null&&sets.length){const s=sets[0];D.settings={...D.settings,company:s.company_name||D.settings.company,email:s.company_email||D.settings.email,tz:s.timezone||D.settings.tz,currency:s.currency||D.settings.currency,hours:s.work_hours||D.settings.hours,officeLat:s.office_lat||D.settings.officeLat,officeLng:s.office_lng||D.settings.officeLng,officeRadius:s.office_radius||D.settings.officeRadius,_uuid:s.id};}
     if(companies!==null) D.companies=companies;
     if(teams!==null) D.teams=teams.map(t=>({
