@@ -4200,19 +4200,16 @@ function empAttendance(){
 
   <!-- Face capture modal (hidden by default, opened by Check In/Out) -->
   <div id="att-face-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;padding:1rem">
-    <div style="background:#fff;border-radius:14px;padding:1.25rem;width:100%;max-width:380px;max-height:90vh;overflow-y:auto">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <h3 id="att-modal-title" style="margin:0;font-size:17px">📷 Face Check-In</h3>
-        <button onclick="closeFaceModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748b;padding:0;line-height:1">×</button>
+    <div style="background:#fff;border-radius:16px;padding:1.5rem;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;display:flex;flex-direction:column;align-items:center">
+      <div style="display:flex;justify-content:space-between;align-items:center;width:100%;margin-bottom:16px">
+        <h3 id="att-modal-title" style="margin:0;font-size:18px">📷 Face Check-In</h3>
+        <button onclick="closeFaceModal()" style="background:none;border:none;font-size:26px;cursor:pointer;color:#64748b;padding:0;line-height:1">×</button>
       </div>
-      <div style="position:relative;width:100%;max-width:320px;margin:0 auto">
-        <video id="att-modal-video" autoplay muted playsinline style="width:100%;border-radius:10px;background:#000;aspect-ratio:4/3;object-fit:cover"></video>
-        <canvas id="att-modal-canvas" style="position:absolute;top:0;left:0;width:100%;border-radius:10px"></canvas>
+      <div style="position:relative;width:100%;max-width:400px">
+        <video id="att-modal-video" autoplay muted playsinline style="width:100%;border-radius:12px;background:#000;aspect-ratio:4/3;object-fit:cover"></video>
+        <canvas id="att-modal-canvas" style="position:absolute;top:0;left:0;width:100%;border-radius:12px"></canvas>
       </div>
-      <div id="att-modal-status" style="font-size:13px;font-weight:600;text-align:center;margin:12px 0;color:var(--muted);min-height:20px">Loading camera…</div>
-      <div id="att-modal-actions" style="display:none">
-        <button class="btn btn-primary" id="att-modal-action-btn" style="width:100%;background:#0f766e;padding:11px;font-size:14px;font-weight:600">📸 Capture & Enroll</button>
-      </div>
+      <div id="att-modal-status" style="font-size:14px;font-weight:600;text-align:center;margin:14px 0 4px;color:var(--muted);min-height:22px">Loading camera…</div>
     </div>
   </div>`;
 }
@@ -4295,37 +4292,24 @@ async function openCheckOutModal(){
 function startModalEnroll(){
   const s=$('att-modal-status');
   if(s){s.textContent='Position your face in the frame';s.style.color='var(--muted)';}
-  const ac=$('att-modal-actions'); if(ac) ac.style.display='block';
-  const btn=$('att-modal-action-btn');
-  if(btn){
-    btn.textContent='📸 Capture & Enroll';
-    btn.style.background='#0f766e';
-    btn.onclick=async()=>{
-      const s=$('att-modal-status');
-      if(s){s.textContent='Capturing…';s.style.color='#0f766e';}
-      btn.disabled=true;
-      const desc=await frCaptureSingle('att-modal-video');
-      if(!desc){
-        if(s){s.textContent='No face detected. Try again.';s.style.color='#ef4444';}
-        btn.disabled=false;
-        return;
-      }
+  let _enrolled=false;
+  frStartCamera('att-modal-video','att-modal-canvas',async result=>{
+    const s=$('att-modal-status');
+    if(!s||_enrolled) return;
+    if(result.type==='cam-error'){s.textContent=result.msg;s.style.color='#ef4444';}
+    else if(result.type==='no-face'){s.textContent='No face detected — look at camera';s.style.color='var(--muted)';}
+    else if(result.type==='detected'){
+      _enrolled=true;
+      s.textContent='✅ Face detected! Enrolling…';s.style.color='#166534';
+      const desc=result.descriptor;
       await frSaveFaceToSupabase(currentEmployee, desc);
-      if(s){s.textContent='✅ Face enrolled! Now checking you in…';s.style.color='#166534';}
-      // Auto-proceed to check-in with the just-enrolled face
+      s.textContent='✅ Enrolled! Checking you in…';
       setTimeout(async()=>{
         const photoDataUrl=captureModalPhoto();
         closeFaceModal();
         await doCheckInWithPhoto(photoDataUrl);
-      },600);
-    };
-  }
-  frStartCamera('att-modal-video','att-modal-canvas',result=>{
-    const s=$('att-modal-status');
-    if(!s) return;
-    if(result.type==='cam-error'){s.textContent=result.msg;s.style.color='#ef4444';}
-    else if(result.type==='no-face'){s.textContent='No face detected — look at camera';s.style.color='var(--muted)';}
-    else if(result.type==='detected'){s.textContent='✅ Face detected! Click Capture below';s.style.color='#166534';}
+      },500);
+    }
   });
 }
 
