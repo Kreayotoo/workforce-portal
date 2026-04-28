@@ -1594,6 +1594,9 @@ function renderLogin(){
         </button>
 
         <div style="margin-top:1.5rem;padding-top:1rem;border-top:1px solid #f1f5f9;text-align:center">
+          <button id="pwa-install-btn" onclick="handleInstallClick()" style="display:none;width:100%;padding:11px;background:#f0fdf4;border:1px solid #86efac;color:#166534;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:10px;align-items:center;justify-content:center;gap:8px">
+            📱 Install Kreayotoo App
+          </button>
           <button onclick="revealSuperAdmin()" style="background:none;border:none;color:#94a3b8;font-size:11px;cursor:pointer;letter-spacing:1px;font-weight:600">👑 SUPER ADMIN ACCESS</button>
         </div>
       </div>
@@ -13050,6 +13053,85 @@ if ('serviceWorker' in navigator) {
       .then(reg => console.log('PWA: service worker registered', reg.scope))
       .catch(err => console.warn('PWA: service worker registration failed', err));
   });
+}
+
+// PWA Install button handling
+let _deferredInstallPrompt = null;
+
+function isPWAInstalled(){
+  // Check if running in standalone mode (already installed)
+  return window.matchMedia('(display-mode: standalone)').matches ||
+         window.navigator.standalone === true;
+}
+
+function showInstallButton(){
+  const btn = document.getElementById('pwa-install-btn');
+  if(!btn) return;
+  if(isPWAInstalled()) { btn.style.display='none'; return; }
+  // Show button with flex display
+  btn.style.display='flex';
+}
+
+// Listen for the install prompt (Android/desktop Chrome+Edge)
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  _deferredInstallPrompt = e;
+  showInstallButton();
+});
+
+// Detect iOS Safari (which doesn't fire beforeinstallprompt — needs manual instructions)
+function isIOS(){
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+function isInStandaloneMode(){
+  return ('standalone' in window.navigator) && window.navigator.standalone;
+}
+
+// Show button on iOS too (will trigger instructions)
+if(isIOS() && !isInStandaloneMode()){
+  setTimeout(showInstallButton, 500);
+}
+
+// Hide button after successful install
+window.addEventListener('appinstalled', () => {
+  _deferredInstallPrompt = null;
+  const btn = document.getElementById('pwa-install-btn');
+  if(btn) btn.style.display='none';
+  showToast && showToast('✅ Kreayotoo installed!','success');
+});
+
+async function handleInstallClick(){
+  // iOS Safari — show manual instructions
+  if(isIOS()){
+    alert(
+      '📱 To install Kreayotoo on iPhone:\n\n' +
+      '1. Make sure you are using Safari (not Chrome)\n' +
+      '2. Tap the Share button (square with arrow) at the bottom\n' +
+      '3. Scroll down and tap "Add to Home Screen"\n' +
+      '4. Tap "Add" in the top right\n\n' +
+      'The app icon will appear on your home screen.'
+    );
+    return;
+  }
+  // Android / desktop Chrome — use the deferred prompt
+  if(_deferredInstallPrompt){
+    _deferredInstallPrompt.prompt();
+    const result = await _deferredInstallPrompt.userChoice;
+    if(result.outcome === 'accepted'){
+      console.log('PWA install accepted');
+    }
+    _deferredInstallPrompt = null;
+    const btn = document.getElementById('pwa-install-btn');
+    if(btn) btn.style.display='none';
+  } else {
+    // Fallback — show generic instructions
+    alert(
+      '📱 To install Kreayotoo:\n\n' +
+      '• Chrome/Edge desktop: Look for ⊕ install icon in the address bar\n' +
+      '• Android Chrome: Tap menu (⋮) → "Install app"\n' +
+      '• iPhone Safari: Tap Share → "Add to Home Screen"'
+    );
+  }
 }
 
 init();
