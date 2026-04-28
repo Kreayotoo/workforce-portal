@@ -8,9 +8,19 @@
     {
       "src": "*.png",
       "use": "@vercel/static"
+    },
+    {
+      "src": "manifest.json",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "sw.js",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
+    { "src": "/manifest.json", "dest": "/manifest.json" },
+    { "src": "/sw.js", "dest": "/sw.js", "headers": { "Service-Worker-Allowed": "/" } },
     { "src": "/(.*\\.png)", "dest": "/$1" },
     { "src": "/(.*)", "dest": "/workforce-portal.html" }
   ]
