@@ -13096,14 +13096,56 @@ async function init(){
   }
 }
 
- // Register PWA service worker (enables install + offline)
- if ('serviceWorker' in navigator) {
-   window.addEventListener('load', () => {
-     navigator.serviceWorker.register('/sw.js')
-       .then(reg => console.log('PWA: service worker registered', reg.scope))
-       .catch(err => console.warn('PWA: service worker registration failed', err));
-   });
- }
+// Register PWA service worker + auto-update banner
+const APP_VERSION = 'v3-2026-04-28';
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
+      console.log('PWA: SW registered', reg.scope);
+
+      // Check for updates every 60 seconds
+      setInterval(() => reg.update(), 60000);
+
+      // Detect new SW installing
+      reg.addEventListener('updatefound', () => {
+        const newSW = reg.installing;
+        if (!newSW) return;
+        newSW.addEventListener('statechange', () => {
+          if (newSW.state === 'installed' && navigator.serviceWorker.controller) {
+            showUpdateBanner(newSW);
+          }
+        });
+      });
+
+      // Auto-reload when new SW takes control
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      });
+    }).catch((err) => console.warn('PWA: SW registration failed', err));
+  });
+}
+
+function showUpdateBanner(newSW) {
+  if (document.getElementById('updateBanner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'updateBanner';
+  banner.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1A1A4E;color:#fff;padding:14px 20px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.3);z-index:99999;display:flex;align-items:center;gap:12px;max-width:90%;font-size:14px';
+  banner.innerHTML = `
+    <span style="font-size:20px">🔄</span>
+    <span style="flex:1">A new version is available!</span>
+    <button id="updateNowBtn" style="background:#7CC0FF;color:#1A1A4E;border:none;padding:8px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-size:14px">Update</button>
+    <button id="updateLaterBtn" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.3);padding:8px 12px;border-radius:8px;cursor:pointer;font-size:13px">Later</button>
+  `;
+  document.body.appendChild(banner);
+  document.getElementById('updateNowBtn').onclick = () => {
+    newSW.postMessage({type: 'SKIP_WAITING'});
+  };
+  document.getElementById('updateLaterBtn').onclick = () => banner.remove();
+}
 
 // PWA Install button handling
 let _deferredInstallPrompt = null;
