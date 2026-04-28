@@ -1379,8 +1379,8 @@ async function frLoadFaceFromSupabase(email){
 function frMatchSingleEmployee(descriptor, storedDescriptor){
   if(!storedDescriptor) return false;
   const dist=faceapi.euclideanDistance(descriptor, storedDescriptor);
-  console.log('Face distance:', dist);
-  return dist < 0.5; // Strict threshold
+  console.log('Face distance:', dist.toFixed(3), '(match if < 0.65)');
+  return dist < 0.65; // Loosened for lighting/angle/device variations
 }
 
 // Old match against all (keep for admin face login)
@@ -4476,23 +4476,45 @@ async function openCheckOutModal(){
 function startModalEnroll(){
   const s=$('att-modal-status');
   if(s){s.textContent='Position your face in the frame';s.style.color='var(--muted)';}
+  let _samples=[];
   let _enrolled=false;
+  let _lastSampleTime=0;
+  const SAMPLE_COUNT=3;
+  const SAMPLE_INTERVAL_MS=800;
+
   frStartCamera('att-modal-video','att-modal-canvas',async result=>{
     const s=$('att-modal-status');
     if(!s||_enrolled) return;
     if(result.type==='cam-error'){s.textContent=result.msg;s.style.color='#ef4444';}
-    else if(result.type==='no-face'){s.textContent='No face detected — look at camera';s.style.color='var(--muted)';}
+    else if(result.type==='no-face'){s.textContent=`No face detected — look at camera (${_samples.length}/${SAMPLE_COUNT} samples)`;s.style.color='var(--muted)';}
     else if(result.type==='detected'){
-      _enrolled=true;
-      s.textContent='✅ Face detected! Enrolling…';s.style.color='#166534';
-      const desc=result.descriptor;
-      await frSaveFaceToSupabase(currentEmployee, desc);
-      s.textContent='✅ Enrolled! Checking you in…';
-      setTimeout(async()=>{
-        const photoDataUrl=captureModalPhoto();
-        closeFaceModal();
-        await doCheckInWithPhoto(photoDataUrl);
-      },500);
+      const now=Date.now();
+      // Throttle samples to avoid grabbing too many at once
+      if(now - _lastSampleTime < SAMPLE_INTERVAL_MS) return;
+      _lastSampleTime=now;
+
+      _samples.push(result.descriptor);
+      s.textContent=`📸 Capturing... (${_samples.length}/${SAMPLE_COUNT}) — keep looking at camera`;
+      s.style.color='#0f766e';
+
+      if(_samples.length >= SAMPLE_COUNT){
+        _enrolled=true;
+        // Average the descriptors element-wise
+        const avgDesc=new Float32Array(_samples[0].length);
+        for(let i=0;i<avgDesc.length;i++){
+          let sum=0;
+          for(const sample of _samples) sum += sample[i];
+          avgDesc[i] = sum / _samples.length;
+        }
+        s.textContent='✅ Face enrolled! Checking you in…';
+        s.style.color='#166534';
+        await frSaveFaceToSupabase(currentEmployee, avgDesc);
+        setTimeout(async()=>{
+          const photoDataUrl=captureModalPhoto();
+          closeFaceModal();
+          await doCheckInWithPhoto(photoDataUrl);
+        },500);
+      }
     }
   });
 }
@@ -4509,6 +4531,7 @@ async function startModalScan(mode){
   }
 
   let _scanned=false;
+  let _failCount=0;
   frStartCamera('att-modal-video','att-modal-canvas',result=>{
     const s=$('att-modal-status');
     if(!s||_scanned) return;
@@ -4528,11 +4551,50 @@ async function startModalScan(mode){
           else await doCheckOutWithPhoto(photoDataUrl);
         },500);
       } else {
-        s.textContent='❌ Face does not match. Try again.';s.style.color='#ef4444';
-        setTimeout(()=>{ if(!_scanned){const s=$('att-modal-status');if(s){s.textContent='Look at camera';s.style.color='var(--muted)';}}},1500);
+        _failCount++;
+        if(_failCount>=3){
+          // After 3 failed attempts, offer re-enrollment
+          _scanned=true; // stop scanning
+          s.innerHTML=`❌ Face doesn't match (tried ${_failCount}x).<br><span style="font-size:11px;font-weight:400;color:var(--muted)">Lighting or angle may differ from enrollment.</span>`;
+          s.style.color='#ef4444';
+          // Show re-enroll button
+          const modal=$('att-face-modal');
+          if(modal && !$('att-reenroll-btn')){
+            const btnContainer=document.createElement('div');
+            btnContainer.style.cssText='margin-top:12px;display:flex;gap:8px;width:100%;max-width:400px';
+            btnContainer.innerHTML=`
+              <button class="btn btn-sec" id="att-retry-btn" style="flex:1;font-size:13px" onclick="closeFaceModal();setTimeout(()=>${mode==='checkin'?'openCheckInModal':'openCheckOutModal'}(),200)">🔄 Try again</button>
+              <button class="btn btn-primary" id="att-reenroll-btn" style="flex:1;background:#f59e0b;font-size:13px" onclick="reEnrollFace()">📷 Re-enroll face</button>`;
+            const inner=modal.querySelector('div');
+            if(inner) inner.appendChild(btnContainer);
+          }
+          frStopCamera();
+        } else {
+          s.textContent=`❌ Face does not match. Try again. (${_failCount}/3)`;s.style.color='#ef4444';
+          setTimeout(()=>{ if(!_scanned){const s=$('att-modal-status');if(s){s.textContent='Look at camera';s.style.color='var(--muted)';}}},1500);
+        }
       }
     }
   });
+}
+
+async function reEnrollFace(){
+  if(!confirm('Re-enroll your face? Your current saved face data will be replaced with a new one.')) return;
+  closeFaceModal();
+  // Clear old face from supabase by saving null descriptor
+  const emp=currentEmployee;
+  try{
+    await sb('employees','PATCH',{face_descriptor:null},`?id=eq.${emp._uuid}`);
+    // Clear local cache
+    const list=frGetEnrolled().filter(e=>e.email!==emp.email);
+    frSaveEnrolled(list);
+    showToast('Old face data cleared. Please enroll again.','info');
+    // Open the enrollment flow
+    setTimeout(()=>openCheckInModal(),300);
+  }catch(e){
+    console.error('Re-enroll error:',e);
+    showToast('Could not reset face data. Try again.','info');
+  }
 }
 
 function captureModalPhoto(){
