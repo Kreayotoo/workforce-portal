@@ -337,8 +337,16 @@ function timeLabel(){
   window._liveClockTimer = setInterval(update, 30000); // every 30 seconds
 })();
 const avColors = [['#eff6ff','#1e40af'],['#f0fdf4','#166534'],['#fdf4ff','#6b21a8'],['#fffbeb','#92400e'],['#fef2f2','#991b1b']];
-const av = (name,size=28) => {
+const av = (name, size=28, photoUrl=null) => {
+  // Auto-resolve photo URL from D.employees if not explicitly passed
+  if(photoUrl===null && name && D && D.employees){
+    const found = D.employees.find(e => e.name && e.name.toLowerCase() === (name||'').toLowerCase());
+    photoUrl = found && found.photoUrl ? found.photoUrl : '';
+  }
   const i=(name||'').charCodeAt(0)%avColors.length;
+  if(photoUrl){
+    return `<div class="av" style="width:${size}px;height:${size}px;background:${avColors[i][0]};color:${avColors[i][1]};font-size:${Math.round(size*.38)}px;border-radius:50%;overflow:hidden;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0"><img src="${photoUrl}" alt="${(name||'').replace(/"/g,'&quot;')}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.parentElement.innerHTML='${initials(name)}'"></div>`;
+  }
   return `<div class="av" style="width:${size}px;height:${size}px;background:${avColors[i][0]};color:${avColors[i][1]};font-size:${Math.round(size*.38)}px">${initials(name)}</div>`;
 };
 const badge = s => {
