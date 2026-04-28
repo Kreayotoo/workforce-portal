@@ -8244,11 +8244,11 @@ function showEmpPopup(empId){
 
   const overlay=document.createElement('div');
   overlay.id='emp-popup-overlay';
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:1rem;overflow-y:auto;-webkit-overflow-scrolling:touch';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:1rem 1rem 2rem';
   overlay.innerHTML=`
-  <div style="background:#fff;border-radius:16px;width:100%;max-width:420px;max-height:calc(100vh - 2rem);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3);margin:auto 0">
-    <div style="background:linear-gradient(135deg,var(--navy),var(--navy2));padding:20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:2;flex-shrink:0">
-      <button onclick="document.getElementById('emp-popup-overlay').remove()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,.25);border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center">×</button>
+  <div style="background:#fff;border-radius:16px;width:100%;max-width:420px;margin:1rem auto;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="background:linear-gradient(135deg,var(--navy),var(--navy2));padding:20px;display:flex;align-items:center;gap:14px;position:relative">
+      <button onclick="document.getElementById('emp-popup-overlay').remove()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,.25);border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center;z-index:3">×</button>
       ${(e.photoUrl || lastPhoto)
         ?`<div style="width:64px;height:64px;border-radius:50%;overflow:hidden;border:3px solid rgba(255,255,255,.5);flex-shrink:0;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff" data-fallback="${e.name.split(' ').map(n=>n[0]).join('').slice(0,2)}"><img src="${e.photoUrl || lastPhoto}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.parentElement.innerHTML=this.parentElement.dataset.fallback"></div>`
         :`<div style="width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff">${e.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>`
@@ -8263,7 +8263,6 @@ function showEmpPopup(empId){
         </div>
       </div>
     </div>
-    <div style="overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch">
     <div style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:10px">
       <div style="background:#f8fafc;border-radius:8px;padding:10px">
         <div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Employee ID</div>
@@ -8317,7 +8316,6 @@ function showEmpPopup(empId){
     <div style="padding:0 16px 16px;display:flex;gap:8px">
       <button class="btn btn-sec" style="flex:1" onclick="document.getElementById('emp-popup-overlay').remove()">Close</button>
       <button class="btn btn-primary" style="flex:1;background:var(--navy)" onclick="document.getElementById('emp-popup-overlay').remove();setTimeout(()=>nav('employees'),50)">View in directory →</button>
-    </div>
     </div>
   </div>`;
   document.body.appendChild(overlay);
