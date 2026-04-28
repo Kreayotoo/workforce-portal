@@ -165,9 +165,14 @@ tr:hover td{background:#fafafa}
   .reg-wrap{flex-direction:column}
   .login-left .login-logo{width:52px!important;height:52px!important}
   /* Topbar */
-  .topbar{gap:8px;padding:0 .75rem;height:52px}
-  .tb-logo{font-size:15px}
+  .topbar{gap:6px;padding:0 .6rem;height:52px;flex-wrap:nowrap}
+  .tb-logo{font-size:15px;flex-shrink:0}
+  .tb-logo img{height:28px!important;max-width:110px!important}
   .topbar span{display:none}
+  /* Hide non-essential topbar elements on mobile */
+  .tb-mobile-hide{display:none!important}
+  .topbar button{font-size:11px!important;padding:4px 7px!important}
+  .topbar .btn-sec{font-size:11px!important;padding:5px 9px!important}
   /* Sidebar → bottom nav on mobile */
   .sidebar{width:100%!important;min-height:auto!important;height:60px!important;flex-direction:row!important;justify-content:space-around!important;padding:0!important;position:fixed!important;bottom:0!important;top:auto!important;left:0;right:0;z-index:90;gap:0!important;overflow:hidden!important}
   .sidebar:hover{width:100%!important}
@@ -1069,7 +1074,7 @@ function renderApp(){
         <button onclick="navBack()" title="Go back" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:13px">← Back</button>
         <button onclick="nav('dashboard')" title="Go to home" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:13px">🏠 Home</button>
       </div>`:''}
-      <div style="flex:1;display:flex;justify-content:center;padding:0 1rem;max-width:500px;margin:0 auto">
+      <div class="tb-mobile-hide" style="flex:1;display:flex;justify-content:center;padding:0 1rem;max-width:500px;margin:0 auto">
         <div style="position:relative;width:100%;max-width:380px">
           <input type="text" id="universal-search" placeholder="🔍 Search anything — employees, leaves, expenses, pages…" autocomplete="off"
             oninput="runUniversalSearch(this.value)"
@@ -1079,19 +1084,20 @@ function renderApp(){
           <div id="univ-search-results" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.2);max-height:400px;overflow-y:auto;z-index:200"></div>
         </div>
       </div>
+      <div style="flex:1"></div>
       <button onclick="syncFromSupabase().then(()=>{nav(currentPage);})" title="Sync latest data from database" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600">🔄 Refresh</button>
-      ${currentCompany?`<div style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">🏢 ${currentCompany.name}</div>`:`<div style="background:rgba(96,165,250,.2);border:1px solid rgba(96,165,250,.4);color:#93c5fd;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">👑 Super Admin</div>`}
+      ${currentCompany?`<div class="tb-mobile-hide" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">🏢 ${currentCompany.name}</div>`:`<div class="tb-mobile-hide" style="background:rgba(96,165,250,.2);border:1px solid rgba(96,165,250,.4);color:#93c5fd;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">👑 Super Admin</div>`}
       <div style="position:relative;cursor:pointer;font-size:16px;color:#fff" onclick="nav('notifications')">
         🔔${uc>0?`<div class="si-dot" style="top:-2px;right:-2px"></div>`:''}
       </div>
       <div onclick="nav('settings')" title="Go to Settings" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:2px 4px;border-radius:6px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='transparent'">
         <div style="width:30px;height:30px;border-radius:50%;background:#60a5fa;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#1e3a8a">${initials(currentCompany?(currentCompany.admin_name||currentCompany.name):D.user.name)}</div>
-        <div style="display:flex;flex-direction:column;line-height:1.1">
+        <div class="tb-mobile-hide" style="display:flex;flex-direction:column;line-height:1.1">
           <span style="font-size:12px;color:#fff;font-weight:600">${currentCompany?(currentCompany.admin_name||currentCompany.name):D.user.name}</span>
           <span style="font-size:10px;color:rgba(255,255,255,.6)">${currentCompany?currentCompany.admin_email:D.user.email}</span>
         </div>
       </div>
-      <div style="background:#fbbf24;color:#78350f;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:800;letter-spacing:1px">🛡 ADMIN</div>
+      <div class="tb-mobile-hide" style="background:#fbbf24;color:#78350f;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:800;letter-spacing:1px">🛡 ADMIN</div>
       <button class="btn btn-sec" style="font-size:12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff" onclick="logout()">Log out</button>
     </div>
     <div class="body-row">
@@ -3424,13 +3430,13 @@ function renderEmployeeApp(){
       </div>
       <div onclick="navEmp('emp-profile')" title="Go to My Profile" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:2px 4px;border-radius:6px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.1)'" onmouseout="this.style.background='transparent'">
         <div style="width:30px;height:30px;border-radius:50%;background:#a7f3d0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#065f46">${initials(emp.name)}</div>
-        <div style="display:flex;flex-direction:column;line-height:1.1">
+        <div class="tb-mobile-hide" style="display:flex;flex-direction:column;line-height:1.1">
           <span style="font-size:12px;color:#fff;font-weight:600">${emp.name}</span>
           <span style="font-size:10px;color:rgba(255,255,255,.6)">${currentCompany?currentCompany.name:D.settings.company||''}</span>
         </div>
       </div>
-      <span style="font-size:10px;background:rgba(255,255,255,.15);padding:2px 8px;border-radius:20px;color:#fff">${emp.dept}</span>
-      <div style="background:#a7f3d0;color:#065f46;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:800;letter-spacing:1px">👤 EMPLOYEE</div>
+      <span class="tb-mobile-hide" style="font-size:10px;background:rgba(255,255,255,.15);padding:2px 8px;border-radius:20px;color:#fff">${emp.dept}</span>
+      <div class="tb-mobile-hide" style="background:#a7f3d0;color:#065f46;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:800;letter-spacing:1px">👤 EMPLOYEE</div>
       <button class="btn btn-sec" style="font-size:12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff" onclick="logout()">Log out</button>
     </div>
     <div class="body-row">
@@ -4392,14 +4398,42 @@ async function doCheckOutWithPhoto(photoDataUrl){
   const active=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
   if(!active){ showToast('No active session','info'); return; }
   await new Promise(resolve=>initAttGeo(resolve));
+  const coLat=_attGeoState.lat||null, coLng=_attGeoState.lng||null, coAddr=_attGeoState.address||'';
   active.checkOut=now.toISOString();
-  active.checkOutLocation=_attGeoState.address||'';
+  active.checkOutLocation=coAddr;
+  active.checkOutLat=coLat;
+  active.checkOutLng=coLng;
   if(active._uuid){
     await sb('attendance_sessions','PATCH',{
       check_out:active.checkOut,
-      checkout_location:active.checkOutLocation
-    },`id=eq.${active._uuid}`);
+      checkout_latitude:coLat,
+      checkout_longitude:coLng,
+      checkout_location:coAddr
+    },`?id=eq.${active._uuid}`);
   }
+  // Update main attendance record
+  const todaySessions=D.attSessions.filter(s=>s.empName===emp.name&&s.date===today);
+  let totalMins=0;
+  todaySessions.forEach(s=>{if(s.checkIn&&s.checkOut)totalMins+=(new Date(s.checkOut)-new Date(s.checkIn))/60000;});
+  const status=totalMins>=240?'Present':totalMins>=120?'Half Day':'Present';
+  const firstSession=todaySessions[todaySessions.length-1];
+  try{
+    const existing=await sb('attendance','GET',null,`?employee_name=eq.${encodeURIComponent(emp.name)}&date=eq.${today}&select=id`);
+    const attPayload={
+      employee_id:emp._uuid||null,
+      employee_name:emp.name,
+      date:today,
+      status,
+      in_time:new Date(firstSession.checkIn).toTimeString().slice(0,5),
+      out_time:now.toTimeString().slice(0,5),
+      company_id:currentCompany?currentCompany.company_id:'KSPL'
+    };
+    if(existing&&existing.length>0){
+      await sb('attendance','PATCH',attPayload,`?id=eq.${existing[0].id}`);
+    } else {
+      await sb('attendance','POST',attPayload);
+    }
+  }catch(e){console.warn('attendance update failed',e);}
   save();
   showToast(`✅ Checked out at ${now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}`,'success');
   navEmp('emp-attendance');
