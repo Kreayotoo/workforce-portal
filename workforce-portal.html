@@ -1579,7 +1579,24 @@ function renderLogin(){
           <div class="fld"><label>Work email *</label><input type="email" id="su-emp-email" placeholder="your email address" style="background:#f1f5fb;border:none"></div>
           <div class="fld"><label>Phone</label><input type="tel" id="su-emp-phone" placeholder="10-digit mobile" style="background:#f1f5fb;border:none"></div>
           <div class="fld"><label>Create password * (min 6 chars)</label><input type="password" id="su-emp-pass" placeholder="Strong password" style="background:#f1f5fb;border:none"></div>
-          <button onclick="doEmployeeSignup()" style="width:100%;padding:13px;background:linear-gradient(135deg,#0f766e,#10b981);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px">Join Company →</button>
+          <button onclick="empSignupSendOTP()" style="width:100%;padding:13px;background:linear-gradient(135deg,#0f766e,#10b981);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:8px">Send verification code →</button>
+        </div>
+
+        <!-- Employee OTP step -->
+        <div id="signup-employee-otp" class="hidden">
+          <button onclick="empSignupBackFromOTP()" style="background:none;border:none;color:#0f766e;font-size:13px;font-weight:600;cursor:pointer;padding:0;margin-bottom:12px">← Edit details</button>
+          <div style="font-size:22px;font-weight:800;color:#111;margin-bottom:6px">Verify your email</div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:16px">We've sent a 6-digit code to <strong id="su-emp-otp-email-display"></strong></div>
+          <div id="signup-emp-otp-err"></div>
+          <div class="fld">
+            <label>Enter the 6-digit code *</label>
+            <input type="text" id="su-emp-otp-input" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code" style="background:#f1f5fb;border:none;font-size:18px;letter-spacing:6px;text-align:center;font-weight:700">
+          </div>
+          <div id="su-emp-otp-timer" style="font-size:12px;color:var(--muted);text-align:center;margin-bottom:12px"></div>
+          <button onclick="empSignupVerifyAndCreate()" style="width:100%;padding:13px;background:linear-gradient(135deg,#0f766e,#10b981);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">Verify & create account →</button>
+          <div style="font-size:12px;color:var(--muted);text-align:center">
+            Didn't receive? <span style="color:#0f766e;cursor:pointer;font-weight:600" onclick="empSignupResendOTP()">Resend OTP</span>
+          </div>
         </div>
       </div>
 
@@ -2090,13 +2107,100 @@ async function doCompanySignup(){
 }
 
 // EMPLOYEE SIGNUP — joins an existing company (picked from dropdown)
-async function doEmployeeSignup(){
+// ─── EMPLOYEE SIGNUP WITH EMAIL OTP ──────────────────────────────
+let _empSignupData = null;
+
+async function empSignupSendOTP(){
   const err = $('signup-emp-err');
   const code = ($('su-emp-company')||{}).value?.trim().toUpperCase();
   const name = ($('su-emp-name')||{}).value?.trim();
   const email = ($('su-emp-email')||{}).value?.trim().toLowerCase();
   const phone = ($('su-emp-phone')||{}).value?.trim();
   const pw = ($('su-emp-pass')||{}).value;
+
+  if(!code){ if(err) err.innerHTML = `<div class="alert alert-e">Please select your company</div>`; return; }
+  if(!name || !email || !pw){ if(err) err.innerHTML = `<div class="alert alert-e">Please fill all required fields</div>`; return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ if(err) err.innerHTML = `<div class="alert alert-e">Enter a valid email address</div>`; return; }
+  if(pw.length < 6){ if(err) err.innerHTML = `<div class="alert alert-e">Password must be 6+ characters</div>`; return; }
+
+  if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">🔎 Verifying company…</div>`;
+
+  try{
+    const companies = await sb('companies','GET',null,`?company_id=eq.${encodeURIComponent(code)}&select=*`);
+    if(!companies || !companies.length){
+      if(err) err.innerHTML = `<div class="alert alert-e">Selected company no longer exists. Please pick again.</div>`;
+      return;
+    }
+    const company = companies[0];
+
+    const existing = await sb('employees','GET',null,`?email=eq.${encodeURIComponent(email)}&company_id=eq.${encodeURIComponent(code)}&select=id`);
+    if(existing && existing.length){
+      if(err) err.innerHTML = `<div class="alert alert-e">This email is already registered in ${company.name}. <a href="#" onclick="event.preventDefault();showSignin()" style="font-weight:700">Sign in instead?</a></div>`;
+      return;
+    }
+
+    if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">📧 Sending verification code…</div>`;
+    const result = await sendOTP(email, name);
+    if(!result.success){
+      if(err) err.innerHTML = `<div class="alert alert-e">Failed to send OTP. Check email and try again.</div>`;
+      return;
+    }
+
+    _empSignupData = { code, name, email, phone, pw, company };
+    $('signup-employee-form').classList.add('hidden');
+    $('signup-employee-otp').classList.remove('hidden');
+    if($('su-emp-otp-email-display')) $('su-emp-otp-email-display').textContent = email;
+    if($('signup-emp-otp-err')) $('signup-emp-otp-err').innerHTML = '';
+    if($('su-emp-otp-input')) $('su-emp-otp-input').value = '';
+    startOTPTimer('su-emp-otp-timer');
+  }catch(e){
+    console.error('empSignupSendOTP failed:', e);
+    if(err) err.innerHTML = `<div class="alert alert-e">Could not send code. Please try again.</div>`;
+  }
+}
+
+function empSignupBackFromOTP(){
+  $('signup-employee-otp').classList.add('hidden');
+  $('signup-employee-form').classList.remove('hidden');
+  if(_otpTimerInterval){ clearInterval(_otpTimerInterval); _otpTimerInterval = null; }
+}
+
+async function empSignupResendOTP(){
+  const err = $('signup-emp-otp-err');
+  if(!_empSignupData) return;
+  if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;border-color:#bfdbfe;color:#1e40af">Sending new OTP…</div>`;
+  const result = await sendOTP(_empSignupData.email, _empSignupData.name);
+  if(result.success){
+    if(err) err.innerHTML = `<div class="alert alert-s">✅ New OTP sent to ${_empSignupData.email}</div>`;
+    if($('su-emp-otp-input')) $('su-emp-otp-input').value = '';
+    startOTPTimer('su-emp-otp-timer');
+  } else {
+    if(err) err.innerHTML = `<div class="alert alert-e">Failed to resend OTP. Try again.</div>`;
+  }
+}
+
+async function empSignupVerifyAndCreate(){
+  const err = $('signup-emp-otp-err');
+  if(!_empSignupData){ if(err) err.innerHTML = `<div class="alert alert-e">Session expired. Please start over.</div>`; return; }
+  const otp = ($('su-emp-otp-input')||{}).value?.trim();
+  if(!otp || otp.length !== 6){ if(err) err.innerHTML = `<div class="alert alert-e">Enter the 6-digit OTP</div>`; return; }
+  const v = verifyOTP(_empSignupData.email, otp);
+  if(!v.valid){ if(err) err.innerHTML = `<div class="alert alert-e">${v.msg}</div>`; return; }
+  // OTP verified — clear timer and create account
+  if(_otpTimerInterval){ clearInterval(_otpTimerInterval); _otpTimerInterval = null; }
+  if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">✅ Verified! Creating your account…</div>`;
+  await doEmployeeSignup(_empSignupData);
+}
+
+async function doEmployeeSignup(prefilledData){
+  // When called from OTP verify, use prefilled values + otp error display
+  const fromOTP = !!prefilledData;
+  const err = fromOTP ? $('signup-emp-otp-err') : $('signup-emp-err');
+  const code = fromOTP ? prefilledData.code : (($('su-emp-company')||{}).value?.trim().toUpperCase());
+  const name = fromOTP ? prefilledData.name : (($('su-emp-name')||{}).value?.trim());
+  const email = fromOTP ? prefilledData.email : (($('su-emp-email')||{}).value?.trim().toLowerCase());
+  const phone = fromOTP ? prefilledData.phone : (($('su-emp-phone')||{}).value?.trim());
+  const pw = fromOTP ? prefilledData.pw : (($('su-emp-pass')||{}).value);
 
   if(!code){
     if(err) err.innerHTML = `<div class="alert alert-e">Please select your company</div>`;
@@ -2110,24 +2214,31 @@ async function doEmployeeSignup(){
     if(err) err.innerHTML = `<div class="alert alert-e">Password must be 6+ characters</div>`;
     return;
   }
-  if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">🔎 Verifying company…</div>`;
+  if(!fromOTP && err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">🔎 Verifying company…</div>`;
 
   try{
-    const companies = await sb('companies','GET',null,`?company_id=eq.${encodeURIComponent(code)}&select=*`);
-    if(!companies || !companies.length){
-      if(err) err.innerHTML = `<div class="alert alert-e">Selected company no longer exists. Please pick again.</div>`;
-      return;
+    const company = fromOTP ? prefilledData.company : null;
+    if(!company){
+      const companies = await sb('companies','GET',null,`?company_id=eq.${encodeURIComponent(code)}&select=*`);
+      if(!companies || !companies.length){
+        if(err) err.innerHTML = `<div class="alert alert-e">Selected company no longer exists. Please pick again.</div>`;
+        return;
+      }
+      // re-assign for non-OTP path
+      var companyResolved = companies[0];
     }
-    const company = companies[0];
+    const finalCompany = fromOTP ? company : companyResolved;
 
-    // Check email not already used in same company
-    const existing = await sb('employees','GET',null,`?email=eq.${encodeURIComponent(email)}&company_id=eq.${encodeURIComponent(code)}&select=id`);
-    if(existing && existing.length){
-      if(err) err.innerHTML = `<div class="alert alert-e">This email is already registered in ${company.name}. <a href="#" onclick="event.preventDefault();showSignin()" style="font-weight:700">Sign in instead?</a></div>`;
-      return;
+    // Check email not already used in same company (skip if from OTP — already checked)
+    if(!fromOTP){
+      const existing = await sb('employees','GET',null,`?email=eq.${encodeURIComponent(email)}&company_id=eq.${encodeURIComponent(code)}&select=id`);
+      if(existing && existing.length){
+        if(err) err.innerHTML = `<div class="alert alert-e">This email is already registered in ${finalCompany.name}. <a href="#" onclick="event.preventDefault();showSignin()" style="font-weight:700">Sign in instead?</a></div>`;
+        return;
+      }
     }
 
-    if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">⚙️ Creating your account in ${company.name}…</div>`;
+    if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">⚙️ Creating your account in ${finalCompany.name}…</div>`;
 
     // Generate emp ID
     const empCount = await sb('employees','GET',null,`?company_id=eq.${encodeURIComponent(code)}&select=id`);
@@ -2160,24 +2271,24 @@ async function doEmployeeSignup(){
       if(err) err.innerHTML = `<div class="alert alert-e">Could not create account: ${errText.substring(0,200)}</div>`;
       return;
     }
-    if(err) err.innerHTML = `<div class="alert alert-s">✅ Welcome to ${company.name}! Employee ID: <strong>${empId}</strong></div>`;
+    if(err) err.innerHTML = `<div class="alert alert-s">✅ Welcome to ${finalCompany.name}! Employee ID: <strong>${empId}</strong></div>`;
 
     // Notify company admin
     try{
       await sbSaveNotification({
         msg: `👋 ${name} just joined as an employee (ID: ${empId})`,
         type: 'success',
-        to: company.admin_email,
+        to: finalCompany.admin_email,
         company_id: code
       });
     }catch(e){/* non-critical */}
 
     setTimeout(()=>{
       // Auto-login as employee
-      currentCompany = company;
+      currentCompany = finalCompany;
       currentRole = 'employee';
       D.loggedIn = true;
-      D.settings = {...D.settings, company: company.name};
+      D.settings = {...D.settings, company: finalCompany.name};
       save();
       syncFromSupabase().then(()=>{
         const emp = D.employees.find(e => e.email && e.email.toLowerCase() === email);
