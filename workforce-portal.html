@@ -164,14 +164,15 @@ tr:hover td{background:#fafafa}
 @media (max-width:768px){
   .show-on-mobile{display:block!important}
   .hide-on-mobile{display:none!important}
-  /* Lock the app to viewport: topbar fixed top, sidebar fixed bottom, main scrolls */
-  html,body{height:100%;overflow:hidden}
+  /* Login pages scroll naturally */
+  .login-wrap{min-height:100vh!important}
+  /* Lock app to viewport ONLY when logged in (app structure present) */
   .app{height:100dvh!important;min-height:0!important;max-height:100dvh!important;display:flex!important;flex-direction:column!important;overflow:hidden!important}
-  .body-row{flex:1!important;min-height:0!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;position:relative!important}
+  .app .body-row{flex:1!important;min-height:0!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;position:relative!important}
   /* Topbar stays at top, doesn't scroll */
-  .topbar{position:sticky!important;top:0!important;flex-shrink:0!important;z-index:100!important}
+  .app .topbar{position:sticky!important;top:0!important;flex-shrink:0!important;z-index:100!important}
   /* Main content area handles ALL scrolling */
-  .main{flex:1!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;min-height:0!important}
+  .app .main{flex:1!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;min-height:0!important}
   /* Login */
   .login-wrap{flex-direction:column}
   .login-left{min-height:auto!important;padding:1.5rem!important;flex:none!important}
