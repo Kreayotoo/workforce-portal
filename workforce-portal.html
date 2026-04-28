@@ -4,6 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kreayotoo Solutions Portal</title>
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1a1a4e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kreayotoo">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--navy:#1a1a4e;--navy2:#2d2d8f;--navy3:#12123a;--bg:#f0f2f5;--white:#fff;--border:#e2e5ea;--text:#111;--muted:#6b7280;--green-bg:#dcfce7;--green-txt:#166534;--red-bg:#fee2e2;--red-txt:#991b1b;--amber-bg:#fef3c7;--amber-txt:#92400e;--blue-bg:#eff6ff;--blue-txt:#1e40af;--purple-bg:#f5f3ff;--purple-txt:#4c1d95}
@@ -12553,6 +12561,15 @@ async function init(){
   } else {
     renderApp();
   }
+}
+
+// Register PWA service worker (enables install + offline)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('PWA: service worker registered', reg.scope))
+      .catch(err => console.warn('PWA: service worker registration failed', err));
+  });
 }
 
 init();
