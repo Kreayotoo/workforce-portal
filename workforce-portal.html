@@ -8100,7 +8100,7 @@ function showEmpPopup(empId){
     <div style="background:linear-gradient(135deg,var(--navy),var(--navy2));padding:20px;display:flex;align-items:center;gap:14px;position:relative">
       <button onclick="document.getElementById('emp-popup-overlay').remove()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px">×</button>
       ${(e.photoUrl || lastPhoto)
-        ?`<img src="${e.photoUrl || lastPhoto}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,.5)" onerror="this.outerHTML='<div style=\\'width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff\\'>${e.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>'">`
+        ?`<div style="width:64px;height:64px;border-radius:50%;overflow:hidden;border:3px solid rgba(255,255,255,.5);flex-shrink:0;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff" data-fallback="${e.name.split(' ').map(n=>n[0]).join('').slice(0,2)}"><img src="${e.photoUrl || lastPhoto}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.parentElement.innerHTML=this.parentElement.dataset.fallback"></div>`
         :`<div style="width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;color:#fff">${e.name.split(' ').map(n=>n[0]).join('').slice(0,2)}</div>`
       }
       <div style="color:#fff">
