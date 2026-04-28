@@ -1375,12 +1375,32 @@ async function frLoadFaceFromSupabase(email){
   }catch(e){return null;}
 }
 
-// Match descriptor only against a specific employee's stored face
+// Match descriptor against the current employee's stored face
+// AND verify it doesn't match someone else's face better (anti-impersonation)
 function frMatchSingleEmployee(descriptor, storedDescriptor){
   if(!storedDescriptor) return false;
-  const dist=faceapi.euclideanDistance(descriptor, storedDescriptor);
-  console.log('Face distance:', dist.toFixed(3), '(match if < 0.65)');
-  return dist < 0.65; // Loosened for lighting/angle/device variations
+  const myDist=faceapi.euclideanDistance(descriptor, storedDescriptor);
+  console.log('Face distance to enrolled:', myDist.toFixed(3));
+
+  // First: must be reasonably close to enrolled face
+  if(myDist >= 0.55) return false;
+
+  // Second: anti-impersonation — check this face doesn't match another employee BETTER
+  try{
+    const others=frGetEnrolled();
+    for(const other of others){
+      if(!other.descriptor) continue;
+      // Skip the current employee themselves (compare descriptors by content)
+      const otherDist=faceapi.euclideanDistance(descriptor, other.descriptor);
+      // If the live face matches someone else closer (with margin), deny
+      if(otherDist < myDist - 0.05){
+        console.warn('Face matches another employee closer:', other.name, 'dist:', otherDist.toFixed(3));
+        return false;
+      }
+    }
+  }catch(e){console.warn('Cross-check failed:',e);}
+
+  return true;
 }
 
 // Old match against all (keep for admin face login)
