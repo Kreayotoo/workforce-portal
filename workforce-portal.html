@@ -4315,9 +4315,9 @@ function startModalEnroll(){
       // Auto-proceed to check-in with the just-enrolled face
       setTimeout(async()=>{
         const photoDataUrl=captureModalPhoto();
-        await doCheckInWithPhoto(photoDataUrl);
         closeFaceModal();
-      },800);
+        await doCheckInWithPhoto(photoDataUrl);
+      },600);
     };
   }
   frStartCamera('att-modal-video','att-modal-canvas',result=>{
@@ -4355,10 +4355,10 @@ async function startModalScan(mode){
         s.textContent=`✅ Verified! ${mode==='checkin'?'Checking in':'Checking out'}…`;
         s.style.color='#166534';
         setTimeout(async()=>{
+          closeFaceModal();
           if(mode==='checkin') await doCheckInWithPhoto(photoDataUrl);
           else await doCheckOutWithPhoto(photoDataUrl);
-          closeFaceModal();
-        },700);
+        },500);
       } else {
         s.textContent='❌ Face does not match. Try again.';s.style.color='#ef4444';
         setTimeout(()=>{ if(!_scanned){const s=$('att-modal-status');if(s){s.textContent='Look at camera';s.style.color='var(--muted)';}}},1500);
