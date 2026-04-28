@@ -4547,6 +4547,13 @@ async function doCheckInWithPhoto(photoDataUrl){
   const emp=currentEmployee;
   const today=todayStr();
   const now=new Date();
+  // Block if already has an open session (no checkout yet)
+  const stillOpen = D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
+  if(stillOpen){
+    showToast('⚠️ Already checked in. Please check out first.','info');
+    navEmp('emp-attendance');
+    return;
+  }
   await new Promise(resolve=>initAttGeo(resolve));
   const session={
     _localId:Date.now(),empName:emp.name,empId:emp._uuid||emp.id,date:today,
@@ -4572,21 +4579,27 @@ async function doCheckOutWithPhoto(photoDataUrl){
   const emp=currentEmployee;
   const today=todayStr();
   const now=new Date();
-  const active=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
-  if(!active){ showToast('No active session','info'); return; }
+  // Get ALL open sessions for today (in case there are stuck ones from previous bugs)
+  const openSessions = D.attSessions?D.attSessions.filter(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):[];
+  if(openSessions.length===0){ showToast('No active session','info'); return; }
   await new Promise(resolve=>initAttGeo(resolve));
   const coLat=_attGeoState.lat||null, coLng=_attGeoState.lng||null, coAddr=_attGeoState.address||'';
-  active.checkOut=now.toISOString();
-  active.checkOutLocation=coAddr;
-  active.checkOutLat=coLat;
-  active.checkOutLng=coLng;
-  if(active._uuid){
-    await sb('attendance_sessions','PATCH',{
-      check_out:active.checkOut,
-      checkout_latitude:coLat,
-      checkout_longitude:coLng,
-      checkout_location:coAddr
-    },`?id=eq.${active._uuid}`);
+  // Close all open sessions
+  for(const active of openSessions){
+    active.checkOut=now.toISOString();
+    active.checkOutLocation=coAddr;
+    active.checkOutLat=coLat;
+    active.checkOutLng=coLng;
+    if(active._uuid){
+      try{
+        await sb('attendance_sessions','PATCH',{
+          check_out:active.checkOut,
+          checkout_latitude:coLat,
+          checkout_longitude:coLng,
+          checkout_location:coAddr
+        },`?id=eq.${active._uuid}`);
+      }catch(err){console.warn('Failed to close session',active._uuid,err);}
+    }
   }
   // Update main attendance record
   const todaySessions=D.attSessions.filter(s=>s.empName===emp.name&&s.date===today);
