@@ -338,10 +338,20 @@ function timeLabel(){
 })();
 const avColors = [['#eff6ff','#1e40af'],['#f0fdf4','#166534'],['#fdf4ff','#6b21a8'],['#fffbeb','#92400e'],['#fef2f2','#991b1b']];
 const av = (name, size=28, photoUrl=null) => {
-  // Auto-resolve photo URL from D.employees if not explicitly passed
-  if(photoUrl===null && name && D && D.employees){
-    const found = D.employees.find(e => e.name && e.name.toLowerCase() === (name||'').toLowerCase());
+  // Auto-resolve photo URL from D.employees by name OR email if not explicitly passed
+  if(photoUrl===null && name && typeof D!=='undefined' && D.employees){
+    const lname = (name||'').toLowerCase().trim();
+    const found = D.employees.find(e =>
+      (e.name && e.name.toLowerCase().trim() === lname) ||
+      (e.email && e.email.toLowerCase().trim() === lname)
+    );
     photoUrl = found && found.photoUrl ? found.photoUrl : '';
+  }
+  // Fallback to currentEmployee's own photo if name matches
+  if(!photoUrl && typeof currentEmployee !== 'undefined' && currentEmployee && name &&
+     currentEmployee.name && currentEmployee.name.toLowerCase().trim() === (name||'').toLowerCase().trim() &&
+     currentEmployee.photoUrl){
+    photoUrl = currentEmployee.photoUrl;
   }
   const i=(name||'').charCodeAt(0)%avColors.length;
   if(photoUrl){
