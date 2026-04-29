@@ -1433,9 +1433,10 @@ function frStrictMatch(descriptor, currentEmpEmail, storedDescriptor, allFaces){
   const myDist=faceapi.euclideanDistance(descriptor, storedDescriptor);
   console.log('[FaceMatch] Distance to enrolled self:', myDist.toFixed(3));
 
-  // Stage 1: live face must be CLOSE to the enrolled face (strict threshold)
-  // 0.45 is industry-standard "same person" cutoff for face-api.js
-  const STRICT_THRESHOLD = 0.45;
+  // Stage 1: live face must be CLOSE to the enrolled face
+  // 0.50 is the standard "same person" cutoff for face-api.js — strict enough to
+  // reject different people but tolerant of phone camera lighting/angle variation
+  const STRICT_THRESHOLD = 0.50;
   if(myDist >= STRICT_THRESHOLD){
     return {match:false, dist:myDist, reason:'too-far-from-self'};
   }
@@ -1453,8 +1454,8 @@ function frStrictMatch(descriptor, currentEmpEmail, storedDescriptor, allFaces){
         closestOther={name:other.name, email:other.email, dist:otherDist};
       }
       // Reject if another employee matches CLOSER (with safety margin)
-      // Margin of 0.08 means: their face must clearly belong to claimed user, not someone else
-      if(otherDist < myDist + 0.08){
+      // Margin 0.05: their face must clearly belong to claimed user, not someone else
+      if(otherDist < myDist + 0.05){
         console.warn('[FaceMatch] Rejected — closer match to', other.name, 'dist:', otherDist.toFixed(3), 'vs self:', myDist.toFixed(3));
         return {match:false, dist:myDist, reason:'matches-other-closer', closestOther:{name:other.name, dist:otherDist}};
       }
@@ -4531,9 +4532,9 @@ function empAttendance(){
         <h3 id="att-modal-title" style="margin:0;font-size:17px">📷 Face Check-In</h3>
         <button onclick="closeFaceModal()" style="background:none;border:none;font-size:26px;cursor:pointer;color:#64748b;padding:0;line-height:1">×</button>
       </div>
-      <div style="position:relative;width:100%;max-width:360px">
-        <video id="att-modal-video" autoplay muted playsinline style="width:100%;border-radius:12px;background:#000;aspect-ratio:4/3;object-fit:cover;display:block"></video>
-        <canvas id="att-modal-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:12px"></canvas>
+      <div style="position:relative;width:100%;max-width:360px;aspect-ratio:4/3;background:#000;border-radius:12px;overflow:hidden">
+        <video id="att-modal-video" autoplay muted playsinline webkit-playsinline style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);background:#000;display:block"></video>
+        <canvas id="att-modal-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;transform:scaleX(-1);pointer-events:none"></canvas>
       </div>
       <div id="att-modal-status" style="font-size:14px;font-weight:600;text-align:center;margin:14px 0 4px;color:var(--muted);min-height:22px;width:100%">Loading camera…</div>
     </div>
@@ -4713,8 +4714,8 @@ async function startModalScan(mode){
 
   let _scanned=false;
   let _failCount=0;
-  let _consecutiveMatches=0; // require 2 in a row to accept
-  const REQUIRED_CONSECUTIVE=2;
+  let _consecutiveMatches=0; // require N in a row to accept (1 = accept first match)
+  const REQUIRED_CONSECUTIVE=1;
   frStartCamera('att-modal-video','att-modal-canvas',result=>{
     const s=$('att-modal-status');
     if(!s||_scanned) return;
@@ -4760,8 +4761,9 @@ async function startModalScan(mode){
           s.innerHTML=`❌ Face doesn't match (tried ${_failCount}x).<br><span style="font-size:11px;font-weight:400;color:var(--muted)">If this is you, your enrolment may need updating.</span>`;
           s.style.color='#ef4444';
           const modal=$('att-face-modal');
-          if(modal && !$('att-reenroll-btn')){
+          if(modal && !$('att-fail-actions')){
             const btnContainer=document.createElement('div');
+            btnContainer.id='att-fail-actions';
             btnContainer.style.cssText='margin-top:12px;display:flex;gap:8px;width:100%;max-width:400px';
             const reenrollBtnHtml = mode==='checkin'
               ? `<button class="btn btn-primary" id="att-reenroll-btn" style="flex:1;background:#f59e0b;font-size:13px" onclick="reEnrollFace()">📷 Re-enroll face</button>`
@@ -13229,7 +13231,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v6-2026-04-29-network-first-html';
+const APP_VERSION = 'v7-2026-04-29-modal-camera-fix';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
