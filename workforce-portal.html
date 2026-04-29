@@ -6034,15 +6034,19 @@ function renderProfileTab(tab, emp){
       <div class="fld"><label>Full name</label><input type="text" id="pf-name" value="${emp.name||''}"></div>
       <div class="fld"><label>Phone</label><input type="text" id="pf-phone" value="${emp.phone||''}" maxlength="10" inputmode="numeric"></div>
     </div>
+    <div class="frow">
+      <div class="fld"><label>Employee ID</label><input type="text" id="pf-empid" value="${emp.id||''}" style="text-transform:uppercase" autocomplete="off"></div>
+      <div class="fld"><label>Date of birth</label><input type="date" id="pf-dob" value="${emp.dob||''}"></div>
+    </div>
     <div class="fld"><label>Email <span style="color:var(--muted);font-weight:400">(contact admin to change)</span></label><input type="email" value="${emp.email||''}" disabled style="background:#f8fafc;color:var(--muted);cursor:not-allowed"></div>
     <div class="frow">
-      <div class="fld"><label>Date of birth</label><input type="date" id="pf-dob" value="${emp.dob||''}"></div>
       <div class="fld"><label>🩸 Blood group</label>
         <select id="pf-bg">
           <option value="" ${!emp.bloodGroup?'selected':''}>— Not specified —</option>
           ${['A+','A-','B+','B-','AB+','AB-','O+','O-'].map(bg=>`<option value="${bg}" ${emp.bloodGroup===bg?'selected':''}>${bg}</option>`).join('')}
         </select>
       </div>
+      <div class="fld"></div>
     </div>
     <div class="fld"><label>Address</label><textarea id="pf-address" rows="2">${emp.address||''}</textarea></div>
     <button class="btn btn-primary" style="background:#0f766e" onclick="saveProfilePersonal()">Save changes</button>
@@ -6364,16 +6368,42 @@ async function saveProfilePersonal(){
   const dob=($('pf-dob')||{}).value;
   const address=($('pf-address')||{}).value?.trim();
   const bloodGroup=($('pf-bg')||{}).value||'';
+  const empIdNew=($('pf-empid')||{}).value?.trim().toUpperCase();
   if(!name){if(msg)msg.innerHTML=`<div class="alert alert-e">Name cannot be empty</div>`;return;}
+  if(!empIdNew){if(msg)msg.innerHTML=`<div class="alert alert-e">Employee ID cannot be empty</div>`;return;}
   if(phone&&!/^\d{10}$/.test(phone)){if(msg)msg.innerHTML=`<div class="alert alert-e">Phone must be 10 digits</div>`;return;}
+
+  // If emp ID changed, dedup-check against other employees in same company
+  const empIdChanged = empIdNew !== (emp.id||'').trim().toUpperCase();
+  if(empIdChanged){
+    if(msg)msg.innerHTML=`<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">🔎 Checking Employee ID…</div>`;
+    try{
+      const cid = currentCompany ? currentCompany.company_id : null;
+      const cidFilter = cid ? `&company_id=eq.${encodeURIComponent(cid)}` : '';
+      const dup = await sb('employees','GET',null,`?emp_id=eq.${encodeURIComponent(empIdNew)}${cidFilter}&select=id`);
+      // Allow if no rows OR if the only matching row IS this employee
+      const conflict = (dup||[]).some(r=>r.id !== emp._uuid);
+      if(conflict){
+        if(msg)msg.innerHTML=`<div class="alert alert-e">Employee ID <strong>${empIdNew}</strong> is already in use. Pick a different one.</div>`;
+        return;
+      }
+    }catch(e){
+      console.error('Emp ID dedup check failed:',e);
+      if(msg)msg.innerHTML=`<div class="alert alert-e">Could not verify Employee ID. Try again.</div>`;
+      return;
+    }
+  }
+
   if(msg)msg.innerHTML=`<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">Saving…</div>`;
-  const r=await sb('employees','PATCH',{name,phone,dob:dob||null,address,blood_group:bloodGroup||null},`?id=eq.${emp._uuid}`);
+  const r=await sb('employees','PATCH',{name,phone,dob:dob||null,address,blood_group:bloodGroup||null,emp_id:empIdNew},`?id=eq.${emp._uuid}`);
   if(!r){if(msg)msg.innerHTML=`<div class="alert alert-e">Save failed. Try again.</div>`;return;}
-  Object.assign(emp,{name,phone,dob,address,bloodGroup});
+  Object.assign(emp,{name,phone,dob,address,bloodGroup,id:empIdNew});
   const idx=D.employees.findIndex(e=>e._uuid===emp._uuid); if(idx>=0) D.employees[idx]=emp;
   save();
-  if(msg)msg.innerHTML=`<div class="alert alert-s">✅ Personal details updated</div>`;
+  if(msg)msg.innerHTML=`<div class="alert alert-s">✅ Personal details updated${empIdChanged?' (Employee ID changed to '+empIdNew+')':''}</div>`;
   showToast('✅ Profile saved','success');
+  // Re-render to reflect new emp ID in the header
+  if(empIdChanged) setTimeout(()=>renderEmployeeApp(),600);
 }
 
 async function saveEmergency(){
@@ -13239,7 +13269,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v8-2026-04-29-empid-on-signup';
+const APP_VERSION = 'v9-2026-04-29-empid-editable';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
