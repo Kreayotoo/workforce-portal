@@ -1384,6 +1384,8 @@ async function frSaveFaceToSupabase(emp, descriptor){
   const list=frGetEnrolled().filter(e=>e.email!==emp.email);
   list.push({name:emp.name,email:emp.email,descriptor});
   frSaveEnrolled(list);
+  // Invalidate company-wide faces cache so next scan loads fresh data
+  if(typeof frInvalidateFacesCache==='function') frInvalidateFacesCache();
 }
 
 // Load face for a specific employee from Supabase
@@ -1396,32 +1398,77 @@ async function frLoadFaceFromSupabase(email){
   }catch(e){return null;}
 }
 
-// Match descriptor against the current employee's stored face
-// AND verify it doesn't match someone else's face better (anti-impersonation)
-function frMatchSingleEmployee(descriptor, storedDescriptor){
-  if(!storedDescriptor) return false;
+// Load ALL enrolled faces in the current company (for anti-impersonation cross-check)
+// Cached for 5 minutes to avoid hitting Supabase every scan
+let _allFacesCache={data:null,ts:0,companyId:null};
+async function frLoadAllFacesInCompany(){
+  const cid=currentCompany?currentCompany.company_id:null;
+  const now=Date.now();
+  if(_allFacesCache.data && _allFacesCache.companyId===cid && (now-_allFacesCache.ts)<300000){
+    return _allFacesCache.data;
+  }
+  const cidFilter = cid ? `&company_id=eq.${cid}` : '';
+  const rows=await sb('employees','GET',null,`?face_descriptor=not.is.null&select=email,name,face_descriptor${cidFilter}`);
+  const out=[];
+  if(rows && rows.length){
+    for(const r of rows){
+      if(!r.face_descriptor) continue;
+      try{
+        const arr=JSON.parse(r.face_descriptor);
+        out.push({email:r.email, name:r.name, descriptor:new Float32Array(arr)});
+      }catch(_){}
+    }
+  }
+  _allFacesCache={data:out,ts:now,companyId:cid};
+  return out;
+}
+
+function frInvalidateFacesCache(){_allFacesCache={data:null,ts:0,companyId:null};}
+
+// STRICT face match against the current employee's stored face,
+// with anti-impersonation cross-check against ALL enrolled employees in the company.
+// Returns: {match:boolean, dist:number, reason:string, closestOther?:{name,dist}}
+function frStrictMatch(descriptor, currentEmpEmail, storedDescriptor, allFaces){
+  if(!storedDescriptor) return {match:false, dist:99, reason:'no-stored-face'};
   const myDist=faceapi.euclideanDistance(descriptor, storedDescriptor);
-  console.log('Face distance to enrolled:', myDist.toFixed(3));
+  console.log('[FaceMatch] Distance to enrolled self:', myDist.toFixed(3));
 
-  // First: must be reasonably close to enrolled face
-  if(myDist >= 0.55) return false;
+  // Stage 1: live face must be CLOSE to the enrolled face (strict threshold)
+  // 0.45 is industry-standard "same person" cutoff for face-api.js
+  const STRICT_THRESHOLD = 0.45;
+  if(myDist >= STRICT_THRESHOLD){
+    return {match:false, dist:myDist, reason:'too-far-from-self'};
+  }
 
-  // Second: anti-impersonation — check this face doesn't match another employee BETTER
-  try{
-    const others=frGetEnrolled();
-    for(const other of others){
+  // Stage 2: anti-impersonation — live face must NOT match any other enrolled
+  // employee closer than (or comparably close to) the current employee
+  let closestOther=null;
+  if(allFaces && allFaces.length){
+    for(const other of allFaces){
       if(!other.descriptor) continue;
-      // Skip the current employee themselves (compare descriptors by content)
+      // Skip the current employee themselves
+      if(other.email && currentEmpEmail && other.email.toLowerCase()===currentEmpEmail.toLowerCase()) continue;
       const otherDist=faceapi.euclideanDistance(descriptor, other.descriptor);
-      // If the live face matches someone else closer (with margin), deny
-      if(otherDist < myDist - 0.05){
-        console.warn('Face matches another employee closer:', other.name, 'dist:', otherDist.toFixed(3));
-        return false;
+      if(!closestOther || otherDist<closestOther.dist){
+        closestOther={name:other.name, email:other.email, dist:otherDist};
+      }
+      // Reject if another employee matches CLOSER (with safety margin)
+      // Margin of 0.08 means: their face must clearly belong to claimed user, not someone else
+      if(otherDist < myDist + 0.08){
+        console.warn('[FaceMatch] Rejected — closer match to', other.name, 'dist:', otherDist.toFixed(3), 'vs self:', myDist.toFixed(3));
+        return {match:false, dist:myDist, reason:'matches-other-closer', closestOther:{name:other.name, dist:otherDist}};
       }
     }
-  }catch(e){console.warn('Cross-check failed:',e);}
+  }
 
-  return true;
+  console.log('[FaceMatch] Accepted. Self-dist:', myDist.toFixed(3), closestOther?'closest other: '+closestOther.name+' @ '+closestOther.dist.toFixed(3):'no other faces in company');
+  return {match:true, dist:myDist, reason:'ok', closestOther};
+}
+
+// Legacy wrapper kept for any old call sites
+function frMatchSingleEmployee(descriptor, storedDescriptor){
+  const result=frStrictMatch(descriptor, null, storedDescriptor, []);
+  return result.match;
 }
 
 // Old match against all (keep for admin face login)
@@ -4659,17 +4706,33 @@ async function startModalScan(mode){
     return;
   }
 
+  // Load all company faces for anti-impersonation cross-check
+  let allFaces=[];
+  try{ allFaces=await frLoadAllFacesInCompany(); }
+  catch(e){ console.warn('Could not load company faces:',e); }
+
   let _scanned=false;
   let _failCount=0;
+  let _consecutiveMatches=0; // require 2 in a row to accept
+  const REQUIRED_CONSECUTIVE=2;
   frStartCamera('att-modal-video','att-modal-canvas',result=>{
     const s=$('att-modal-status');
     if(!s||_scanned) return;
     if(result.type==='cam-error'){s.textContent=result.msg;s.style.color='#ef4444';}
-    else if(result.type==='no-face'){s.textContent='No face detected — look at camera';s.style.color='var(--muted)';}
+    else if(result.type==='no-face'){
+      _consecutiveMatches=0;
+      s.textContent='No face detected — look at camera';s.style.color='var(--muted)';
+    }
     else if(result.type==='detected'){
-      s.textContent='🔍 Verifying your face…';s.style.color='#0f766e';
-      const isMatch=frMatchSingleEmployee(result.descriptor, faceData.descriptor);
-      if(isMatch){
+      const verdict=frStrictMatch(result.descriptor, emp.email, faceData.descriptor, allFaces);
+      if(verdict.match){
+        _consecutiveMatches++;
+        if(_consecutiveMatches < REQUIRED_CONSECUTIVE){
+          s.textContent=`🔍 Verifying… (${_consecutiveMatches}/${REQUIRED_CONSECUTIVE})`;
+          s.style.color='#0f766e';
+          return;
+        }
+        // 2 in a row → accept
         _scanned=true;
         const photoDataUrl=captureModalPhoto();
         s.textContent=`✅ Verified! ${mode==='checkin'?'Checking in':'Checking out'}…`;
@@ -4680,26 +4743,39 @@ async function startModalScan(mode){
           else await doCheckOutWithPhoto(photoDataUrl);
         },500);
       } else {
+        _consecutiveMatches=0; // reset streak on any miss
         _failCount++;
-        if(_failCount>=3){
-          // After 3 failed attempts, offer re-enrollment
+        let failMsg='';
+        if(verdict.reason==='matches-other-closer' && verdict.closestOther){
+          failMsg=`❌ Face does not match ${emp.name}. Try again.`;
+          console.warn('Closer match to:', verdict.closestOther.name);
+        } else if(verdict.reason==='too-far-from-self'){
+          failMsg=`❌ Face does not match. Try again. (dist ${verdict.dist.toFixed(2)})`;
+        } else {
+          failMsg='❌ Face does not match. Try again.';
+        }
+        if(_failCount>=5){
+          // After 5 failed attempts, offer re-enrollment
           _scanned=true; // stop scanning
-          s.innerHTML=`❌ Face doesn't match (tried ${_failCount}x).<br><span style="font-size:11px;font-weight:400;color:var(--muted)">Lighting or angle may differ from enrollment.</span>`;
+          s.innerHTML=`❌ Face doesn't match (tried ${_failCount}x).<br><span style="font-size:11px;font-weight:400;color:var(--muted)">If this is you, your enrolment may need updating.</span>`;
           s.style.color='#ef4444';
-          // Show re-enroll button
+          // Show re-enroll button (checkin only — checkout shouldn't re-enroll)
           const modal=$('att-face-modal');
           if(modal && !$('att-reenroll-btn')){
             const btnContainer=document.createElement('div');
             btnContainer.style.cssText='margin-top:12px;display:flex;gap:8px;width:100%;max-width:400px';
+            const reenrollBtnHtml = mode==='checkin'
+              ? `<button class="btn btn-primary" id="att-reenroll-btn" style="flex:1;background:#f59e0b;font-size:13px" onclick="reEnrollFace()">📷 Re-enroll face</button>`
+              : '';
             btnContainer.innerHTML=`
               <button class="btn btn-sec" id="att-retry-btn" style="flex:1;font-size:13px" onclick="closeFaceModal();setTimeout(()=>${mode==='checkin'?'openCheckInModal':'openCheckOutModal'}(),200)">🔄 Try again</button>
-              <button class="btn btn-primary" id="att-reenroll-btn" style="flex:1;background:#f59e0b;font-size:13px" onclick="reEnrollFace()">📷 Re-enroll face</button>`;
+              ${reenrollBtnHtml}`;
             const inner=modal.querySelector('div');
             if(inner) inner.appendChild(btnContainer);
           }
           frStopCamera();
         } else {
-          s.textContent=`❌ Face does not match. Try again. (${_failCount}/3)`;s.style.color='#ef4444';
+          s.textContent=`${failMsg} (${_failCount}/5)`;s.style.color='#ef4444';
           setTimeout(()=>{ if(!_scanned){const s=$('att-modal-status');if(s){s.textContent='Look at camera';s.style.color='var(--muted)';}}},1500);
         }
       }
@@ -4717,6 +4793,7 @@ async function reEnrollFace(){
     // Clear local cache
     const list=frGetEnrolled().filter(e=>e.email!==emp.email);
     frSaveEnrolled(list);
+    if(typeof frInvalidateFacesCache==='function') frInvalidateFacesCache();
     showToast('Old face data cleared. Please enroll again.','info');
     // Open the enrollment flow
     setTimeout(()=>openCheckInModal(),300);
@@ -13153,7 +13230,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v4-2026-04-29-camera-fix';
+const APP_VERSION = 'v5-2026-04-29-strict-face-match';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
