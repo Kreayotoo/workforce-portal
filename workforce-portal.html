@@ -1730,6 +1730,7 @@ function renderLogin(){
           </div>
           <div style="font-size:11px;color:#64748b;margin-top:-10px;margin-bottom:14px">Your company not listed? Ask your HR to register it first.</div>
           <div class="fld"><label>Full name *</label><input type="text" id="su-emp-name" placeholder="Your name" style="background:#f1f5fb;border:none"></div>
+          <div class="fld"><label>Employee ID *</label><input type="text" id="su-emp-empid" placeholder="As given by your company (e.g. KSPL-001)" autocomplete="off" style="background:#f1f5fb;border:none;text-transform:uppercase"></div>
           <div class="fld"><label>Work email *</label><input type="email" id="su-emp-email" placeholder="your email address" style="background:#f1f5fb;border:none"></div>
           <div class="fld"><label>Phone</label><input type="tel" id="su-emp-phone" placeholder="10-digit mobile" style="background:#f1f5fb;border:none"></div>
           <div class="fld"><label>Create password * (min 6 chars)</label><input type="password" id="su-emp-pass" placeholder="Strong password" style="background:#f1f5fb;border:none"></div>
@@ -2268,16 +2269,17 @@ async function empSignupSendOTP(){
   const err = $('signup-emp-err');
   const code = ($('su-emp-company')||{}).value?.trim().toUpperCase();
   const name = ($('su-emp-name')||{}).value?.trim();
+  const empIdInput = ($('su-emp-empid')||{}).value?.trim().toUpperCase();
   const email = ($('su-emp-email')||{}).value?.trim().toLowerCase();
   const phone = ($('su-emp-phone')||{}).value?.trim();
   const pw = ($('su-emp-pass')||{}).value;
 
   if(!code){ if(err) err.innerHTML = `<div class="alert alert-e">Please select your company</div>`; return; }
-  if(!name || !email || !pw){ if(err) err.innerHTML = `<div class="alert alert-e">Please fill all required fields</div>`; return; }
+  if(!name || !empIdInput || !email || !pw){ if(err) err.innerHTML = `<div class="alert alert-e">Please fill all required fields (including Employee ID)</div>`; return; }
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ if(err) err.innerHTML = `<div class="alert alert-e">Enter a valid email address</div>`; return; }
   if(pw.length < 6){ if(err) err.innerHTML = `<div class="alert alert-e">Password must be 6+ characters</div>`; return; }
 
-  if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">🔎 Verifying company…</div>`;
+  if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">🔎 Verifying details…</div>`;
 
   try{
     const companies = await sb('companies','GET',null,`?company_id=eq.${encodeURIComponent(code)}&select=*`);
@@ -2293,6 +2295,13 @@ async function empSignupSendOTP(){
       return;
     }
 
+    // Dedup-check the typed Employee ID within this company
+    const idDup = await sb('employees','GET',null,`?emp_id=eq.${encodeURIComponent(empIdInput)}&company_id=eq.${encodeURIComponent(code)}&select=id`);
+    if(idDup && idDup.length){
+      if(err) err.innerHTML = `<div class="alert alert-e">Employee ID <strong>${empIdInput}</strong> is already in use at ${company.name}. Please use a different ID or contact your HR.</div>`;
+      return;
+    }
+
     if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">📧 Sending verification code…</div>`;
     const result = await sendOTP(email, name);
     if(!result.success){
@@ -2300,7 +2309,7 @@ async function empSignupSendOTP(){
       return;
     }
 
-    _empSignupData = { code, name, email, phone, pw, company };
+    _empSignupData = { code, name, empId: empIdInput, email, phone, pw, company };
     $('signup-employee-form').classList.add('hidden');
     $('signup-employee-otp').classList.remove('hidden');
     if($('su-emp-otp-email-display')) $('su-emp-otp-email-display').textContent = email;
@@ -2352,6 +2361,7 @@ async function doEmployeeSignup(prefilledData){
   const err = fromOTP ? $('signup-emp-otp-err') : $('signup-emp-err');
   const code = fromOTP ? prefilledData.code : (($('su-emp-company')||{}).value?.trim().toUpperCase());
   const name = fromOTP ? prefilledData.name : (($('su-emp-name')||{}).value?.trim());
+  const empIdTyped = fromOTP ? prefilledData.empId : (($('su-emp-empid')||{}).value?.trim().toUpperCase());
   const email = fromOTP ? prefilledData.email : (($('su-emp-email')||{}).value?.trim().toLowerCase());
   const phone = fromOTP ? prefilledData.phone : (($('su-emp-phone')||{}).value?.trim());
   const pw = fromOTP ? prefilledData.pw : (($('su-emp-pass')||{}).value);
@@ -2360,8 +2370,8 @@ async function doEmployeeSignup(prefilledData){
     if(err) err.innerHTML = `<div class="alert alert-e">Please select your company</div>`;
     return;
   }
-  if(!name || !email || !pw){
-    if(err) err.innerHTML = `<div class="alert alert-e">Please fill all required fields</div>`;
+  if(!name || !empIdTyped || !email || !pw){
+    if(err) err.innerHTML = `<div class="alert alert-e">Please fill all required fields (including Employee ID)</div>`;
     return;
   }
   if(pw.length < 6){
@@ -2438,16 +2448,14 @@ async function doEmployeeSignup(prefilledData){
 
     if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">⚙️ Creating your account in ${finalCompany.name}…</div>`;
 
-    // Generate fresh emp ID — find next free number across all rows (active + inactive)
-    const allEmps = await sb('employees','GET',null,`?company_id=eq.${encodeURIComponent(code)}&select=emp_id`);
-    const usedNumbers = new Set();
-    (allEmps || []).forEach(e => {
-      const m = (e.emp_id || '').match(/-(\d+)$/);
-      if(m) usedNumbers.add(parseInt(m[1], 10));
-    });
-    let nextNum = 1;
-    while(usedNumbers.has(nextNum)) nextNum++;
-    const empId = `${code}-${String(nextNum).padStart(3,'0')}`;
+    // Use the Employee ID the user typed, but re-verify it's still unique
+    // (race condition: someone else may have signed up while this user was at OTP step)
+    const empId = empIdTyped;
+    const idDupFinal = await sb('employees','GET',null,`?emp_id=eq.${encodeURIComponent(empId)}&company_id=eq.${encodeURIComponent(code)}&select=id`);
+    if(idDupFinal && idDupFinal.length){
+      if(err) err.innerHTML = `<div class="alert alert-e">Employee ID <strong>${empId}</strong> was just claimed by someone else. Please go back and use a different ID.</div>`;
+      return;
+    }
 
     const payload = {
       emp_id: empId,
@@ -13231,7 +13239,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v7-2026-04-29-modal-camera-fix';
+const APP_VERSION = 'v8-2026-04-29-empid-on-signup';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
