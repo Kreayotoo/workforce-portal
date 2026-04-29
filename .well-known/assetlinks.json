@@ -1,0 +1,8 @@
+[{
+     "relation": ["delegate_permission/common.handle_all_urls"],
+     "target": {
+       "namespace": "android_app",
+       "package_name": "app.vercel.kspl.twa",
+       "sha256_cert_fingerprints": ["9C:71:97:CD:4D:A0:8B:BC:59:BC:ED:8E:4F:8D:21:6C:16:31:F7:AF:D4:1A:5A:23:A1:18:AC:6E:BB:43:C4:24"]
+     }
+   }]
