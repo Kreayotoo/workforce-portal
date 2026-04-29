@@ -1398,8 +1398,8 @@ async function frLoadFaceFromSupabase(email){
   }catch(e){return null;}
 }
 
-// Load ALL enrolled faces in the current company (for anti-impersonation cross-check)
-// Cached for 5 minutes to avoid hitting Supabase every scan
+// Load ALL enrolled faces in the current company (for anti-impersonation cross-check).
+// Cached for 5 minutes to avoid hitting Supabase every scan.
 let _allFacesCache={data:null,ts:0,companyId:null};
 async function frLoadAllFacesInCompany(){
   const cid=currentCompany?currentCompany.company_id:null;
@@ -1465,7 +1465,7 @@ function frStrictMatch(descriptor, currentEmpEmail, storedDescriptor, allFaces){
   return {match:true, dist:myDist, reason:'ok', closestOther};
 }
 
-// Legacy wrapper kept for any old call sites
+// Legacy wrapper — kept for any old call sites (login face flow, employee face login)
 function frMatchSingleEmployee(descriptor, storedDescriptor){
   const result=frStrictMatch(descriptor, null, storedDescriptor, []);
   return result.match;
@@ -4755,11 +4755,10 @@ async function startModalScan(mode){
           failMsg='❌ Face does not match. Try again.';
         }
         if(_failCount>=5){
-          // After 5 failed attempts, offer re-enrollment
+          // After 5 failed attempts, offer re-enrollment (checkin only — checkout shouldn't re-enroll)
           _scanned=true; // stop scanning
           s.innerHTML=`❌ Face doesn't match (tried ${_failCount}x).<br><span style="font-size:11px;font-weight:400;color:var(--muted)">If this is you, your enrolment may need updating.</span>`;
           s.style.color='#ef4444';
-          // Show re-enroll button (checkin only — checkout shouldn't re-enroll)
           const modal=$('att-face-modal');
           if(modal && !$('att-reenroll-btn')){
             const btnContainer=document.createElement('div');
@@ -13230,7 +13229,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v5-2026-04-29-strict-face-match';
+const APP_VERSION = 'v6-2026-04-29-network-first-html';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
