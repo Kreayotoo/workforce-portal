@@ -8566,12 +8566,33 @@ function onTeamSelect(teamUuid){
 async function saveEmp(){
   const data={name:$('ef-name').value,email:$('ef-email').value,phone:$('ef-ph').value,dob:$('ef-dob-birth').value,joined:$('ef-doj').value,dept:$('ef-dept').value,role:$('ef-role').value,salary:parseInt($('ef-sal').value)||0,status:$('ef-st').value,empType:$('ef-type').value||'office',bloodGroup:$('ef-bg')?.value||'',teamLeadEmail:$('ef-tl')?.value||'',teamId:$('ef-team')?.value||null,isExecutive:$('ef-exec')?.checked===true,executiveTitle:$('ef-exec-title')?.value||''};
   if(!data.name||!data.email){alert('Name and email are required');return;}
+  // Capture the typed Emp ID so changes to it are persisted (used for both edit and create)
+  const typedEmpId=($('ef-empid-val')?.value||'').trim();
   if(editingEmpId){
     const existing=D.employees.find(e=>e.id===editingEmpId);
+    if(!existing){ alert('Employee not found'); return; }
     // Capture old values BEFORE mutating
-    const oldRole=existing.role, oldDept=existing.dept, oldStatus=existing.status;
+    const oldRole=existing.role, oldDept=existing.dept, oldStatus=existing.status, oldId=existing.id;
     Object.assign(existing,data);
-    await sbSaveEmployee(existing);
+    // Apply Emp ID change if user edited it
+    if(typedEmpId && typedEmpId !== oldId){
+      // Optional: check uniqueness within company
+      const dup = D.employees.find(e=>e!==existing && (e.id||'').toUpperCase()===typedEmpId.toUpperCase());
+      if(dup){
+        alert(`Employee ID "${typedEmpId}" is already used by ${dup.name}. Pick a different ID.`);
+        return;
+      }
+      existing.id = typedEmpId;
+      // editingEmpId was the OLD id — update reference for downstream usage
+      editingEmpId = typedEmpId;
+    }
+    const r = await sbSaveEmployee(existing);
+    if(r === null){
+      alert('Could not save changes. Please check your connection and try again.');
+      // Revert local changes so UI stays consistent with DB
+      existing.id = oldId; existing.role = oldRole; existing.dept = oldDept; existing.status = oldStatus;
+      return;
+    }
     // Notify employee of meaningful changes
     if(existing.email){
       const changes=[];
@@ -8582,6 +8603,7 @@ async function saveEmp(){
         else if(oldStatus==='Inactive'&&data.status==='Active') changes.push(`account <strong>reactivated</strong>`);
         else changes.push(`status changed to <strong>${data.status}</strong>`);
       }
+      if(typedEmpId && typedEmpId!==oldId) changes.push(`Employee ID updated to <strong>${typedEmpId}</strong>`);
       if(changes.length){
         await sbSaveNotification({
           msg:`📋 Admin updated your profile: ${changes.join(', ')}`,
@@ -8591,7 +8613,13 @@ async function saveEmp(){
       }
     }
   } else {
-    const newId=$('ef-empid-val').value.trim()||'EMP-'+String(D.employees.length+101).padStart(3,'0');
+    const newId=typedEmpId||'EMP-'+String(D.employees.length+101).padStart(3,'0');
+    // Check ID uniqueness for new employees too
+    const dup = D.employees.find(e=>(e.id||'').toUpperCase()===newId.toUpperCase());
+    if(dup){
+      alert(`Employee ID "${newId}" is already used by ${dup.name}. Pick a different ID.`);
+      return;
+    }
     data.id=newId;data.passwordHash='emp@123';
     D.employees.push(data);
     const r=await sbSaveEmployee(data);
@@ -8609,6 +8637,9 @@ async function saveEmp(){
   }
   save();
   logAudit(editingEmpId?'update':'create','employee',editingEmpId||data.email,data.name,{dept:data.dept,role:data.role});
+  // Close the modal and re-render the page so the change appears immediately
+  closeModal('emp-modal-wrap');
+  showToast(editingEmpId ? '✓ Employee updated' : '✓ Employee added', 'success');
   nav(currentPage);
 }
 async function delEmp(id,name){
@@ -14709,7 +14740,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v30-2026-04-30-projects-module';
+const APP_VERSION = 'v31-2026-04-30-emp-edit-fix';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
