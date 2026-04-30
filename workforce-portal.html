@@ -2586,15 +2586,31 @@ async function doSmartLogin(){
     const employees = await sb('employees','GET',null,`?email=eq.${encodeURIComponent(em)}&select=*`);
     if(employees && employees.length){
       const empRec = employees[0];
-      // Check password — stored as password_hash (plain text for now in this portal)
-      if(empRec.password_hash && empRec.password_hash !== pw){
-        if(err) err.innerHTML = `<div class="alert alert-e">Wrong password</div>`;
-        return;
-      }
       if(!empRec.password_hash){
         if(err) err.innerHTML = `<div class="alert alert-e">No password set for this account. Please ask your admin to set one.</div>`;
         return;
       }
+      // Rate-limit check before password verification
+      const empRate = loginAttemptCheck(em);
+      if(empRate.blocked){
+        if(err) err.innerHTML = `<div class="alert alert-e">${empRate.message}</div>`;
+        return;
+      }
+      // Use verifyPassword — handles both hashed (s2:...) and legacy plaintext entries
+      const pwOk = await verifyPassword(pw, empRec.password_hash);
+      if(!pwOk){
+        loginAttemptFail(em);
+        const remaining = loginAttemptCheck(em);
+        if(remaining.blocked){
+          if(err) err.innerHTML = `<div class="alert alert-e">${remaining.message}</div>`;
+          return;
+        }
+        const attemptsUsed = 5 - (remaining.attemptsLeft||0);
+        if(err) err.innerHTML = `<div class="alert alert-e">❌ Wrong password (attempt ${attemptsUsed}/5). <a href="#" onclick="event.preventDefault();showForgotPassword()" style="color:#1e40af;font-weight:700;text-decoration:underline">Forgot password?</a></div>`;
+        return;
+      }
+      // ✅ Password correct
+      loginAttemptReset(em);
       // Set the company scope for this employee
       if(empRec.company_id){
         const cRes = await sb('companies','GET',null,`?company_id=eq.${encodeURIComponent(empRec.company_id)}&select=*`);
@@ -14015,7 +14031,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v20-2026-04-30-syntax-fix';
+const APP_VERSION = 'v21-2026-04-30-smart-login-hash-fix';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
