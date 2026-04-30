@@ -4545,7 +4545,6 @@ function empDashboard(){
   <div class="stat-grid">
     <div class="stat"><div class="stat-lbl">Days present</div><div class="stat-val">${present}</div><div class="stat-sub">This month</div></div>
     <div class="stat"><div class="stat-lbl">Leave taken</div><div class="stat-val">${approved}</div><div class="stat-sub">Days this year</div></div>
-    <div class="stat"><div class="stat-lbl">Net salary</div><div class="stat-val">₹${fmt(net)}</div><div class="stat-sub">This month</div></div>
     <div class="stat"><div class="stat-lbl">Today</div><div class="stat-val" style="font-size:14px">${todayStatus}</div><div class="stat-sub">${todaySub}</div></div>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem">
@@ -14083,7 +14082,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v24-2026-04-30-global-responsive';
+const APP_VERSION = 'v25-2026-04-30-remove-dashboard-salary';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
