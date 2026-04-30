@@ -12674,37 +12674,134 @@ function empWorkLog(){
   const selDate=window._wlSelectedDate||today;
   const selMode=window._wlMode||'daily';
 
-  // Load existing log for this date (from cache)
-  const existing=(window._wlCache||[]).find(l=>l.empUuid===emp._uuid&&l.date===selDate);
+  // Separate personal logs from team summaries when looking up "existing" for the date
+  const existingPersonal=(window._wlCache||[]).find(l=>l.empUuid===emp._uuid && l.date===selDate && !(l.tags||[]).includes('team-summary'));
+  const existingTeamSummary=(window._wlCache||[]).find(l=>l.empUuid===emp._uuid && l.date===selDate && (l.tags||[]).includes('team-summary'));
+  const existing = existingPersonal; // alias used by the daily/hourly/session form renderers
   if(existing&&existing.mode) window._wlMode=existing.mode;
   const mode=existing?existing.mode:selMode;
 
-  // Recent logs for this employee
-  const recent=(window._wlCache||[]).filter(l=>l.empUuid===emp._uuid).slice(0,7);
+  // Recent logs split into two groups for TLs
+  const personalRecent=(window._wlCache||[]).filter(l=>l.empUuid===emp._uuid && !(l.tags||[]).includes('team-summary')).slice(0,7);
+  const teamSummaryRecent=(window._wlCache||[]).filter(l=>l.empUuid===emp._uuid && (l.tags||[]).includes('team-summary')).slice(0,7);
 
   // Check if this employee is a TL of any team
   const myEmail=(emp.email||'').toLowerCase();
   const myTeams=(D.teams||[]).filter(t=>t.teamLeadEmail&&t.teamLeadEmail.toLowerCase()===myEmail);
-  const tlBanner = myTeams.length>0 ? `
-  <div class="card" style="margin-bottom:1rem;background:linear-gradient(135deg,#fef3c7,#fde68a);border:2px solid #fbbf24;padding:14px 18px">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-      <div>
-        <div style="font-size:12px;color:#92400e;font-weight:700;text-transform:uppercase;letter-spacing:.5px">👑 You lead ${myTeams.length===1?myTeams[0].name:myTeams.length+' teams'}</div>
-        <div style="font-size:13px;color:#78350f;margin-top:2px">Post a summary of your team's progress — visible to admin and all team members.</div>
+  const isTL = myTeams.length>0;
+
+  // Build the inline team summary card (TLs only)
+  // Stores existing team summary contents for the date (if any)
+  const tsDefaultText = existingTeamSummary ? (existingTeamSummary.summary||'') : '';
+  const tsDefaultTags = existingTeamSummary ? (existingTeamSummary.tags||[]).filter(t=>t!=='team-summary' && !t.startsWith('team-')).join(', ') : '';
+  const tsDefaultTeamUuid = (()=>{
+    if(existingTeamSummary && existingTeamSummary.tags){
+      const teamTag = existingTeamSummary.tags.find(t=>t.startsWith('team-') && t!=='team-summary');
+      if(teamTag){
+        const teamName = teamTag.replace(/^team-/,'').replace(/-/g,' ');
+        const t = myTeams.find(x=>x.name.toLowerCase()===teamName.toLowerCase());
+        if(t) return t._uuid;
+      }
+    }
+    return myTeams[0]?._uuid||'';
+  })();
+  const tsModeDefault = existingTeamSummary ? (existingTeamSummary.mode||'daily') : 'daily';
+
+  // Auto-load team summaries from MY team's team lead (if I belong to a team)
+  // Triggers a one-shot fetch + re-render. Uses a separate flag from dashboard's loader.
+  if(emp.teamId && !window._wlTeamSummariesLoaded){
+    window._wlTeamSummariesLoaded = true;
+    loadTeamSummariesForMyTeam().then(()=>{
+      if(empPage==='emp-worklog') navEmp('emp-worklog');
+    });
+  }
+
+  // Build "From your team lead" section — visible to anyone who is a team member
+  // (could also be a TL of a different team). Shows team summaries from the TL of their team.
+  const myTeam = emp.teamId ? (D.teams||[]).find(t=>t._uuid===emp.teamId) : null;
+  const myTeamLeadEmail = myTeam ? (myTeam.teamLeadEmail||'').toLowerCase() : '';
+  const myTeamLeadName = myTeamLeadEmail
+    ? ((D.employees||[]).find(e=>e.email && e.email.toLowerCase()===myTeamLeadEmail)?.name || myTeamLeadEmail)
+    : '';
+  const tlSummaries = (window._teamSummariesCache||[])
+    .filter(s => {
+      // Only show summaries from the TL of MY team (not my own as a TL of a different team)
+      if(!s.empEmail) return false;
+      if(s.empEmail.toLowerCase() === (emp.email||'').toLowerCase()) return false; // skip my own
+      if(myTeamLeadEmail && s.empEmail.toLowerCase() === myTeamLeadEmail) return true;
+      return false;
+    })
+    .slice(0, 10);
+  const fromTLCard = (myTeam && tlSummaries.length>0) ? `
+  <div class="card" style="margin-bottom:1rem;border:2px solid #c4b5fd;background:linear-gradient(135deg,#faf5ff,#ede9fe)">
+    <div class="card-hd" style="border-bottom:1px dashed #ddd6fe">
+      <h3 style="color:#5b21b6">📣 From your team lead — ${_wlcEscape(myTeam.name)}</h3>
+      <div style="font-size:12px;color:#6d28d9;font-weight:500">Recent updates from ${_wlcEscape(myTeamLeadName)}. Click 💬 to comment.</div>
+    </div>
+    <div style="padding:8px 1rem 14px">
+      <table style="margin-top:8px"><thead><tr>
+        <th style="padding-left:12px">Date</th>
+        <th>Type</th>
+        <th>Summary</th>
+        <th>Action</th>
+      </tr></thead><tbody>${tlSummaries.map(l=>`
+        <tr>
+          <td style="padding-left:12px"><strong>${l.date}</strong></td>
+          <td><span style="background:#ede9fe;color:#5b21b6;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${l.mode==='weekly'?'📅 Weekly':l.mode==='milestone'?'🎯 Milestone':'📋 End of day'}</span></td>
+          <td style="white-space:normal;font-size:12px;color:var(--muted)">${_wlcEscape((l.summary||'').substring(0,120))}${(l.summary||'').length>120?'…':''}</td>
+          <td>
+            ${l._uuid?`<button class="btn-link" style="font-size:12px;color:#0f766e" onclick="openWorkLogComments('${l._uuid}','${(l.empEmail||'').replace(/'/g,'&#39;')}','${l.date}')">💬 Comments</button>`:''}
+          </td>
+        </tr>`).join('')}</tbody></table>
+    </div>
+  </div>` : '';
+
+  const teamSummaryCard = isTL ? `
+  <div class="card" style="margin-bottom:1rem;border:2px solid #fbbf24;background:linear-gradient(135deg,#fffef0,#fef3c7)">
+    <div class="card-hd" style="border-bottom:1px dashed #fde68a">
+      <h3 style="color:#92400e">📣 Team Summary ${myTeams.length===1?'— '+myTeams[0].name:''}</h3>
+      <div style="font-size:12px;color:#78350f;font-weight:500">${existingTeamSummary?'You already posted a summary for '+selDate+' — editing will update it.':'Post a summary of your team progress — visible to admin and all team members.'}</div>
+    </div>
+    <div style="padding:14px 1rem">
+      <div class="frow" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">
+        <div class="fld" style="margin-bottom:0">
+          <label>👥 Team</label>
+          ${myTeams.length===1?
+            `<input type="text" value="${myTeams[0].name}" disabled style="background:#f8fafc;color:var(--muted)"><input type="hidden" id="ts-team-inline" value="${myTeams[0]._uuid}">`:
+            `<select id="ts-team-inline">${myTeams.map(t=>`<option value="${t._uuid}" ${t._uuid===tsDefaultTeamUuid?'selected':''}>${t.name}</option>`).join('')}</select>`}
+        </div>
+        <div class="fld" style="margin-bottom:0">
+          <label>📋 Type</label>
+          <select id="ts-mode-inline">
+            <option value="daily" ${tsModeDefault==='daily'?'selected':''}>📋 End of day</option>
+            <option value="weekly" ${tsModeDefault==='weekly'?'selected':''}>📅 Weekly summary</option>
+            <option value="milestone" ${tsModeDefault==='milestone'?'selected':''}>🎯 Milestone update</option>
+          </select>
+        </div>
       </div>
-      <button class="btn" style="background:#f59e0b;color:#fff;border:none;padding:8px 16px;font-size:13px;font-weight:700;border-radius:8px;cursor:pointer" onclick="openTeamSummaryModal()">📣 Post team summary</button>
+      <div class="fld">
+        <label>Summary <span style="color:#ef4444">*</span></label>
+        <textarea id="ts-text-inline" rows="3" placeholder="What did the team accomplish today? Any blockers, wins, or focus areas for tomorrow?">${(tsDefaultText||'').replace(/</g,'&lt;')}</textarea>
+      </div>
+      <div class="fld" style="margin-bottom:0">
+        <label>🏷 Tags (optional, comma-separated)</label>
+        <input type="text" id="ts-tags-inline" value="${tsDefaultTags||''}" placeholder="e.g. project-alpha, milestone, design-review">
+      </div>
+      <div id="ts-msg-inline" style="margin-top:8px"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end">
+        ${existingTeamSummary?`<button class="btn btn-sec" onclick="deleteMyWorkLog('${existingTeamSummary._uuid}')" style="color:#dc2626;border-color:#fecaca">🗑 Delete summary</button>`:''}
+        <button class="btn" style="background:#f59e0b;color:#fff;border:none;font-weight:700" onclick="postTeamSummaryInline('${selDate}')">📣 ${existingTeamSummary?'Update team summary':'Post team summary'}</button>
+      </div>
     </div>
   </div>` : '';
 
   return `
   <div class="page-hd">
-    <div><div class="pg-title">📝 Work Log</div><div class="pg-sub">Record what you worked on — pick any of the three styles</div></div>
+    <div><div class="pg-title">📝 Work Log</div><div class="pg-sub">Record what you worked on${isTL?' — and post your team summary':''}</div></div>
     <button class="btn btn-sec" onclick="reloadMyWorkLogs()">🔄 Refresh</button>
   </div>
 
-  ${tlBanner}
-
-  <!-- Date picker + Mode selector -->
+  <!-- Date picker + Mode selector (applies to personal log) -->
   <div class="card" style="margin-bottom:1rem">
     <div style="display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap">
       <div class="fld" style="margin-bottom:0;flex:0 0 180px">
@@ -12712,7 +12809,7 @@ function empWorkLog(){
         <input type="date" id="wl-date" value="${selDate}" max="${today}" onchange="window._wlSelectedDate=this.value;navEmp('emp-worklog')">
       </div>
       <div style="flex:1;min-width:280px">
-        <label style="font-size:13px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">Log style (pick one)</label>
+        <label style="font-size:13px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">Personal log style (pick one)</label>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           ${[
             ['hourly','⏱ Hourly','Log work by hour (time slots)'],
@@ -12727,43 +12824,52 @@ function empWorkLog(){
     </div>
   </div>
 
-  <!-- Entry form -->
-  <div class="card" style="margin-bottom:1rem">
-    <div class="card-hd"><h3>${mode==='hourly'?'⏱ Hourly log':mode==='session'?'📍 Session log':'📋 Daily log'} — ${selDate}</h3></div>
-    ${mode==='hourly'?renderHourlyForm(existing):mode==='session'?renderSessionForm(existing):renderDailyForm(existing)}
-    <div class="fld" style="margin-top:14px">
-      <label>🏷 Tags (optional, comma-separated)</label>
-      <input type="text" id="wl-tags" value="${(existing?.tags||[]).join(', ')}" placeholder="e.g. client-A, meeting, deep-work, admin">
-      <div style="font-size:11px;color:var(--muted);margin-top:3px">Helps filter and group similar work later</div>
+  <!-- PERSONAL LOG card -->
+  <div class="card" style="margin-bottom:1rem;border:2px solid #d1fae5">
+    <div class="card-hd" style="background:#f0fdf4">
+      <h3 style="color:#065f46">${isTL?'📋 My Personal Work Log':'📝 Daily Work Log'} — ${selDate}</h3>
+      <div style="font-size:12px;color:#047857;font-weight:500">${isTL?'This is your individual log, separate from the team summary below.':'Record what you personally accomplished.'}</div>
     </div>
-    ${existing&&existing.adminComments&&existing.adminComments.length?`
-    <div style="margin-top:14px;padding:10px 14px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px">
-      <div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">💬 Replies & comments</div>
-      ${existing.adminComments.map(c=>{
-        const authorName = c.author_name || c.author || 'Unknown';
-        const isExec = c.role==='executive' || c.role==='exec';
-        const badge = isExec?'<span style="background:#8b5cf6;color:#fff;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700;margin-right:4px">👔 EXEC</span>':'';
-        return `<div style="font-size:12px;color:#78350f;padding:6px 0;border-bottom:1px dashed #fde68a">${badge}<strong>${authorName}:</strong> ${c.text} <span style="color:#92400e;font-size:10px">· ${new Date(c.at).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'})}</span></div>`;
-      }).join('')}
-    </div>`:''}
-    <div id="wl-save-msg" style="margin-top:10px"></div>
-    <div style="display:flex;gap:8px;margin-top:1rem;justify-content:flex-end">
-      ${existing?`<button class="btn btn-sec" onclick="deleteMyWorkLog('${existing._uuid}')" style="color:#dc2626;border-color:#fecaca">🗑 Delete this log</button>`:''}
-      <button class="btn btn-primary" style="background:#0f766e" onclick="saveMyWorkLog()">💾 Save work log</button>
+    <div style="padding:14px 1rem">
+      ${mode==='hourly'?renderHourlyForm(existing):mode==='session'?renderSessionForm(existing):renderDailyForm(existing)}
+      <div class="fld" style="margin-top:14px">
+        <label>🏷 Tags (optional, comma-separated)</label>
+        <input type="text" id="wl-tags" value="${(existing?.tags||[]).filter(t=>t!=='team-summary' && !t.startsWith('team-')).join(', ')}" placeholder="e.g. client-A, meeting, deep-work, admin">
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">Helps filter and group similar work later</div>
+      </div>
+      ${existing&&existing.adminComments&&existing.adminComments.length?`
+      <div style="margin-top:14px;padding:10px 14px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px">
+        <div style="font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">💬 Replies & comments</div>
+        ${existing.adminComments.map(c=>{
+          const authorName = c.author_name || c.author || 'Unknown';
+          const isExec = c.role==='executive' || c.role==='exec';
+          const badge = isExec?'<span style="background:#8b5cf6;color:#fff;padding:1px 6px;border-radius:8px;font-size:9px;font-weight:700;margin-right:4px">👔 EXEC</span>':'';
+          return `<div style="font-size:12px;color:#78350f;padding:6px 0;border-bottom:1px dashed #fde68a">${badge}<strong>${authorName}:</strong> ${c.text} <span style="color:#92400e;font-size:10px">· ${new Date(c.at).toLocaleString('en-IN',{dateStyle:'short',timeStyle:'short'})}</span></div>`;
+        }).join('')}
+      </div>`:''}
+      <div id="wl-save-msg" style="margin-top:10px"></div>
+      <div style="display:flex;gap:8px;margin-top:1rem;justify-content:flex-end">
+        ${existing?`<button class="btn btn-sec" onclick="deleteMyWorkLog('${existing._uuid}')" style="color:#dc2626;border-color:#fecaca">🗑 Delete this log</button>`:''}
+        <button class="btn btn-primary" style="background:#0f766e" onclick="saveMyWorkLog()">💾 Save personal log</button>
+      </div>
     </div>
   </div>
 
-  <!-- Recent logs -->
-  <div class="card">
-    <div class="card-hd"><h3>📚 My recent logs</h3></div>
-    ${recent.length===0?`<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px">No work logs yet. Start logging today's work above ↑</div>`:`
+  ${teamSummaryCard}
+
+  ${fromTLCard}
+
+  <!-- Recent personal logs -->
+  <div class="card" ${isTL?'style="margin-bottom:1rem"':''}>
+    <div class="card-hd"><h3>📚 ${isTL?'My recent personal logs':'My recent logs'}</h3></div>
+    ${personalRecent.length===0?`<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px">No personal work logs yet. Start logging today's work above ↑</div>`:`
     <table style="margin-top:8px"><thead><tr>
       <th style="padding-left:12px">Date</th>
       <th>Style</th>
       <th>Entries</th>
       <th>Summary</th>
       <th>Action</th>
-    </tr></thead><tbody>${recent.map(l=>`
+    </tr></thead><tbody>${personalRecent.map(l=>`
       <tr>
         <td style="padding-left:12px"><strong>${l.date}</strong></td>
         <td><span style="background:#eff6ff;color:#1e40af;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${l.mode==='hourly'?'⏱':l.mode==='session'?'📍':'📋'} ${l.mode}</span></td>
@@ -12774,7 +12880,87 @@ function empWorkLog(){
           ${l._uuid?`<button class="btn-link" style="font-size:12px;color:#0f766e;margin-left:8px" onclick="openWorkLogComments('${l._uuid}','${(l.empEmail||emp.email||'').replace(/'/g,'&#39;')}','${l.date}')">💬 Comments</button>`:''}
         </td>
       </tr>`).join('')}</tbody></table>`}
-  </div>`;
+  </div>
+
+  ${isTL?`
+  <!-- Recent team summaries -->
+  <div class="card">
+    <div class="card-hd"><h3>📣 My recent team summaries</h3></div>
+    ${teamSummaryRecent.length===0?`<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px">No team summaries yet. Post one in the orange card above ↑</div>`:`
+    <table style="margin-top:8px"><thead><tr>
+      <th style="padding-left:12px">Date</th>
+      <th>Team</th>
+      <th>Type</th>
+      <th>Summary</th>
+      <th>Action</th>
+    </tr></thead><tbody>${teamSummaryRecent.map(l=>{
+      const teamTag = (l.tags||[]).find(t=>t.startsWith('team-') && t!=='team-summary');
+      const teamName = teamTag ? teamTag.replace(/^team-/,'').replace(/-/g,' ') : '—';
+      return `
+      <tr>
+        <td style="padding-left:12px"><strong>${l.date}</strong></td>
+        <td><span style="background:#fef3c7;color:#92400e;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">📣 ${teamName}</span></td>
+        <td><span style="background:#eef2ff;color:#4338ca;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${l.mode==='weekly'?'📅 Weekly':l.mode==='milestone'?'🎯 Milestone':'📋 End of day'}</span></td>
+        <td style="white-space:normal;font-size:12px;color:var(--muted)">${(l.summary||'').substring(0,80)}${(l.summary||'').length>80?'…':''}</td>
+        <td>
+          <button class="btn-link" style="font-size:12px" onclick="window._wlSelectedDate='${l.date}';navEmp('emp-worklog')">View / Edit</button>
+          ${l._uuid?`<button class="btn-link" style="font-size:12px;color:#0f766e;margin-left:8px" onclick="openWorkLogComments('${l._uuid}','${(l.empEmail||emp.email||'').replace(/'/g,'&#39;')}','${l.date}')">💬 Comments</button>`:''}
+        </td>
+      </tr>`;}).join('')}</tbody></table>`}
+  </div>`:''}`;
+}
+
+// New: post team summary inline (replaces modal call from this page)
+async function postTeamSummaryInline(date){
+  const emp=currentEmployee;
+  const teamUuid=$('ts-team-inline')?.value;
+  const mode=$('ts-mode-inline')?.value || 'daily';
+  const text=($('ts-text-inline')?.value||'').trim();
+  const tagsRaw=($('ts-tags-inline')?.value||'').trim();
+  const msg=$('ts-msg-inline');
+
+  if(!text){ if(msg) msg.innerHTML='<div class="alert alert-e">Summary text is required</div>'; return; }
+  if(!teamUuid){ if(msg) msg.innerHTML='<div class="alert alert-e">Please pick a team</div>'; return; }
+
+  const team=D.teams.find(t=>t._uuid===teamUuid);
+  if(!team){ if(msg) msg.innerHTML='<div class="alert alert-e">Team not found</div>'; return; }
+
+  const userTags = tagsRaw ? tagsRaw.split(',').map(t=>t.trim()).filter(Boolean) : [];
+  const teamTag = 'team-'+team.name.toLowerCase().replace(/\s+/g,'-');
+  const tags = ['team-summary', teamTag, ...userTags];
+
+  if(msg) msg.innerHTML='<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">💾 Posting…</div>';
+
+  // Look up an existing team summary for this date so we update instead of create
+  const existingTS = (window._wlCache||[]).find(l=>l.empUuid===emp._uuid && l.date===date && (l.tags||[]).includes('team-summary'));
+  const log = {
+    _uuid: existingTS?._uuid,
+    empUuid: emp._uuid,
+    empName: emp.name,
+    empEmail: emp.email,
+    date: date,
+    mode: mode,
+    entries: [],
+    summary: text,
+    tags: tags,
+    adminComments: existingTS?.adminComments||[],
+    totalHours: 0
+  };
+
+  const r = await sbSaveWorkLog(log);
+  if(!r){ if(msg) msg.innerHTML='<div class="alert alert-e">❌ Save failed. Please try again.</div>'; return; }
+  if(r && r[0] && !log._uuid) log._uuid = r[0].id;
+
+  // Update local cache
+  if(window._wlCache){
+    const idx=window._wlCache.findIndex(x=>x._uuid===log._uuid);
+    if(idx>=0) window._wlCache[idx]=log;
+    else window._wlCache.unshift(log);
+  }
+
+  if(msg) msg.innerHTML='<div class="alert alert-s">✅ Team summary posted</div>';
+  showToast(`📣 Team summary posted to ${team.name}`,'success');
+  setTimeout(()=>navEmp('emp-worklog'),700);
 }
 
 function renderHourlyForm(existing){
@@ -13829,7 +14015,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v17-2026-04-30-team-summary-fix';
+const APP_VERSION = 'v20-2026-04-30-syntax-fix';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
