@@ -800,6 +800,186 @@ async function wlcDoTogglePin(commentId, currentPinned){
 }
 // ───── END WORK LOG COMMENTS MODULE ─────
 
+// ───── PROJECTS MODULE ─────
+// Projects belong to a team. Employees can be on multiple projects (M2M via project_members).
+// Admin & assigned members can post text updates. Time worked is auto-summed from work logs
+// that have a tag matching `proj-<lower-kebab-name>`.
+window._projectsCache = null;          // [{_uuid, name, description, teamId, companyId, status, createdAt}]
+window._projectMembersCache = null;    // [{_uuid, projectId, empUuid}]
+window._projectUpdatesCache = {};      // {projectId: [{_uuid, authorEmail, authorName, body, createdAt}]}
+
+async function projectsLoad(force){
+  if(window._projectsCache && !force) return window._projectsCache;
+  try{
+    const cid = currentCompany ? currentCompany.company_id : 'KSPL';
+    const rows = await sb('projects','GET',null,`?company_id=eq.${encodeURIComponent(cid)}&order=created_at.desc&select=*`);
+    window._projectsCache = (rows||[]).map(r=>({
+      _uuid:r.id, name:r.name, description:r.description||'',
+      teamId:r.team_id, companyId:r.company_id,
+      status:r.status||'active', createdAt:r.created_at
+    }));
+    return window._projectsCache;
+  }catch(e){console.warn('[projects] load failed:',e); return [];}
+}
+
+async function projectMembersLoad(force){
+  if(window._projectMembersCache && !force) return window._projectMembersCache;
+  try{
+    const rows = await sb('project_members','GET',null,'?select=*');
+    window._projectMembersCache = (rows||[]).map(r=>({
+      _uuid:r.id, projectId:r.project_id, empUuid:r.employee_uuid
+    }));
+    return window._projectMembersCache;
+  }catch(e){console.warn('[projects] members load failed:',e); return [];}
+}
+
+async function projectUpdatesLoad(projectId, force){
+  if(window._projectUpdatesCache[projectId] && !force) return window._projectUpdatesCache[projectId];
+  try{
+    const rows = await sb('project_updates','GET',null,`?project_id=eq.${projectId}&order=created_at.desc&limit=100&select=*`);
+    window._projectUpdatesCache[projectId] = (rows||[]).map(r=>({
+      _uuid:r.id, projectId:r.project_id,
+      authorEmail:r.author_email, authorName:r.author_name,
+      body:r.body, createdAt:r.created_at
+    }));
+    return window._projectUpdatesCache[projectId];
+  }catch(e){console.warn('[projects] updates load failed:',e); return [];}
+}
+
+async function projectCreate(data){
+  // data: {name, description, teamId}
+  if(!data.name || !data.name.trim()){ showToast('Project name is required','info'); return null; }
+  if(!data.teamId){ showToast('Team is required','info'); return null; }
+  const payload = {
+    name: data.name.trim(),
+    description: (data.description||'').trim(),
+    team_id: data.teamId,
+    company_id: currentCompany ? currentCompany.company_id : 'KSPL',
+    status: 'active'
+  };
+  try{
+    const r = await sb('projects','POST',payload);
+    window._projectsCache = null; // bust cache
+    return r && r[0] ? r[0] : null;
+  }catch(e){console.error('[projects] create failed:',e); showToast('Could not create project','info'); return null;}
+}
+
+async function projectUpdate(projectId, data){
+  const payload = {};
+  if(data.name !== undefined) payload.name = data.name.trim();
+  if(data.description !== undefined) payload.description = (data.description||'').trim();
+  if(data.status !== undefined) payload.status = data.status;
+  try{
+    await sb('projects','PATCH',payload,`?id=eq.${projectId}`);
+    window._projectsCache = null;
+    return true;
+  }catch(e){console.error('[projects] update failed:',e); return false;}
+}
+
+async function projectDelete(projectId){
+  try{
+    await sb('projects','DELETE',null,`?id=eq.${projectId}`);
+    window._projectsCache = null;
+    window._projectMembersCache = null; // ON DELETE CASCADE removes members
+    delete window._projectUpdatesCache[projectId];
+    return true;
+  }catch(e){console.error('[projects] delete failed:',e); return false;}
+}
+
+async function projectAddMember(projectId, empUuid){
+  try{
+    await sb('project_members','POST',{project_id:projectId, employee_uuid:empUuid});
+    window._projectMembersCache = null;
+    return true;
+  }catch(e){console.error('[projects] add member failed:',e); return false;}
+}
+
+async function projectRemoveMember(memberRowId){
+  try{
+    await sb('project_members','DELETE',null,`?id=eq.${memberRowId}`);
+    window._projectMembersCache = null;
+    return true;
+  }catch(e){console.error('[projects] remove member failed:',e); return false;}
+}
+
+async function projectPostUpdate(projectId, body){
+  const actor = _wlcCurrentActor();
+  if(!actor){ showToast('Please sign in','info'); return null; }
+  const text = (body||'').trim();
+  if(!text){ showToast('Update is empty','info'); return null; }
+  if(text.length > 2000){ showToast('Update too long (max 2000 chars)','info'); return null; }
+  // Permission: admin OR a project member
+  const isAdmin = (currentRole === 'admin');
+  if(!isAdmin){
+    const members = await projectMembersLoad();
+    const myUuid = currentEmployee ? currentEmployee._uuid : null;
+    const isMember = myUuid && members.some(m => m.projectId === projectId && m.empUuid === myUuid);
+    if(!isMember){ showToast('Only admin or project members can post updates','info'); return null; }
+  }
+  const payload = {
+    project_id: projectId,
+    author_email: actor.email.toLowerCase(),
+    author_name: actor.name,
+    body: text
+  };
+  try{
+    const r = await sb('project_updates','POST',payload);
+    delete window._projectUpdatesCache[projectId]; // bust so next load is fresh
+    return r && r[0] ? r[0] : null;
+  }catch(e){console.error('[projects] post update failed:',e); return null;}
+}
+
+async function projectDeleteUpdate(projectId, updateId){
+  try{
+    await sb('project_updates','DELETE',null,`?id=eq.${updateId}`);
+    delete window._projectUpdatesCache[projectId];
+    return true;
+  }catch(e){console.error('[projects] delete update failed:',e); return false;}
+}
+
+// Helper: project name → tag form for work-log-based time-worked auto-calc
+function _projectTag(projectName){
+  return 'proj-' + String(projectName||'').toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+}
+
+// Returns array of project objects this employee is on
+async function projectsForEmployee(empUuid){
+  if(!empUuid) return [];
+  const [projects, members] = await Promise.all([projectsLoad(), projectMembersLoad()]);
+  const myMemberships = members.filter(m => m.empUuid === empUuid);
+  return myMemberships
+    .map(m => projects.find(p => p._uuid === m.projectId))
+    .filter(Boolean);
+}
+
+// Returns array of employees on a given project
+async function membersOfProject(projectId){
+  if(!projectId) return [];
+  const members = await projectMembersLoad();
+  const empMemberships = members.filter(m => m.projectId === projectId);
+  return empMemberships
+    .map(m => (D.employees||[]).find(e => e._uuid === m.empUuid))
+    .filter(Boolean);
+}
+
+// Calculate total hours worked on this project from member work logs (any log with proj-tag)
+async function projectTotalHours(project){
+  const tag = _projectTag(project.name);
+  // Use cached _wlAllCache if present, otherwise this returns 0 (best-effort)
+  const allLogs = window._wlAllCache || [];
+  const members = await membersOfProject(project._uuid);
+  const memberUuids = new Set(members.map(m=>m._uuid));
+  let total = 0;
+  allLogs.forEach(l=>{
+    if(memberUuids.has(l.empUuid) && (l.tags||[]).includes(tag)){
+      total += parseFloat(l.totalHours)||0;
+    }
+  });
+  return total;
+}
+// ───── END PROJECTS MODULE ─────
+
+
 
 
 // Time-of-day greeting
@@ -4326,7 +4506,7 @@ function renderEmployeeApp(){
           const isTL = myEmail && D.employees.some(e=>e.teamLeadEmail && e.teamLeadEmail.toLowerCase()===myEmail);
           const isExec = currentEmployee?.isExecutive===true;
           const pendingForTL = isTL ? D.leaves.filter(l=>l.tlEmail&&l.tlEmail.toLowerCase()===myEmail&&l.tlStatus==='Pending').length : 0;
-          const menu=[['⊞','emp-dashboard','Dashboard'],['📅','emp-attendance','Mark Attendance'],['📝','emp-worklog','Work Log'],['🏖','emp-leave','My Leaves']];
+          const menu=[['⊞','emp-dashboard','Dashboard'],['📅','emp-attendance','Mark Attendance'],['📝','emp-worklog','Work Log'],['📁','emp-projects','My Projects'],['🏖','emp-leave','My Leaves']];
           if(isExec) menu.push(['👔','exec-view','Executive View']);
           if(isTL) menu.push(['👥','emp-team','Team Requests',pendingForTL]);
           menu.push(['💰','emp-payslip','My Payslip'],['📊','emp-performance','My Performance'],['📆','emp-holidays','Holiday Calendar'],['🔔','emp-notifications','Notifications'],['🪪','emp-idcard','My ID Card'],['🏢','emp-orgchart','Org Chart'],['👤','emp-profile','My Profile']);
@@ -4351,6 +4531,7 @@ function renderEmployeeApp(){
     'emp-orgchart':()=>pgOrgChart(true),
     'emp-notifications':pgNotifications,
     'emp-worklog':empWorkLog,
+    'emp-projects':empMyProjects,
     'emp-team':empTeamRequests,
     'exec-view':empExecView,
     'exec-team':empExecTeam
@@ -8003,6 +8184,10 @@ let empPage_num = 1;
 const EMP_PER_PAGE = 25;
 
 function pgEmployees(){
+  // Load projects in background so search can match by project name
+  if(!window._projectsCache){
+    projectsLoad().then(()=>projectMembersLoad());
+  }
   return `
   <div class="page-hd"><div class="pg-title">Employee directory <span style="font-size:13px;font-weight:400;color:var(--muted)">${D.employees.length} total</span></div>
   <div style="display:flex;gap:8px">
@@ -8010,7 +8195,7 @@ function pgEmployees(){
     <button class="btn btn-primary" onclick="openEmpModal()">+ Add employee</button>
   </div></div>
   <div class="search-bar">
-    <input type="text" id="emp-q" placeholder="Search name, email, dept, role…" style="max-width:260px" oninput="empPage_num=1;filterEmps()">
+    <input type="text" id="emp-q" placeholder="Search name, email, dept, role, project…" style="max-width:280px" oninput="empPage_num=1;filterEmps()">
     <select id="emp-d" style="width:160px" onchange="empPage_num=1;filterEmps()"><option value="">All departments</option>${DEPTS.map(d=>`<option>${d}</option>`).join('')}</select>
     <select id="emp-s" style="width:130px" onchange="empPage_num=1;filterEmps()"><option value="">All statuses</option><option>Active</option><option>Pending</option><option>Inactive</option></select>
     <select id="emp-reg" style="width:150px" onchange="empPage_num=1;filterEmps()"><option value="">All types</option><option value="self">Self-registered</option><option value="admin">Admin-added</option></select>
@@ -8043,8 +8228,22 @@ function getFilteredEmps(){
   const d=($('emp-d')||{}).value||'';
   const s=($('emp-s')||{}).value||'';
   const reg=($('emp-reg')||{}).value||'';
+  // If query matches a project name, return employees on that project
+  let projectMatchUuids = null;
+  if(q && window._projectsCache && window._projectMembersCache){
+    const matchedProjects = window._projectsCache.filter(p => (p.name||'').toLowerCase().includes(q));
+    if(matchedProjects.length){
+      const set = new Set();
+      matchedProjects.forEach(p=>{
+        window._projectMembersCache.filter(m=>m.projectId===p._uuid).forEach(m=>set.add(m.empUuid));
+      });
+      projectMatchUuids = set;
+    }
+  }
   return D.employees.filter(e=>{
-    const mq=!q||e.name.toLowerCase().includes(q)||e.email.toLowerCase().includes(q)||(e.dept||'').toLowerCase().includes(q)||(e.role||'').toLowerCase().includes(q)||(e.phone||'').includes(q);
+    const mqText = !q || e.name.toLowerCase().includes(q) || e.email.toLowerCase().includes(q) || (e.dept||'').toLowerCase().includes(q) || (e.role||'').toLowerCase().includes(q) || (e.phone||'').includes(q);
+    const mqProj = projectMatchUuids ? projectMatchUuids.has(e._uuid) : false;
+    const mq = mqText || mqProj;
     const md=!d||e.dept===d;
     const ms=!s||e.status===s;
     const mr=!reg||(reg==='self'&&e.selfRegistered)||(reg==='admin'&&!e.selfRegistered);
@@ -8875,6 +9074,12 @@ function showEmployeeDetail(empIdOrUuid){
         <div style="font-size:13px;margin-top:2px;${!e.address?'color:var(--muted);font-style:italic':''}">${e.address||'Not provided'}</div>
       </div>
 
+      <!-- Projects this employee is on -->
+      <div id="emp-detail-projects" style="margin-bottom:1rem">
+        <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📁 <span>Projects</span></div>
+        <div style="font-size:12px;color:var(--muted);font-style:italic">Loading…</div>
+      </div>
+
       <!-- KYC (mirrors employee KYC tab) -->
       <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
         <span>🪪 KYC &amp; Identity documents</span>
@@ -8934,6 +9139,33 @@ function showEmployeeDetail(empIdOrUuid){
   </div>`;
   document.body.appendChild(overlay);
   overlay.addEventListener('click',ev=>{if(ev.target===overlay)overlay.remove();});
+
+  // Hydrate "Projects this employee is on" section asynchronously
+  (async ()=>{
+    try{
+      if(!window._projectsCache) await projectsLoad();
+      if(!window._projectMembersCache) await projectMembersLoad();
+      const empProjects = await projectsForEmployee(e._uuid);
+      const sec = document.getElementById('emp-detail-projects');
+      if(!sec) return; // modal closed
+      if(empProjects.length === 0){
+        sec.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📁 <span>Projects</span></div>
+          <div style="font-size:12px;color:var(--muted);font-style:italic">Not on any projects yet.</div>`;
+        return;
+      }
+      const chips = empProjects.map(p=>{
+        const team = D.teams.find(t=>t._uuid===p.teamId);
+        const teamLabel = team ? ` · ${team.name}` : '';
+        return `<button onclick="document.getElementById('emp-detail-overlay').remove();openProjectDetailModal('${p._uuid}','${p.teamId}')" style="background:#faf5ff;border:1px solid #e9d5ff;color:#6b21a8;padding:5px 12px;border-radius:14px;cursor:pointer;font-size:12px;font-weight:600;display:inline-flex;align-items:center;gap:4px">📁 ${_wlcEscape(p.name)}<span style="font-weight:400;color:#7c3aed;font-size:10px">${_wlcEscape(teamLabel)}</span></button>`;
+      }).join(' ');
+      sec.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">📁 <span>Projects (${empProjects.length})</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">${chips}</div>`;
+    }catch(err){
+      console.warn('Failed to load projects for emp detail:',err);
+      const sec = document.getElementById('emp-detail-projects');
+      if(sec) sec.innerHTML = '';
+    }
+  })();
 }
 
 function infoCard(label,value){
@@ -11107,14 +11339,19 @@ function pgTeams(){
             <button class="btn btn-sec" style="flex:1;font-size:12px;padding:7px" onclick="openTeamMembers('${t._uuid}')">👥 Members</button>
             <button class="btn btn-sec" style="font-size:12px;padding:7px;color:#dc2626;border-color:#fecaca" onclick="deleteTeam('${t._uuid}')" title="Delete team">🗑</button>
           </div>
-          <button class="btn btn-primary" style="width:100%;font-size:12px;padding:8px;margin-top:6px;background:linear-gradient(135deg,#0f766e,#14b8a6)" onclick="viewTeamWorkLogs('${t._uuid}')">📊 View Work Logs</button>
+          <div style="display:flex;gap:6px;margin-top:6px">
+            <button class="btn btn-primary" style="flex:1;font-size:12px;padding:8px;background:linear-gradient(135deg,#0f766e,#14b8a6)" onclick="viewTeamWorkLogs('${t._uuid}')">📊 Work Logs</button>
+            <button class="btn btn-primary" style="flex:1;font-size:12px;padding:8px;background:linear-gradient(135deg,#7c3aed,#a855f7)" onclick="openTeamProjects('${t._uuid}')">📁 Projects</button>
+          </div>
         </div>
       </div>`;
     }).join('')}
   </div>`}
 
   <div id="team-modal-wrap"></div>
-  <div id="team-members-modal-wrap"></div>`;
+  <div id="team-members-modal-wrap"></div>
+  <div id="team-projects-modal-wrap"></div>
+  <div id="project-detail-modal-wrap"></div>`;
 }
 
 function openTeamModal(uuid){
@@ -11214,6 +11451,394 @@ async function deleteTeam(uuid){
   nav('teams');
   showToast(`🗑 Team "${t.name}" deleted`, 'info');
 }
+
+// ── PROJECT UI ──────────────────────────────────────────────
+async function openTeamProjects(teamUuid){
+  const team = D.teams.find(t=>t._uuid===teamUuid);
+  if(!team) return;
+  const wrap = $('team-projects-modal-wrap');
+  if(!wrap) return;
+  wrap.innerHTML = `<div class="modal-bg" onclick="if(event.target===this)closeModal('team-projects-modal-wrap')">
+    <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto">
+      <div class="modal-hd">
+        <h3>📁 Projects — ${_wlcEscape(team.name)}</h3>
+        <button class="xbtn" onclick="closeModal('team-projects-modal-wrap')">×</button>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+        <button class="btn btn-primary" onclick="openProjectEditModal('','${teamUuid}')" style="background:linear-gradient(135deg,#7c3aed,#a855f7)">+ New project</button>
+      </div>
+      <div id="team-projects-list">
+        <div style="text-align:center;padding:1.5rem;color:var(--muted);font-size:13px">Loading…</div>
+      </div>
+    </div>
+  </div>`;
+  // Load and render
+  await renderTeamProjectsList(teamUuid);
+}
+
+async function renderTeamProjectsList(teamUuid){
+  const list = $('team-projects-list');
+  if(!list) return;
+  // Make sure we have all the data we need
+  const [projects, members] = await Promise.all([projectsLoad(true), projectMembersLoad(true)]);
+  // Also ensure work logs are loaded for time-worked calculation
+  if(!window._wlAllCache){
+    try{ const all = await sbLoadWorkLogs(); window._wlAllCache = all; }catch(e){}
+  }
+  const teamProjects = projects.filter(p => p.teamId === teamUuid);
+  if(teamProjects.length === 0){
+    list.innerHTML = `<div style="text-align:center;padding:2rem;color:var(--muted);font-size:13px">
+      <div style="font-size:42px;margin-bottom:8px">📁</div>
+      No projects in this team yet.<br>
+      <span style="font-size:12px">Click <strong>+ New project</strong> above to create the first one.</span>
+    </div>`;
+    return;
+  }
+  // Render each project as a card
+  const cards = await Promise.all(teamProjects.map(async p => {
+    const projMembers = members.filter(m => m.projectId === p._uuid);
+    const hours = await projectTotalHours(p);
+    const statusBadge = p.status === 'completed'
+      ? `<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">✓ Completed</span>`
+      : p.status === 'on-hold'
+      ? `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">⏸ On hold</span>`
+      : `<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">▶ Active</span>`;
+    return `<div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;transition:.15s;background:#fff" onclick="openProjectDetailModal('${p._uuid}','${teamUuid}')" onmouseover="this.style.background='#faf5ff';this.style.borderColor='#c4b5fd'" onmouseout="this.style.background='#fff';this.style.borderColor='var(--border)'">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:700;color:var(--text)">${_wlcEscape(p.name)}</div>
+          ${p.description?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${_wlcEscape(p.description.substring(0,140))}${p.description.length>140?'…':''}</div>`:''}
+        </div>
+        ${statusBadge}
+      </div>
+      <div style="display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--muted)">
+        <span>👥 ${projMembers.length} member${projMembers.length!==1?'s':''}</span>
+        <span>⏱ ${hours.toFixed(1)}h logged</span>
+        <span style="margin-left:auto;color:#7c3aed;font-weight:600">View →</span>
+      </div>
+    </div>`;
+  }));
+  list.innerHTML = cards.join('');
+}
+
+function openProjectEditModal(projectId, teamUuid){
+  const existing = projectId ? (window._projectsCache||[]).find(p=>p._uuid===projectId) : null;
+  const team = D.teams.find(t=>t._uuid===teamUuid);
+  const wrap = $('project-detail-modal-wrap');
+  if(!wrap) return;
+  wrap.innerHTML = `<div class="modal-bg" onclick="if(event.target===this)closeModal('project-detail-modal-wrap')" style="z-index:10000">
+    <div class="modal" style="max-width:520px">
+      <div class="modal-hd">
+        <h3>${existing?'Edit project':'+ New project'}${team?` — ${_wlcEscape(team.name)}`:''}</h3>
+        <button class="xbtn" onclick="closeModal('project-detail-modal-wrap')">×</button>
+      </div>
+      <div id="proj-form-err"></div>
+      <div class="fld"><label>Project name <span style="color:#ef4444">*</span></label>
+        <input type="text" id="proj-name" value="${existing?_wlcEscape(existing.name):''}" placeholder="e.g. Website Redesign Q3" autocomplete="off">
+      </div>
+      <div class="fld"><label>Description</label>
+        <textarea id="proj-desc" rows="3" placeholder="What is this project about?">${existing?_wlcEscape(existing.description):''}</textarea>
+      </div>
+      ${existing?`
+      <div class="fld"><label>Status</label>
+        <select id="proj-status">
+          <option value="active" ${existing.status==='active'?'selected':''}>▶ Active</option>
+          <option value="on-hold" ${existing.status==='on-hold'?'selected':''}>⏸ On hold</option>
+          <option value="completed" ${existing.status==='completed'?'selected':''}>✓ Completed</option>
+        </select>
+      </div>`:''}
+      <div style="background:#eef2ff;padding:10px 12px;border-radius:8px;margin:10px 0;font-size:11px;color:#3730a3">
+        💡 <strong>Tip:</strong> Time worked is auto-calculated. When members tag their work logs with <code style="background:#fff;padding:1px 5px;border-radius:3px;font-size:10px">${_projectTag(existing?existing.name:'project-name')}</code> the hours will sum here.
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem">
+        ${existing?`<button class="btn btn-sec" style="color:#dc2626;border-color:#fecaca;margin-right:auto" onclick="confirmDeleteProject('${existing._uuid}','${teamUuid}')">🗑 Delete</button>`:''}
+        <button class="btn btn-sec" onclick="closeModal('project-detail-modal-wrap')">Cancel</button>
+        <button class="btn btn-primary" style="background:#7c3aed" onclick="saveProject('${existing?existing._uuid:''}','${teamUuid}')">${existing?'Save changes':'Create project'}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function saveProject(projectId, teamUuid){
+  const name = ($('proj-name')||{}).value?.trim();
+  const desc = ($('proj-desc')||{}).value?.trim();
+  const err = $('proj-form-err');
+  if(!name){ if(err)err.innerHTML='<div class="alert alert-e">Project name is required</div>'; return; }
+  if(err) err.innerHTML='<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">💾 Saving…</div>';
+
+  if(projectId){
+    const status = ($('proj-status')||{}).value || 'active';
+    const ok = await projectUpdate(projectId, {name, description:desc, status});
+    if(!ok){ if(err)err.innerHTML='<div class="alert alert-e">Save failed</div>'; return; }
+    showToast(`Project "${name}" updated`,'success');
+  } else {
+    const created = await projectCreate({name, description:desc, teamId:teamUuid});
+    if(!created){ if(err)err.innerHTML='<div class="alert alert-e">Create failed</div>'; return; }
+    showToast(`Project "${name}" created`,'success');
+  }
+  closeModal('project-detail-modal-wrap');
+  await renderTeamProjectsList(teamUuid);
+}
+
+async function confirmDeleteProject(projectId, teamUuid){
+  if(!confirm('Delete this project? All members and updates will be removed permanently.')) return;
+  const ok = await projectDelete(projectId);
+  if(!ok){ showToast('Delete failed','info'); return; }
+  showToast('Project deleted','success');
+  closeModal('project-detail-modal-wrap');
+  await renderTeamProjectsList(teamUuid);
+}
+
+async function openProjectDetailModal(projectId, teamUuid){
+  const project = (window._projectsCache||[]).find(p=>p._uuid===projectId);
+  if(!project){ showToast('Project not found','info'); return; }
+  const team = D.teams.find(t=>t._uuid===teamUuid || t._uuid===project.teamId);
+  const wrap = $('project-detail-modal-wrap');
+  if(!wrap) return;
+  wrap.innerHTML = `<div class="modal-bg" onclick="if(event.target===this)closeModal('project-detail-modal-wrap')" style="z-index:10000">
+    <div class="modal" style="max-width:680px;max-height:92vh;overflow-y:auto">
+      <div style="background:linear-gradient(135deg,#7c3aed,#a855f7);margin:-1.75rem -1.75rem 1rem -1.75rem;padding:18px 22px;color:#fff">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;opacity:.85;text-transform:uppercase;letter-spacing:.5px">${team?_wlcEscape(team.name):'Project'}</div>
+            <div style="font-size:18px;font-weight:800;margin-top:2px">${_wlcEscape(project.name)}</div>
+            ${project.description?`<div style="font-size:12px;opacity:.9;margin-top:4px">${_wlcEscape(project.description)}</div>`:''}
+          </div>
+          <button onclick="closeModal('project-detail-modal-wrap')" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:18px;flex-shrink:0">×</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+          <span style="background:rgba(255,255,255,.2);padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600" id="proj-stat-hours">⏱ Loading…</span>
+          <span style="background:rgba(255,255,255,.2);padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600" id="proj-stat-members">👥 Loading…</span>
+          <span style="background:rgba(255,255,255,.2);padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600">${project.status==='completed'?'✓ Completed':project.status==='on-hold'?'⏸ On hold':'▶ Active'}</span>
+        </div>
+        ${currentRole==='admin'?`<div style="margin-top:12px"><button class="btn" style="background:rgba(255,255,255,.25);color:#fff;border:1px solid rgba(255,255,255,.4);font-size:12px;padding:5px 12px" onclick="openProjectEditModal('${projectId}','${teamUuid}')">✏ Edit project</button></div>`:''}
+      </div>
+
+      <div style="display:flex;gap:6px;border-bottom:1px solid var(--border);margin-bottom:1rem">
+        <button class="proj-tab proj-tab-active" data-tab="members" onclick="switchProjectTab('members','${projectId}','${teamUuid}')" style="background:none;border:none;padding:10px 16px;font-size:13px;font-weight:700;color:#7c3aed;border-bottom:2px solid #7c3aed;cursor:pointer">👥 Members</button>
+        <button class="proj-tab" data-tab="updates" onclick="switchProjectTab('updates','${projectId}','${teamUuid}')" style="background:none;border:none;padding:10px 16px;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;cursor:pointer">💬 Updates</button>
+      </div>
+
+      <div id="proj-tab-content">
+        <div style="text-align:center;padding:1.5rem;color:var(--muted);font-size:13px">Loading…</div>
+      </div>
+    </div>
+  </div>`;
+  // Load stats + default tab
+  const [members, hours] = await Promise.all([membersOfProject(projectId), projectTotalHours(project)]);
+  const hEl = $('proj-stat-hours'); if(hEl) hEl.textContent = `⏱ ${hours.toFixed(1)}h logged`;
+  const mEl = $('proj-stat-members'); if(mEl) mEl.textContent = `👥 ${members.length} member${members.length!==1?'s':''}`;
+  await switchProjectTab('members', projectId, teamUuid);
+}
+
+async function switchProjectTab(tab, projectId, teamUuid){
+  // Update tab UI
+  document.querySelectorAll('.proj-tab').forEach(b=>{
+    const isActive = b.dataset.tab === tab;
+    b.style.color = isActive ? '#7c3aed' : 'var(--muted)';
+    b.style.borderBottomColor = isActive ? '#7c3aed' : 'transparent';
+    b.style.fontWeight = isActive ? '700' : '600';
+  });
+  const content = $('proj-tab-content');
+  if(!content) return;
+  if(tab === 'members'){
+    await renderProjectMembersTab(content, projectId, teamUuid);
+  } else if(tab === 'updates'){
+    await renderProjectUpdatesTab(content, projectId, teamUuid);
+  }
+}
+
+async function renderProjectMembersTab(container, projectId, teamUuid){
+  const members = await membersOfProject(projectId);
+  const isAdmin = (currentRole === 'admin');
+  const allEmps = (D.employees||[]).filter(e => e.status==='Active');
+  const memberUuids = new Set(members.map(m=>m._uuid));
+  const availableEmps = allEmps.filter(e => !memberUuids.has(e._uuid));
+
+  container.innerHTML = `
+    ${isAdmin ? `
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <select id="proj-add-emp" style="flex:1">
+        <option value="">— Pick an employee to add —</option>
+        ${availableEmps.map(e=>`<option value="${e._uuid}">${_wlcEscape(e.name)} · ${_wlcEscape(e.dept||'—')} · ${_wlcEscape(e.role||'—')}</option>`).join('')}
+      </select>
+      <button class="btn btn-primary" style="background:#7c3aed" onclick="doAddProjectMember('${projectId}','${teamUuid}')">+ Add</button>
+    </div>` : ''}
+    ${members.length===0 ? `
+    <div style="text-align:center;padding:1.5rem;color:var(--muted);font-size:13px">No members yet.${isAdmin?' Add one from the dropdown above.':''}</div>` : `
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${members.map(m=>{
+        const memberRow = (window._projectMembersCache||[]).find(x => x.projectId===projectId && x.empUuid===m._uuid);
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:#fafafa;border-radius:8px">
+          ${av(m.name,32)}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600">${_wlcEscape(m.name)}</div>
+            <div style="font-size:11px;color:var(--muted)">${_wlcEscape(m.id||'')} · ${_wlcEscape(m.role||'—')}</div>
+          </div>
+          ${isAdmin && memberRow?`<button onclick="doRemoveProjectMember('${memberRow._uuid}','${projectId}','${teamUuid}')" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:18px;padding:4px 8px;border-radius:4px" title="Remove from project">×</button>`:''}
+        </div>`;
+      }).join('')}
+    </div>`}`;
+}
+
+async function doAddProjectMember(projectId, teamUuid){
+  const sel = $('proj-add-emp');
+  if(!sel || !sel.value){ showToast('Pick an employee first','info'); return; }
+  const ok = await projectAddMember(projectId, sel.value);
+  if(!ok){ showToast('Add failed','info'); return; }
+  showToast('Member added','success');
+  // Refresh just the members tab + the count badge
+  const proj = (window._projectsCache||[]).find(p=>p._uuid===projectId);
+  if(proj){
+    const members = await membersOfProject(projectId);
+    const mEl = $('proj-stat-members'); if(mEl) mEl.textContent = `👥 ${members.length} member${members.length!==1?'s':''}`;
+  }
+  await renderProjectMembersTab($('proj-tab-content'), projectId, teamUuid);
+}
+
+async function doRemoveProjectMember(memberRowId, projectId, teamUuid){
+  if(!confirm('Remove this employee from the project?')) return;
+  const ok = await projectRemoveMember(memberRowId);
+  if(!ok){ showToast('Remove failed','info'); return; }
+  showToast('Member removed','success');
+  const members = await membersOfProject(projectId);
+  const mEl = $('proj-stat-members'); if(mEl) mEl.textContent = `👥 ${members.length} member${members.length!==1?'s':''}`;
+  await renderProjectMembersTab($('proj-tab-content'), projectId, teamUuid);
+}
+
+async function renderProjectUpdatesTab(container, projectId, teamUuid){
+  const updates = await projectUpdatesLoad(projectId, true);
+  const isAdmin = (currentRole === 'admin');
+  let canPost = isAdmin;
+  if(!canPost && currentEmployee){
+    const members = await projectMembersLoad();
+    canPost = members.some(m => m.projectId === projectId && m.empUuid === currentEmployee._uuid);
+  }
+  container.innerHTML = `
+    ${canPost ? `
+    <div style="margin-bottom:12px">
+      <textarea id="proj-update-text" rows="2" placeholder="Post an update — milestone, blocker, status…" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+      <div style="display:flex;justify-content:flex-end;margin-top:6px">
+        <button class="btn btn-primary" style="background:#7c3aed;font-size:12px;padding:7px 16px" onclick="doPostProjectUpdate('${projectId}','${teamUuid}')">📣 Post update</button>
+      </div>
+    </div>` : `
+    <div style="background:#f1f5f9;padding:10px 12px;border-radius:8px;font-size:12px;color:var(--muted);margin-bottom:12px">
+      💬 You can read updates but only admin and project members can post.
+    </div>`}
+    ${updates.length===0 ? `
+    <div style="text-align:center;padding:1.5rem;color:var(--muted);font-size:13px">No updates yet. ${canPost?'Be the first to post one!':''}</div>` : `
+    <div style="display:flex;flex-direction:column;gap:10px">
+      ${updates.map(u=>{
+        const isMine = currentEmployee && u.authorEmail === currentEmployee.email.toLowerCase();
+        const canDelete = isAdmin || isMine;
+        return `<div style="padding:10px 12px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+            <div style="flex:1;min-width:0">
+              <div style="font-size:12px;font-weight:700;color:var(--text)">${_wlcEscape(u.authorName)}</div>
+              <div style="font-size:10px;color:var(--muted)">${_wlcFormatTime(u.createdAt)}</div>
+            </div>
+            ${canDelete?`<button onclick="doDeleteProjectUpdate('${projectId}','${u._uuid}','${teamUuid}')" style="background:none;border:none;color:#dc2626;cursor:pointer;font-size:13px" title="Delete">🗑</button>`:''}
+          </div>
+          <div style="font-size:13px;color:var(--text);margin-top:6px;white-space:pre-wrap;word-wrap:break-word">${_wlcEscape(u.body)}</div>
+        </div>`;
+      }).join('')}
+    </div>`}`;
+}
+
+async function doPostProjectUpdate(projectId, teamUuid){
+  const ta = $('proj-update-text');
+  if(!ta) return;
+  const body = ta.value.trim();
+  if(!body){ ta.focus(); return; }
+  ta.disabled = true;
+  const r = await projectPostUpdate(projectId, body);
+  ta.disabled = false;
+  if(r){ ta.value=''; await renderProjectUpdatesTab($('proj-tab-content'), projectId, teamUuid); }
+}
+
+async function doDeleteProjectUpdate(projectId, updateId, teamUuid){
+  if(!confirm('Delete this update?')) return;
+  const ok = await projectDeleteUpdate(projectId, updateId);
+  if(!ok){ showToast('Delete failed','info'); return; }
+  await renderProjectUpdatesTab($('proj-tab-content'), projectId, teamUuid);
+}
+
+// Employee-facing read-only "My Projects" page
+function empMyProjects(){
+  const emp = currentEmployee;
+  if(!emp){ return '<div class="card">Please log in</div>'; }
+  // Schedule async hydration once (then re-render)
+  if(!window._empProjectsLoaded){
+    window._empProjectsLoaded = true;
+    (async ()=>{
+      try{
+        await projectsLoad();
+        await projectMembersLoad();
+        if(!window._wlAllCache){ try{ window._wlAllCache = await sbLoadWorkLogs(); }catch(e){} }
+      }catch(e){console.warn(e);}
+      if(empPage==='emp-projects') navEmp('emp-projects');
+    })();
+  }
+
+  const projects = window._projectsCache || [];
+  const members = window._projectMembersCache || [];
+  const myMemberships = members.filter(m => m.empUuid === emp._uuid);
+  const myProjects = myMemberships
+    .map(m => projects.find(p => p._uuid === m.projectId))
+    .filter(Boolean);
+
+  return `
+  <div class="page-hd">
+    <div><div class="pg-title">📁 My Projects</div><div class="pg-sub">${myProjects.length} project${myProjects.length!==1?'s':''} you're working on</div></div>
+    <button class="btn btn-sec" onclick="window._empProjectsLoaded=false;navEmp('emp-projects')">🔄 Refresh</button>
+  </div>
+  ${!window._projectsCache ? `
+  <div class="card" style="text-align:center;padding:2rem;color:var(--muted);font-size:13px">Loading your projects…</div>
+  ` : myProjects.length === 0 ? `
+  <div class="card" style="text-align:center;padding:2.5rem 1rem">
+    <div style="font-size:48px;margin-bottom:8px">📁</div>
+    <div style="font-weight:700;font-size:15px;margin-bottom:6px">You're not on any projects yet</div>
+    <div style="font-size:12px;color:var(--muted)">Your admin will assign you to projects from the Teams page.</div>
+  </div>` : `
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem">
+    ${myProjects.map(p => {
+      const projMembers = members.filter(mm => mm.projectId === p._uuid);
+      // Sync time-worked calc (no await)
+      const tag = _projectTag(p.name);
+      const allLogs = window._wlAllCache || [];
+      const memberSet = new Set(projMembers.map(mm=>mm.empUuid));
+      let hours = 0;
+      allLogs.forEach(l=>{
+        if(memberSet.has(l.empUuid) && (l.tags||[]).includes(tag)){ hours += parseFloat(l.totalHours)||0; }
+      });
+      const team = D.teams.find(t=>t._uuid===p.teamId);
+      const statusBadge = p.status === 'completed'
+        ? `<span style="background:#dcfce7;color:#166534;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">✓ Completed</span>`
+        : p.status === 'on-hold'
+        ? `<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">⏸ On hold</span>`
+        : `<span style="background:#dbeafe;color:#1e40af;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700">▶ Active</span>`;
+      return `<div class="card" style="cursor:pointer;border:2px solid #e9d5ff" onclick="openProjectDetailModal('${p._uuid}','${p.teamId}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;color:#7c3aed;font-weight:700;text-transform:uppercase;letter-spacing:.5px">${team?_wlcEscape(team.name):'—'}</div>
+            <div style="font-size:15px;font-weight:700;margin-top:2px">${_wlcEscape(p.name)}</div>
+          </div>
+          ${statusBadge}
+        </div>
+        ${p.description?`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">${_wlcEscape(p.description.substring(0,100))}${p.description.length>100?'…':''}</div>`:''}
+        <div style="display:flex;gap:14px;font-size:11px;color:var(--muted);margin-top:8px">
+          <span>👥 ${projMembers.length}</span>
+          <span>⏱ ${hours.toFixed(1)}h</span>
+          <span style="margin-left:auto;color:#7c3aed;font-weight:600">View →</span>
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`}
+  <div id="project-detail-modal-wrap"></div>`;
+}
+
+// ── END PROJECT UI ─────────────────────────────────────────
+
 
 function openTeamMembers(uuid){
   const t=D.teams.find(x=>x._uuid===uuid);
@@ -14084,7 +14709,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v29-2026-04-30-add-departments';
+const APP_VERSION = 'v30-2026-04-30-projects-module';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
