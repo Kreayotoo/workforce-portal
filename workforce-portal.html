@@ -8018,15 +8018,16 @@ function pgEmployees(){
   <div class="card" style="padding:0">
     <table><thead><tr>
       <th style="width:3%;padding-left:10px">#</th>
-      <th style="width:16%">Name</th>
-      <th style="width:11%">Dept</th>
-      <th style="width:12%">Role</th>
-      <th style="width:15%">Email</th>
+      <th style="width:9%">Emp ID</th>
+      <th style="width:14%">Name</th>
+      <th style="width:10%">Dept</th>
+      <th style="width:11%">Role</th>
+      <th style="width:14%">Email</th>
       <th style="width:9%">Phone</th>
       <th style="width:8%">DOB</th>
-      <th style="width:10%">Type</th>
-      <th style="width:8%">Status</th>
-      <th style="width:8%">Actions</th>
+      <th style="width:9%">Type</th>
+      <th style="width:7%">Status</th>
+      <th style="width:6%">Actions</th>
     </tr></thead>
     <tbody id="emp-tbody">${empRows(D.employees,0,EMP_PER_PAGE)}</tbody></table>
   </div>
@@ -8056,6 +8057,7 @@ function empRows(list, start, end){
   const typeBadge={field:'ba',remote:'bb',hybrid:'bp',office:'bg'};
   return list.slice(start,end).map((e,i)=>`<tr style="cursor:pointer" onclick="showEmployeeDetail('${e._uuid||e.id}')" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
     <td style="padding-left:10px;color:var(--muted);font-size:11px">${start+i+1}</td>
+    <td style="font-size:11px;font-weight:600;color:#0f766e">${e.id||'—'}</td>
     <td><div style="display:flex;align-items:center;gap:7px">${av(e.name,26)}<div><div style="font-size:12px;font-weight:600;color:var(--navy)">${e.name}</div>${e.selfRegistered?'<div style="font-size:10px;color:#0f766e;font-weight:600">Self-registered</div>':''}</div></div></td>
     <td style="font-size:12px">${e.dept||'—'}</td>
     <td style="font-size:12px">${e.role||'—'}</td>
@@ -14082,7 +14084,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v25-2026-04-30-remove-dashboard-salary';
+const APP_VERSION = 'v26-2026-04-30-emp-id-column';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
