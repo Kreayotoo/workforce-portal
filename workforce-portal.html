@@ -931,7 +931,7 @@ async function sb(table,method='GET',body=null,query=''){
 
 // ─── DATA LAYER ───────────────────────────────────────────────────
 const STORE_KEY = 'wf_portal_v3'; // bumped version clears old cache automatically
-const DEPTS = ['Engineering','Civil','HR','Sales','Finance','Operations','Marketing','Legal'];
+const DEPTS = ['Engineering','IT','AI','Civil','HR','Sales','Finance','Operations','Marketing','Legal'];
 
 function loadData(){ try{return JSON.parse(localStorage.getItem(STORE_KEY))||null;}catch(e){return null;} }
 function saveData(d){ localStorage.setItem(STORE_KEY,JSON.stringify(d)); }
@@ -14084,7 +14084,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v26-2026-04-30-emp-id-column';
+const APP_VERSION = 'v29-2026-04-30-add-departments';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
