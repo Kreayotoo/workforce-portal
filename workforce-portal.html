@@ -394,6 +394,354 @@ function loginAttemptReset(email){
 }
 // ───── END SECURITY HELPERS ─────
 
+// ───── WORK LOG COMMENTS MODULE ─────
+// Threaded comments on work logs. Anyone in the company can comment.
+// Employees with role='CEO' (case-insensitive) get extra privileges:
+//   - delete any comment, pin/unpin comments, "CEO" badge.
+// Non-CEO authors can edit/delete their OWN comments within 1 hour of posting.
+function _wlcIsCEO(emp){
+  if(!emp) return false;
+  return String(emp.role||'').trim().toLowerCase()==='ceo';
+}
+function _wlcCurrentActor(){
+  // Returns {email,name,role,isCEO} for whoever is currently logged in
+  if(typeof currentEmployee!=='undefined' && currentEmployee && currentEmployee.email){
+    return {email:currentEmployee.email, name:currentEmployee.name, role:currentEmployee.role||'', isCEO:_wlcIsCEO(currentEmployee)};
+  }
+  if(typeof currentCompany!=='undefined' && currentCompany && currentCompany.admin_email){
+    return {email:currentCompany.admin_email, name:currentCompany.admin_name||currentCompany.name||'Admin', role:'Admin', isCEO:true};
+  }
+  return null;
+}
+async function wlcLoad(workLogId){
+  if(!workLogId) return [];
+  try{
+    const rows = await sb('work_log_comments','GET',null,`?work_log_id=eq.${workLogId}&order=created_at.asc&select=*`);
+    return Array.isArray(rows) ? rows : [];
+  }catch(e){console.warn('[wlc] load failed:',e); return [];}
+}
+async function wlcCount(workLogId){
+  // Lightweight: just return number of non-deleted comments
+  const rows = await wlcLoad(workLogId);
+  return rows.filter(r=>!r.is_deleted).length;
+}
+async function wlcPost(workLogId, parentId, body, workLogOwnerEmail){
+  const actor = _wlcCurrentActor();
+  if(!actor){ showToast('Please sign in to comment','info'); return null; }
+  const text = (body||'').trim();
+  if(!text){ showToast('Comment is empty','info'); return null; }
+  if(text.length > 2000){ showToast('Comment too long (max 2000 chars)','info'); return null; }
+  const payload = {
+    work_log_id: workLogId,
+    parent_id: parentId || null,
+    author_email: actor.email.toLowerCase(),
+    author_name: actor.name,
+    author_role: actor.role || null,
+    body: text,
+    company_id: currentCompany ? currentCompany.company_id : 'KSPL'
+  };
+  try{
+    const r = await sb('work_log_comments','POST',payload);
+    const inserted = (r && r[0]) ? r[0] : null;
+
+    // Notification fan-out (best-effort, don't block on failure)
+    try{
+      // Notify work log owner if commenter isn't the owner
+      if(workLogOwnerEmail && workLogOwnerEmail.toLowerCase() !== actor.email.toLowerCase()){
+        await wlcNotify(workLogOwnerEmail, `${actor.name}${actor.isCEO?' (CEO)':''} commented on your work log`, text);
+      }
+      // If reply, notify parent comment author too (unless it's the same person)
+      if(parentId){
+        const parents = await sb('work_log_comments','GET',null,`?id=eq.${parentId}&select=author_email,author_name`);
+        const parentAuthor = parents && parents[0] ? parents[0].author_email : null;
+        if(parentAuthor &&
+           parentAuthor.toLowerCase() !== actor.email.toLowerCase() &&
+           parentAuthor.toLowerCase() !== (workLogOwnerEmail||'').toLowerCase()){
+          await wlcNotify(parentAuthor, `${actor.name}${actor.isCEO?' (CEO)':''} replied to your comment`, text);
+        }
+      }
+    }catch(e){console.warn('[wlc] notify failed:',e);}
+
+    return inserted;
+  }catch(e){
+    console.error('[wlc] post failed:',e);
+    showToast('Could not post comment. Please try again.','info');
+    return null;
+  }
+}
+async function wlcEdit(commentId, newBody){
+  const actor = _wlcCurrentActor();
+  if(!actor) return false;
+  const text = (newBody||'').trim();
+  if(!text){ showToast('Comment cannot be empty','info'); return false; }
+  if(text.length > 2000){ showToast('Comment too long','info'); return false; }
+  try{
+    // Ownership + 1h window enforced client-side; backend RLS still permissive for now
+    const rows = await sb('work_log_comments','GET',null,`?id=eq.${commentId}&select=*`);
+    const c = rows && rows[0];
+    if(!c){ showToast('Comment not found','info'); return false; }
+    const isOwner = c.author_email.toLowerCase() === actor.email.toLowerCase();
+    if(!isOwner){ showToast('You can only edit your own comments','info'); return false; }
+    const ageMin = (Date.now() - new Date(c.created_at).getTime())/60000;
+    if(ageMin > 60){ showToast('Edit window (1 hour) has passed','info'); return false; }
+    await sb('work_log_comments','PATCH',{body:text, updated_at:new Date().toISOString()},`?id=eq.${commentId}`);
+    return true;
+  }catch(e){console.error('[wlc] edit failed:',e); return false;}
+}
+async function wlcDelete(commentId){
+  const actor = _wlcCurrentActor();
+  if(!actor) return false;
+  try{
+    const rows = await sb('work_log_comments','GET',null,`?id=eq.${commentId}&select=*`);
+    const c = rows && rows[0];
+    if(!c){ return false; }
+    const isOwner = c.author_email.toLowerCase() === actor.email.toLowerCase();
+    const isCEO = actor.isCEO;
+    if(!isOwner && !isCEO){ showToast('You can only delete your own comments','info'); return false; }
+    if(isOwner && !isCEO){
+      const ageMin = (Date.now() - new Date(c.created_at).getTime())/60000;
+      if(ageMin > 60){ showToast('Delete window (1 hour) has passed','info'); return false; }
+    }
+    // Soft delete to preserve thread structure; mark body as removed
+    await sb('work_log_comments','PATCH',{is_deleted:true, body:'[deleted]', updated_at:new Date().toISOString()},`?id=eq.${commentId}`);
+    return true;
+  }catch(e){console.error('[wlc] delete failed:',e); return false;}
+}
+async function wlcTogglePin(commentId, currentPinned){
+  const actor = _wlcCurrentActor();
+  if(!actor || !actor.isCEO){ showToast('Only CEOs can pin comments','info'); return false; }
+  try{
+    await sb('work_log_comments','PATCH',{is_pinned:!currentPinned, updated_at:new Date().toISOString()},`?id=eq.${commentId}`);
+    return true;
+  }catch(e){console.error('[wlc] pin failed:',e); return false;}
+}
+async function wlcNotify(toEmail, title, body){
+  if(!toEmail) return;
+  try{
+    const msg = title + (body ? (' — ' + (body.length>100 ? body.substring(0,100)+'…' : body)) : '');
+    await sb('notifications','POST',{
+      recipient_email: toEmail.toLowerCase(),
+      message: msg,
+      type: 'work_log_comment',
+      is_read: false
+    });
+  }catch(e){console.warn('[wlc] notification insert failed:',e);}
+}
+
+// Build a tree from a flat comment list using parent_id
+function _wlcBuildTree(flat){
+  const byId = {};
+  flat.forEach(c => { c.children = []; byId[c.id] = c; });
+  const roots = [];
+  flat.forEach(c => {
+    if(c.parent_id && byId[c.parent_id]) byId[c.parent_id].children.push(c);
+    else roots.push(c);
+  });
+  // Pinned items first within each level, then chronological
+  const sortFn = (a,b) => {
+    if(a.is_pinned !== b.is_pinned) return a.is_pinned ? -1 : 1;
+    return new Date(a.created_at) - new Date(b.created_at);
+  };
+  roots.sort(sortFn);
+  const sortChildren = (node) => {
+    node.children.sort(sortFn);
+    node.children.forEach(sortChildren);
+  };
+  roots.forEach(sortChildren);
+  return roots;
+}
+
+function _wlcEscape(str){
+  return String(str||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+function _wlcFormatTime(iso){
+  if(!iso) return '';
+  const d = new Date(iso);
+  const now = new Date();
+  const diffMin = (now - d)/60000;
+  if(diffMin < 1) return 'just now';
+  if(diffMin < 60) return Math.floor(diffMin) + 'm ago';
+  if(diffMin < 1440) return Math.floor(diffMin/60) + 'h ago';
+  return d.toLocaleDateString('en-IN', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+}
+
+// Render a single comment node + its children
+function _wlcRenderNode(c, depth, actor, ownerEmail){
+  const isMyComment = actor && c.author_email.toLowerCase()===actor.email.toLowerCase();
+  const canEdit = isMyComment && !c.is_deleted && (Date.now() - new Date(c.created_at).getTime())/60000 < 60;
+  const canDelete = !c.is_deleted && (
+    (isMyComment && (Date.now() - new Date(c.created_at).getTime())/60000 < 60) ||
+    (actor && actor.isCEO)
+  );
+  const canPin = actor && actor.isCEO && depth===0 && !c.is_deleted;
+  const isCEOAuthor = String(c.author_role||'').trim().toLowerCase()==='ceo';
+  const indent = Math.min(depth, 5) * 24; // cap indentation
+  const bodyHtml = c.is_deleted
+    ? `<em style="color:var(--muted)">[deleted]</em>`
+    : _wlcEscape(c.body).replace(/\n/g,'<br>');
+  return `
+    <div class="wlc-node" data-cid="${c.id}" style="margin-left:${indent}px;padding:10px 12px;border-left:3px solid ${c.is_pinned?'#f59e0b':'#e5e7eb'};background:${c.is_pinned?'#fffbeb':(depth>0?'#f8fafc':'#fff')};border-radius:8px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px">
+            <strong style="color:var(--text)">${_wlcEscape(c.author_name)}</strong>
+            ${isCEOAuthor ? `<span style="background:#1A1A4E;color:#fff;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700;letter-spacing:.5px">CEO</span>` : ''}
+            ${c.is_pinned ? `<span style="background:#fef3c7;color:#92400e;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:700">📌 Pinned</span>` : ''}
+            <span style="color:var(--muted);font-size:11px">${_wlcFormatTime(c.created_at)}${c.updated_at?' · edited':''}</span>
+          </div>
+          <div class="wlc-body" style="margin-top:6px;font-size:13px;line-height:1.5;color:var(--text);word-wrap:break-word">${bodyHtml}</div>
+          <div class="wlc-actions" style="margin-top:6px;display:flex;gap:10px;flex-wrap:wrap">
+            ${!c.is_deleted ? `<button class="wlc-btn-link" onclick="wlcShowReply('${c.id}')" style="background:none;border:none;color:#0f766e;font-size:11px;font-weight:600;cursor:pointer;padding:0">↩ Reply</button>` : ''}
+            ${canEdit ? `<button class="wlc-btn-link" onclick="wlcShowEdit('${c.id}')" style="background:none;border:none;color:#3b82f6;font-size:11px;font-weight:600;cursor:pointer;padding:0">✎ Edit</button>` : ''}
+            ${canDelete ? `<button class="wlc-btn-link" onclick="wlcConfirmDelete('${c.id}')" style="background:none;border:none;color:#dc2626;font-size:11px;font-weight:600;cursor:pointer;padding:0">🗑 Delete</button>` : ''}
+            ${canPin ? `<button class="wlc-btn-link" onclick="wlcDoTogglePin('${c.id}', ${c.is_pinned?'true':'false'})" style="background:none;border:none;color:#92400e;font-size:11px;font-weight:600;cursor:pointer;padding:0">${c.is_pinned?'Unpin':'📌 Pin'}</button>` : ''}
+          </div>
+          <div id="wlc-reply-${c.id}" style="margin-top:8px;display:none">
+            <textarea id="wlc-replytxt-${c.id}" rows="2" placeholder="Write a reply…" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;font-family:inherit;resize:vertical"></textarea>
+            <div style="display:flex;gap:6px;margin-top:6px">
+              <button class="btn btn-primary" style="font-size:11px;padding:5px 12px;background:#0f766e" onclick="wlcSubmitReply('${c.id}','${ownerEmail||''}')">Reply</button>
+              <button class="btn btn-sec" style="font-size:11px;padding:5px 12px" onclick="wlcHideReply('${c.id}')">Cancel</button>
+            </div>
+          </div>
+          <div id="wlc-edit-${c.id}" style="margin-top:8px;display:none">
+            <textarea id="wlc-edittxt-${c.id}" rows="2" style="width:100%;padding:8px;border:1px solid #e5e7eb;border-radius:6px;font-size:12px;font-family:inherit;resize:vertical">${_wlcEscape(c.body)}</textarea>
+            <div style="display:flex;gap:6px;margin-top:6px">
+              <button class="btn btn-primary" style="font-size:11px;padding:5px 12px;background:#3b82f6" onclick="wlcSubmitEdit('${c.id}')">Save</button>
+              <button class="btn btn-sec" style="font-size:11px;padding:5px 12px" onclick="wlcHideEdit('${c.id}')">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      ${(c.children||[]).map(child => _wlcRenderNode(child, depth+1, actor, ownerEmail)).join('')}
+    </div>
+  `;
+}
+
+// Open the comments modal for a given work log
+async function openWorkLogComments(workLogId, workLogOwnerEmail, workLogDate){
+  if(!workLogId){ showToast('Save the work log first before commenting','info'); return; }
+  // Build modal shell
+  let overlay = document.getElementById('wlc-overlay');
+  if(overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = 'wlc-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9998;overflow-y:auto;padding:1rem 1rem 2rem';
+  overlay.onclick = (e)=>{ if(e.target===overlay) overlay.remove(); };
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:14px;width:100%;max-width:560px;margin:1rem auto;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)" onclick="event.stopPropagation()">
+      <div style="background:linear-gradient(135deg,#0f766e,#10b981);padding:14px 18px;color:#fff;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-weight:700;font-size:15px">💬 Comments</div>
+          <div style="font-size:11px;opacity:.85">Work log · ${workLogDate||''}</div>
+        </div>
+        <button onclick="document.getElementById('wlc-overlay').remove()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:18px">×</button>
+      </div>
+      <div id="wlc-list" style="padding:14px;max-height:50vh;overflow-y:auto;background:#fafafa">
+        <div style="text-align:center;color:var(--muted);font-size:13px;padding:1rem">Loading…</div>
+      </div>
+      <div style="padding:12px 14px;border-top:1px solid #e5e7eb;background:#fff">
+        <textarea id="wlc-newtxt" rows="2" placeholder="Write a comment…" style="width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
+        <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px">
+          <button class="btn btn-primary" style="background:#0f766e;font-size:13px;padding:8px 18px" onclick="wlcSubmitNew('${workLogId}','${workLogOwnerEmail||''}')">💬 Post comment</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  await wlcRefreshList(workLogId, workLogOwnerEmail);
+}
+
+async function wlcRefreshList(workLogId, ownerEmail){
+  const list = document.getElementById('wlc-list');
+  if(!list) return;
+  list.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:1rem">Loading…</div>`;
+  const flat = await wlcLoad(workLogId);
+  if(flat.length === 0){
+    list.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:2rem">No comments yet. Be the first to comment.</div>`;
+    return;
+  }
+  const tree = _wlcBuildTree(flat);
+  const actor = _wlcCurrentActor();
+  list.innerHTML = tree.map(c => _wlcRenderNode(c, 0, actor, ownerEmail)).join('');
+  list.dataset.workLogId = workLogId;
+  list.dataset.ownerEmail = ownerEmail || '';
+}
+
+async function wlcSubmitNew(workLogId, ownerEmail){
+  const ta = document.getElementById('wlc-newtxt');
+  if(!ta) return;
+  const body = ta.value.trim();
+  if(!body){ ta.focus(); return; }
+  ta.disabled = true;
+  const r = await wlcPost(workLogId, null, body, ownerEmail);
+  ta.disabled = false;
+  if(r){
+    ta.value = '';
+    await wlcRefreshList(workLogId, ownerEmail);
+  }
+}
+
+function wlcShowReply(commentId){
+  const el = document.getElementById('wlc-reply-'+commentId);
+  if(el){ el.style.display='block'; const txt=document.getElementById('wlc-replytxt-'+commentId); if(txt) txt.focus(); }
+}
+function wlcHideReply(commentId){
+  const el = document.getElementById('wlc-reply-'+commentId);
+  if(el) el.style.display='none';
+}
+async function wlcSubmitReply(parentId, ownerEmail){
+  const ta = document.getElementById('wlc-replytxt-'+parentId);
+  if(!ta) return;
+  const body = ta.value.trim();
+  if(!body){ ta.focus(); return; }
+  const list = document.getElementById('wlc-list');
+  const workLogId = list ? list.dataset.workLogId : null;
+  if(!workLogId) return;
+  ta.disabled = true;
+  const r = await wlcPost(workLogId, parentId, body, ownerEmail || (list?list.dataset.ownerEmail:''));
+  ta.disabled = false;
+  if(r){ ta.value=''; await wlcRefreshList(workLogId, ownerEmail || (list?list.dataset.ownerEmail:'')); }
+}
+
+function wlcShowEdit(commentId){
+  const el = document.getElementById('wlc-edit-'+commentId);
+  if(el){ el.style.display='block'; const txt=document.getElementById('wlc-edittxt-'+commentId); if(txt) txt.focus(); }
+}
+function wlcHideEdit(commentId){
+  const el = document.getElementById('wlc-edit-'+commentId);
+  if(el) el.style.display='none';
+}
+async function wlcSubmitEdit(commentId){
+  const ta = document.getElementById('wlc-edittxt-'+commentId);
+  if(!ta) return;
+  const body = ta.value.trim();
+  if(!body){ ta.focus(); return; }
+  const list = document.getElementById('wlc-list');
+  const workLogId = list ? list.dataset.workLogId : null;
+  ta.disabled = true;
+  const ok = await wlcEdit(commentId, body);
+  ta.disabled = false;
+  if(ok && workLogId){ await wlcRefreshList(workLogId, list?list.dataset.ownerEmail:''); }
+}
+
+async function wlcConfirmDelete(commentId){
+  if(!confirm('Delete this comment? It cannot be undone.')) return;
+  const list = document.getElementById('wlc-list');
+  const workLogId = list ? list.dataset.workLogId : null;
+  const ok = await wlcDelete(commentId);
+  if(ok && workLogId){ await wlcRefreshList(workLogId, list?list.dataset.ownerEmail:''); }
+}
+
+async function wlcDoTogglePin(commentId, currentPinned){
+  const list = document.getElementById('wlc-list');
+  const workLogId = list ? list.dataset.workLogId : null;
+  const ok = await wlcTogglePin(commentId, currentPinned);
+  if(ok && workLogId){ await wlcRefreshList(workLogId, list?list.dataset.ownerEmail:''); }
+}
+// ───── END WORK LOG COMMENTS MODULE ─────
+
+
 
 // Time-of-day greeting
 function greetingForTime(){
@@ -12373,7 +12721,10 @@ function empWorkLog(){
         <td><span style="background:#eff6ff;color:#1e40af;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${l.mode==='hourly'?'⏱':l.mode==='session'?'📍':'📋'} ${l.mode}</span></td>
         <td style="font-size:12px">${(l.entries||[]).length} ${(l.entries||[]).length===1?'entry':'entries'}</td>
         <td style="white-space:normal;font-size:12px;color:var(--muted)">${(l.summary||(l.entries||[]).map(e=>e.work||e.text||'').join(' · ')).substring(0,80)}${(l.summary||'').length>80?'…':''}</td>
-        <td><button class="btn-link" style="font-size:12px" onclick="window._wlSelectedDate='${l.date}';navEmp('emp-worklog')">View / Edit</button></td>
+        <td>
+          <button class="btn-link" style="font-size:12px" onclick="window._wlSelectedDate='${l.date}';navEmp('emp-worklog')">View / Edit</button>
+          ${l._uuid?`<button class="btn-link" style="font-size:12px;color:#0f766e;margin-left:8px" onclick="openWorkLogComments('${l._uuid}','${(l.empEmail||emp.email||'').replace(/'/g,'&#39;')}','${l.date}')">💬 Comments</button>`:''}
+        </td>
       </tr>`).join('')}</tbody></table>`}
   </div>`;
 }
@@ -12821,7 +13172,10 @@ function pgWorkLogs(){
         <td><strong style="color:#0f766e">${(parseFloat(l.totalHours)||0).toFixed(1)}h</strong></td>
         <td style="white-space:normal;font-size:12px;color:var(--muted)">${(preview||'—').substring(0,100)}${preview&&preview.length>100?'…':''}</td>
         <td style="white-space:normal">${tagChips||'<span style="color:var(--muted);font-size:11px">—</span>'}</td>
-        <td><button class="btn-link" onclick="event.stopPropagation();viewWorkLogDetail('${l._uuid}')" style="font-size:12px">View →</button></td>
+        <td>
+          <button class="btn-link" onclick="event.stopPropagation();viewWorkLogDetail('${l._uuid}')" style="font-size:12px">View →</button>
+          <button class="btn-link" onclick="event.stopPropagation();openWorkLogComments('${l._uuid}','${(l.empEmail||'').replace(/'/g,'&#39;')}','${l.date}')" style="font-size:12px;color:#0f766e;margin-left:6px">💬</button>
+        </td>
       </tr>`;
     }).join('')}</tbody></table>`}
   </div>
@@ -13422,7 +13776,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v14-2026-04-30-emailjs-keys-rotated';
+const APP_VERSION = 'v15-2026-04-30-worklog-comments';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
