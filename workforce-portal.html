@@ -304,6 +304,97 @@ const initials = name => (name||'').split(' ').map(w=>w[0]).join('').slice(0,2).
 const todayStr = () => new Date().toISOString().split('T')[0];
 const dateLabel = () => new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 
+// ───── SECURITY HELPERS ─────
+// SHA-256 hash function using browser crypto. Returns hex string prefixed with 's2:'
+// (so we can tell hashed values apart from plain text and migrate over time).
+async function hashPassword(plain){
+  if(!plain) return '';
+  // If already hashed (starts with 's2:'), return as-is — idempotent
+  if(typeof plain==='string' && plain.startsWith('s2:')) return plain;
+  try{
+    const enc = new TextEncoder().encode(plain);
+    const buf = await crypto.subtle.digest('SHA-256', enc);
+    const hex = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    return 's2:'+hex;
+  }catch(e){
+    console.warn('[security] hash failed, storing plain:', e);
+    return plain;
+  }
+}
+
+// Verify a password against a stored value.
+// Backward-compatible: if stored value is hashed (s2:), compare hashes;
+// if stored value is plain text (legacy), do plain comparison.
+async function verifyPassword(plainEntered, stored){
+  if(!stored) return false;
+  if(typeof stored==='string' && stored.startsWith('s2:')){
+    const h = await hashPassword(plainEntered);
+    return h === stored;
+  }
+  // Legacy plain-text comparison
+  return plainEntered === stored;
+}
+
+// Reject weak/common passwords at signup or password change.
+// Returns null if OK, or an error string if weak.
+const COMMON_WEAK_PWS = new Set([
+  'password','password1','passw0rd','123456','1234567','12345678','123456789','1234567890',
+  'qwerty','qwerty123','abc123','admin','admin123','letmein','welcome','welcome1',
+  'iloveyou','monkey','dragon','master','login','passw','p@ssw0rd','p@ssword',
+  'emp@123','employee','emp123','kreayotoo','kreayotoo123','company','company123',
+  '111111','000000','aaaaaa','asdfgh','zxcvbn','qazwsx'
+]);
+function checkPasswordStrength(pw){
+  if(!pw || typeof pw!=='string') return 'Password cannot be empty';
+  if(pw.length < 6) return 'Password must be at least 6 characters';
+  const lower = pw.toLowerCase();
+  if(COMMON_WEAK_PWS.has(lower)) return 'This password is too common — please pick a stronger one';
+  // Reject all-same-character passwords like "aaaaaa", "111111"
+  if(/^(.)\1+$/.test(pw)) return 'Password is too weak (all same character)';
+  // Reject simple sequences
+  if(/^(0123|1234|2345|3456|4567|5678|6789|abcd|abcde|qwer|qwert)/i.test(pw)) return 'Password is too predictable';
+  return null;
+}
+
+// Rate-limit failed login attempts per email (client-side; helps but not bulletproof).
+// After 5 failed attempts in 5 minutes, block that email for 10 minutes.
+function _loginAttemptKey(email){return 'login_attempts:'+(email||'').toLowerCase().trim();}
+function loginAttemptCheck(email){
+  try{
+    const raw = localStorage.getItem(_loginAttemptKey(email));
+    if(!raw) return {blocked:false, attemptsLeft:5};
+    const data = JSON.parse(raw);
+    const now = Date.now();
+    // Clear stale attempts older than 5 minutes
+    data.attempts = (data.attempts||[]).filter(t => now - t < 5*60*1000);
+    // If currently blocked
+    if(data.blockedUntil && data.blockedUntil > now){
+      const minsLeft = Math.ceil((data.blockedUntil - now)/60000);
+      return {blocked:true, message:`Too many failed attempts. Please try again in ${minsLeft} minute(s) or use Forgot Password.`};
+    }
+    return {blocked:false, attemptsLeft: Math.max(0, 5 - data.attempts.length)};
+  }catch(e){return {blocked:false, attemptsLeft:5};}
+}
+function loginAttemptFail(email){
+  try{
+    const key = _loginAttemptKey(email);
+    const raw = localStorage.getItem(key);
+    const now = Date.now();
+    let data = raw ? JSON.parse(raw) : {attempts:[]};
+    data.attempts = (data.attempts||[]).filter(t => now - t < 5*60*1000);
+    data.attempts.push(now);
+    if(data.attempts.length >= 5){
+      data.blockedUntil = now + 10*60*1000; // 10 minute block
+    }
+    localStorage.setItem(key, JSON.stringify(data));
+  }catch(_){}
+}
+function loginAttemptReset(email){
+  try{ localStorage.removeItem(_loginAttemptKey(email)); }catch(_){}
+}
+// ───── END SECURITY HELPERS ─────
+
+
 // Time-of-day greeting
 function greetingForTime(){
   const h = new Date().getHours();
@@ -1907,8 +1998,9 @@ async function verifyOTPAndReset(){
     if(err) err.innerHTML = `<div class="alert alert-e">Enter the 6-digit code from your email</div>`;
     return;
   }
-  if(!newPass || newPass.length < 6){
-    if(err) err.innerHTML = `<div class="alert alert-e">New password must be at least 6 characters</div>`;
+  const _strErr = checkPasswordStrength(newPass);
+  if(_strErr){
+    if(err) err.innerHTML = `<div class="alert alert-e">${_strErr}</div>`;
     return;
   }
   if(newPass !== newPass2){
@@ -1928,18 +2020,19 @@ async function verifyOTPAndReset(){
   // Update password in DB based on role
   try{
     const { user, role } = _forgotUserInfo;
+    const hashedNewPass = await hashPassword(newPass);
     if(role === 'employee'){
       const res = await fetch(`${SB_URL}/rest/v1/employees?id=eq.${user.id}`, {
         method: 'PATCH',
         headers: {...SB_HDR, 'Prefer': 'return=representation'},
-        body: JSON.stringify({ password_hash: newPass })
+        body: JSON.stringify({ password_hash: hashedNewPass })
       });
       if(!res.ok){ throw new Error(`DB error ${res.status}`); }
     } else if(role === 'admin'){
       const res = await fetch(`${SB_URL}/rest/v1/companies?company_id=eq.${encodeURIComponent(user.company_id)}`, {
         method: 'PATCH',
         headers: {...SB_HDR, 'Prefer': 'return=representation'},
-        body: JSON.stringify({ admin_password: newPass })
+        body: JSON.stringify({ admin_password: hashedNewPass })
       });
       if(!res.ok){ throw new Error(`DB error ${res.status}`); }
     }
@@ -2102,10 +2195,19 @@ async function doSmartLogin(){
     const companies = await sb('companies','GET',null,`?admin_email=eq.${encodeURIComponent(em)}&select=*`);
     if(companies && companies.length){
       const company = companies[0];
-      if(company.admin_password !== pw){
+      // Rate-limit check
+      const adminRate = loginAttemptCheck(em);
+      if(adminRate.blocked){
+        if(err) err.innerHTML = `<div class="alert alert-e">${adminRate.message}</div>`;
+        return;
+      }
+      const adminOk = await verifyPassword(pw, company.admin_password);
+      if(!adminOk){
+        loginAttemptFail(em);
         if(err) err.innerHTML = `<div class="alert alert-e">Wrong password</div>`;
         return;
       }
+      loginAttemptReset(em);
       if(company.status && company.status !== 'Active'){
         if(err) err.innerHTML = `<div class="alert alert-e">This company account is inactive.</div>`;
         return;
@@ -2194,8 +2296,9 @@ async function doCompanySignup(){
     if(err) err.innerHTML = `<div class="alert alert-e">Please fill all required fields</div>`;
     return;
   }
-  if(pw.length < 6){
-    if(err) err.innerHTML = `<div class="alert alert-e">Password must be 6+ characters</div>`;
+  const _pwStrErr3 = checkPasswordStrength(pw);
+  if(_pwStrErr3){
+    if(err) err.innerHTML = `<div class="alert alert-e">${_pwStrErr3}</div>`;
     return;
   }
   if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">⚙️ Creating company account…</div>`;
@@ -2224,7 +2327,7 @@ async function doCompanySignup(){
     admin_name: adminName,
     admin_email: email,
     admin_phone: phone || null,
-    admin_password: pw,
+    admin_password: await hashPassword(pw),
     status: 'Active',
     created_at: new Date().toISOString()
   };
@@ -2274,7 +2377,8 @@ async function empSignupSendOTP(){
   if(!code){ if(err) err.innerHTML = `<div class="alert alert-e">Please select your company</div>`; return; }
   if(!name || !empIdInput || !email || !pw){ if(err) err.innerHTML = `<div class="alert alert-e">Please fill all required fields (including Employee ID)</div>`; return; }
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ if(err) err.innerHTML = `<div class="alert alert-e">Enter a valid email address</div>`; return; }
-  if(pw.length < 6){ if(err) err.innerHTML = `<div class="alert alert-e">Password must be 6+ characters</div>`; return; }
+  const _pwStrErr1 = checkPasswordStrength(pw);
+  if(_pwStrErr1){ if(err) err.innerHTML = `<div class="alert alert-e">${_pwStrErr1}</div>`; return; }
 
   if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">🔎 Verifying details…</div>`;
 
@@ -2371,8 +2475,9 @@ async function doEmployeeSignup(prefilledData){
     if(err) err.innerHTML = `<div class="alert alert-e">Please fill all required fields (including Employee ID)</div>`;
     return;
   }
-  if(pw.length < 6){
-    if(err) err.innerHTML = `<div class="alert alert-e">Password must be 6+ characters</div>`;
+  const _pwStrErr2 = checkPasswordStrength(pw);
+  if(_pwStrErr2){
+    if(err) err.innerHTML = `<div class="alert alert-e">${_pwStrErr2}</div>`;
     return;
   }
   if(!fromOTP && err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">🔎 Verifying company…</div>`;
@@ -2401,7 +2506,7 @@ async function doEmployeeSignup(prefilledData){
           name,
           phone: phone || null,
           status: 'Active',
-          password_hash: pw,
+          password_hash: await hashPassword(pw),
           self_registered: true,
           date_of_joining: new Date().toISOString().slice(0,10)
         };
@@ -2465,7 +2570,7 @@ async function doEmployeeSignup(prefilledData){
       salary: 0,
       date_of_joining: new Date().toISOString().slice(0,10),
       self_registered: true,
-      password_hash: pw,
+      password_hash: await hashPassword(pw),
       emp_type: 'office',
       company_id: code
     };
@@ -2534,11 +2639,15 @@ async function doCompanyLogin(){
   const pw=($('co-pass')||{}).value;
   const err=$('company-login-err');
   if(!em||!pw){if(err)err.innerHTML=`<div class="alert alert-e">Enter email and password</div>`;return;}
+  const _coRate = loginAttemptCheck(em);
+  if(_coRate.blocked){if(err)err.innerHTML=`<div class="alert alert-e">${_coRate.message}</div>`;return;}
   if(err)err.innerHTML=`<div class="alert alert-e" style="color:#1e40af;background:#eff6ff;border-color:#bfdbfe">Checking credentials…</div>`;
   const companies=await sb('companies','GET',null,`?admin_email=eq.${encodeURIComponent(em)}&select=*`);
   if(!companies||!companies.length){if(err)err.innerHTML=`<div class="alert alert-e">No company found with this email</div>`;return;}
   const company=companies[0];
-  if(company.admin_password!==pw){if(err)err.innerHTML=`<div class="alert alert-e">Wrong password</div>`;return;}
+  const _coOk = await verifyPassword(pw, company.admin_password);
+  if(!_coOk){loginAttemptFail(em);if(err)err.innerHTML=`<div class="alert alert-e">Wrong password</div>`;return;}
+  loginAttemptReset(em);
   if(company.status!=='Active'){if(err)err.innerHTML=`<div class="alert alert-e">This company account is inactive. Contact Kreayotoo.</div>`;return;}
   currentCompany=company;
   currentRole='admin';
@@ -2654,7 +2763,7 @@ function startEmpFaceLogin(email, faceData){
           sb('employees','GET',null,`?email=eq.${encodeURIComponent(email)}&limit=1`).then(rows=>{
             if(rows&&rows.length){
               const row=rows[0];
-              const empObj={id:row.emp_id||row.id,_uuid:row.id,name:row.name,email:row.email,phone:row.phone||'',dob:row.dob||'',dept:row.department||'',role:row.role||'',status:row.status||'Active',salary:row.salary||0,joined:row.date_of_joining||'',passwordHash:row.password_hash||'emp@123'};
+              const empObj={id:row.emp_id||row.id,_uuid:row.id,name:row.name,email:row.email,phone:row.phone||'',dob:row.dob||'',dept:row.department||'',role:row.role||'',status:row.status||'Active',salary:row.salary||0,joined:row.date_of_joining||'',passwordHash:row.password_hash||''};
               loginAsEmployee(empObj);
             }
           });
@@ -2676,39 +2785,43 @@ async function doEmpLogin(){
   let empObj=null;
   let passwordCorrect=false;
 
+  // Rate-limit check BEFORE password comparison — block brute force on this device
+  const rateCheck = loginAttemptCheck(em);
+  if(rateCheck.blocked){
+    if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">${rateCheck.message}</div>`;
+    return;
+  }
+
   if(!rows||!rows.length){
     const local=D.employees.find(e=>e.email.toLowerCase()===em.toLowerCase());
     if(!local){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">No employee found. <span style="cursor:pointer;text-decoration:underline" onclick="showRegister()">Register here</span></div>`;return;}
-    passwordCorrect = pw===(local.passwordHash||'emp@123');
+    passwordCorrect = await verifyPassword(pw, local.passwordHash);
     empObj=local;
   } else {
     const row=rows[0];
-    passwordCorrect = pw===(row.password_hash||'emp@123');
-    empObj={id:row.emp_id||row.id,_uuid:row.id,name:row.name,email:row.email,phone:row.phone||'',dob:row.dob||'',dept:row.department||'',role:row.role||'',status:row.status||'Active',salary:row.salary||0,joined:row.date_of_joining||'',selfRegistered:row.self_registered||false,passwordHash:row.password_hash||'emp@123'};
+    passwordCorrect = await verifyPassword(pw, row.password_hash);
+    empObj={id:row.emp_id||row.id,_uuid:row.id,name:row.name,email:row.email,phone:row.phone||'',dob:row.dob||'',dept:row.department||'',role:row.role||'',status:row.status||'Active',salary:row.salary||0,joined:row.date_of_joining||'',selfRegistered:row.self_registered||false,passwordHash:row.password_hash||''};
     const idx=D.employees.findIndex(e=>e.email.toLowerCase()===em.toLowerCase());
     if(idx>=0)D.employees[idx]=empObj; else D.employees.push(empObj);
     save();
   }
 
   if(passwordCorrect){
-    // ✅ Password correct — login directly, no OTP needed
+    // ✅ Password correct — login directly
+    loginAttemptReset(em);
     if($('emp-login-err'))$('emp-login-err').innerHTML='';
     loginAsEmployee(empObj);
   } else {
-    // ❌ Wrong password — send OTP as fallback
-    if(!empObj.email){if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Wrong password</div>`;return;}
-    if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e" style="color:#92400e;background:#fffbeb;border-color:#fde68a">⚠️ Wrong password. Sending OTP to your email as alternative…</div>`;
-    _empLoginData=empObj;
-    const result=await sendOTP(empObj.email, empObj.name);
-    if(!result.success){
-      if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">Wrong password. OTP also failed to send. Please check your credentials.</div>`;
+    // ❌ Wrong password — record failed attempt for rate limiting
+    loginAttemptFail(em);
+    const remaining = loginAttemptCheck(em);
+    if(remaining.blocked){
+      if($('emp-login-err'))$('emp-login-err').innerHTML=`<div class="alert alert-e">${remaining.message}</div>`;
       return;
     }
-    if($('emp-login-form'))$('emp-login-form').classList.add('hidden');
-    if($('emp-otp-form'))$('emp-otp-form').classList.remove('hidden');
-    if($('emp-otp-email-show'))$('emp-otp-email-show').textContent=empObj.email;
-    if($('emp-login-err'))$('emp-login-err').innerHTML='';
-    startOTPTimer('emp-otp-timer');
+    // Show clear error with Forgot Password link — do NOT auto-send OTP
+    const attemptsUsed = 5 - (remaining.attemptsLeft||0);
+    if($('emp-login-err'))$('emp-login-err').innerHTML = `<div class="alert alert-e">❌ Wrong password (attempt ${attemptsUsed}/5). <a href="#" onclick="event.preventDefault();showForgotPassword()" style="color:#1e40af;font-weight:700;text-decoration:underline">Forgot password?</a></div>`;
   }
 }
 
@@ -2852,15 +2965,18 @@ async function fpResetPassword(){
   const pw=($('fp-new-pw')||{}).value;
   const pw2=($('fp-confirm-pw')||{}).value;
   const err=$('fp-err-3');
-  if(!pw||pw.length<6){if(err)err.innerHTML=`<div class="alert alert-e">Password must be at least 6 characters</div>`;return;}
+  const strengthErr = checkPasswordStrength(pw);
+  if(strengthErr){if(err)err.innerHTML=`<div class="alert alert-e">${strengthErr}</div>`;return;}
   if(pw!==pw2){if(err)err.innerHTML=`<div class="alert alert-e">Passwords do not match</div>`;return;}
   showSyncBanner('Updating password…');
-  const r=await sb('employees','PATCH',{password_hash:pw},`?email=eq.${encodeURIComponent(_fpEmail)}`);
+  const hashedPw = await hashPassword(pw);
+  const r=await sb('employees','PATCH',{password_hash:hashedPw},`?email=eq.${encodeURIComponent(_fpEmail)}`);
   hideSyncBanner();
   if(!r){if(err)err.innerHTML=`<div class="alert alert-e">Failed to update. Try again.</div>`;return;}
   const local=D.employees.find(e=>e.email.toLowerCase()===_fpEmail);
-  if(local) local.passwordHash=pw;
+  if(local) local.passwordHash=hashedPw;
   save();
+  loginAttemptReset(_fpEmail);
   clearOTP(_fpEmail);
   _fpEmail='';
   alert('✅ Password reset successfully! Login with your new password.');
@@ -3414,8 +3530,9 @@ async function doChangePassword(){
     if(msg) msg.innerHTML = '<div class="alert alert-e">All fields are required.</div>';
     return;
   }
-  if(newPw.length < 6){
-    if(msg) msg.innerHTML = '<div class="alert alert-e">New password must be at least 6 characters.</div>';
+  const _strChkErr = checkPasswordStrength(newPw);
+  if(_strChkErr){
+    if(msg) msg.innerHTML = `<div class="alert alert-e">${_strChkErr}</div>`;
     return;
   }
   if(newPw !== conf){
@@ -3430,50 +3547,52 @@ async function doChangePassword(){
   if(msg) msg.innerHTML = '<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">🔄 Verifying…</div>';
 
   try{
+    const newPwHashed = await hashPassword(newPw);
     // Employee path
     if(currentRole === 'employee' && currentEmployee){
-      if((currentEmployee.passwordHash||'') !== oldPw){
+      const oldOK = await verifyPassword(oldPw, currentEmployee.passwordHash||'');
+      if(!oldOK){
         if(msg) msg.innerHTML = '<div class="alert alert-e">❌ Current password is incorrect.</div>';
         return;
       }
       const res = await fetch(`${SB_URL}/rest/v1/employees?id=eq.${currentEmployee._uuid}`,{
         method:'PATCH',
         headers:{...SB_HDR,'Prefer':'return=representation'},
-        body: JSON.stringify({ password_hash: newPw })
+        body: JSON.stringify({ password_hash: newPwHashed })
       });
       if(!res.ok) throw new Error(`DB error ${res.status}`);
-      currentEmployee.passwordHash = newPw;
+      currentEmployee.passwordHash = newPwHashed;
       const empRec = D.employees.find(e=>e._uuid===currentEmployee._uuid);
-      if(empRec) empRec.passwordHash = newPw;
+      if(empRec) empRec.passwordHash = newPwHashed;
       save();
       await logAudit('password_change','employee',currentEmployee._uuid,currentEmployee.name,{self:true});
     }
     // Company admin path
     else if(currentRole === 'admin' && currentCompany){
-      if(currentCompany.admin_password !== oldPw){
+      const oldOK = await verifyPassword(oldPw, currentCompany.admin_password||'');
+      if(!oldOK){
         if(msg) msg.innerHTML = '<div class="alert alert-e">❌ Current password is incorrect.</div>';
         return;
       }
       const res = await fetch(`${SB_URL}/rest/v1/companies?company_id=eq.${encodeURIComponent(currentCompany.company_id)}`,{
         method:'PATCH',
         headers:{...SB_HDR,'Prefer':'return=representation'},
-        body: JSON.stringify({ admin_password: newPw })
+        body: JSON.stringify({ admin_password: newPwHashed })
       });
       if(!res.ok) throw new Error(`DB error ${res.status}`);
-      currentCompany.admin_password = newPw;
+      currentCompany.admin_password = newPwHashed;
       await logAudit('password_change','company',currentCompany.company_id,currentCompany.name,{self:true});
     }
     // Super admin path
     else if(currentRole === 'admin' && !currentCompany){
-      if(D.superAdminPassword && D.superAdminPassword !== oldPw){
+      const sapOK = D.superAdminPassword
+        ? await verifyPassword(oldPw, D.superAdminPassword)
+        : (oldPw === 'Kreayotoo@123');
+      if(!sapOK){
         if(msg) msg.innerHTML = '<div class="alert alert-e">❌ Current password is incorrect.</div>';
         return;
       }
-      if(!D.superAdminPassword && oldPw !== 'Kreayotoo@123'){
-        if(msg) msg.innerHTML = '<div class="alert alert-e">❌ Current password is incorrect.</div>';
-        return;
-      }
-      D.superAdminPassword = newPw;
+      D.superAdminPassword = newPwHashed;
       save();
       await logAudit('password_change','super_admin','claudekreayotoo@gmail.com','Super Admin',{self:true});
     }
@@ -13303,7 +13422,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v11-2026-04-29-android-banner';
+const APP_VERSION = 'v13-2026-04-30-no-otp-bypass';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
