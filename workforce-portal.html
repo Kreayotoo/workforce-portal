@@ -12592,15 +12592,26 @@ async function sbSaveWorkLog(log){
     total_hours:log.totalHours,
     company_id:currentCompany?currentCompany.company_id:'KSPL'
   };
+
+  // A team summary and a personal daily log are separate records, even on the same date
+  // by the same person. We distinguish them by the 'team-summary' tag.
+  const isTeamSummary = (log.tags||[]).includes('team-summary');
+
   try{
     if(log._uuid){
       const r=await sb('work_logs','PATCH',{...payload,updated_at:new Date().toISOString()},`?id=eq.${log._uuid}`);
       if(r!==null) return r;
     }
-    const q=`?emp_uuid=eq.${log.empUuid}&log_date=eq.${log.date}&select=id`;
-    const existing=await sb('work_logs','GET',null,q);
-    if(existing&&existing[0]){
-      log._uuid=existing[0].id;
+    // Look up an existing record of the SAME kind (team-summary OR personal) before deciding insert vs update.
+    // We have to fetch all matching rows for this employee+date and filter by tag presence.
+    const lookupQ=`?emp_uuid=eq.${log.empUuid}&log_date=eq.${log.date}&select=id,tags`;
+    const candidates = await sb('work_logs','GET',null,lookupQ) || [];
+    const match = candidates.find(c => {
+      const ts = (c.tags||[]).includes('team-summary');
+      return ts === isTeamSummary;
+    });
+    if(match){
+      log._uuid = match.id;
       const r=await sb('work_logs','PATCH',{...payload,updated_at:new Date().toISOString()},`?id=eq.${log._uuid}`);
       return r;
     }
@@ -12958,6 +12969,11 @@ function openTeamSummaryModal(){
     showToast('You are not a team lead','info');
     return;
   }
+
+  // Clear any leftover error message on the daily-log form behind the modal
+  // so it doesn't look like an active error while the modal is open.
+  const dailyMsg=$('wl-msg');
+  if(dailyMsg) dailyMsg.innerHTML='';
 
   // If the TL leads multiple teams, let them pick which; otherwise auto-select
   const today=todayStr();
@@ -13813,7 +13829,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v16-2026-04-30-clickable-comment-notifs';
+const APP_VERSION = 'v17-2026-04-30-team-summary-fix';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
