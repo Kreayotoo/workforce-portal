@@ -1820,13 +1820,18 @@ function renderApp(){
         <button onclick="nav('dashboard')" title="Go to home" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:13px">🏠 Home</button>
       </div>`:''}
       <div class="tb-mobile-hide" style="flex:1;display:flex;justify-content:center;padding:0 1rem;max-width:500px;margin:0 auto">
-        <div style="position:relative;width:100%;max-width:380px">
-          <input type="text" id="universal-search" placeholder="🔍 Search anything — employees, leaves, expenses, pages…" autocomplete="off"
-            oninput="runUniversalSearch(this.value)"
-            onfocus="runUniversalSearch(this.value)"
-            onblur="setTimeout(()=>{const r=document.getElementById('univ-search-results');if(r)r.style.display='none'},200)"
-            style="width:100%;padding:8px 16px;border-radius:20px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.12);color:#fff;font-size:14px;outline:none" />
-          <div id="univ-search-results" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.2);max-height:400px;overflow-y:auto;z-index:200"></div>
+        <div style="position:relative;width:100%;max-width:420px">
+          <div style="display:flex;align-items:center;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:22px;padding:0 4px 0 14px;transition:background .15s" onmouseover="this.style.background='rgba(255,255,255,.18)'" onmouseout="this.style.background='rgba(255,255,255,.12)'">
+            <span style="font-size:14px;line-height:1;flex-shrink:0;background:linear-gradient(135deg,#a78bfa,#60a5fa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-weight:700">✨</span>
+            <input type="text" id="universal-search" placeholder="AI search — employees, leaves, projects…" autocomplete="off"
+              oninput="runUniversalSearch(this.value)"
+              onfocus="runUniversalSearch(this.value)"
+              onkeydown="if(event.key==='Enter')runUniversalSearch(this.value,true)"
+              onblur="setTimeout(()=>{const r=document.getElementById('univ-search-results');if(r)r.style.display='none'},200)"
+              style="flex:1;min-width:0;padding:8px 10px;border:none;background:transparent;color:#fff;font-size:14px;outline:none" />
+            <button onclick="runUniversalSearch(document.getElementById('universal-search').value,true)" title="Search" style="background:linear-gradient(135deg,#7c3aed,#3b82f6);border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;transition:transform .12s" onmouseover="this.style.transform='scale(1.07)'" onmouseout="this.style.transform='scale(1)'">🔍</button>
+          </div>
+          <div id="univ-search-results" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.2);max-height:400px;overflow-y:auto;z-index:200"></div>
         </div>
       </div>
       <div style="flex:1"></div>
@@ -14740,7 +14745,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v31-2026-04-30-emp-edit-fix';
+const APP_VERSION = 'v32-2026-04-30-ai-search-look';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
