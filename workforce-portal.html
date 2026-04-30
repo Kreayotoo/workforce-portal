@@ -425,7 +425,7 @@ async function wlcCount(workLogId){
   const rows = await wlcLoad(workLogId);
   return rows.filter(r=>!r.is_deleted).length;
 }
-async function wlcPost(workLogId, parentId, body, workLogOwnerEmail){
+async function wlcPost(workLogId, parentId, body, workLogOwnerEmail, workLogDate){
   const actor = _wlcCurrentActor();
   if(!actor){ showToast('Please sign in to comment','info'); return null; }
   const text = (body||'').trim();
@@ -446,9 +446,10 @@ async function wlcPost(workLogId, parentId, body, workLogOwnerEmail){
 
     // Notification fan-out (best-effort, don't block on failure)
     try{
+      const dateTag = workLogDate ? ` (${workLogDate})` : '';
       // Notify work log owner if commenter isn't the owner
       if(workLogOwnerEmail && workLogOwnerEmail.toLowerCase() !== actor.email.toLowerCase()){
-        await wlcNotify(workLogOwnerEmail, `${actor.name}${actor.isCEO?' (CEO)':''} commented on your work log`, text);
+        await wlcNotify(workLogOwnerEmail, `${actor.name}${actor.isCEO?' (CEO)':''} commented on your work log${dateTag}`, text);
       }
       // If reply, notify parent comment author too (unless it's the same person)
       if(parentId){
@@ -457,7 +458,7 @@ async function wlcPost(workLogId, parentId, body, workLogOwnerEmail){
         if(parentAuthor &&
            parentAuthor.toLowerCase() !== actor.email.toLowerCase() &&
            parentAuthor.toLowerCase() !== (workLogOwnerEmail||'').toLowerCase()){
-          await wlcNotify(parentAuthor, `${actor.name}${actor.isCEO?' (CEO)':''} replied to your comment`, text);
+          await wlcNotify(parentAuthor, `${actor.name}${actor.isCEO?' (CEO)':''} replied to your comment${dateTag}`, text);
         }
       }
     }catch(e){console.warn('[wlc] notify failed:',e);}
@@ -643,22 +644,25 @@ async function openWorkLogComments(workLogId, workLogOwnerEmail, workLogDate){
       <div style="padding:12px 14px;border-top:1px solid #e5e7eb;background:#fff">
         <textarea id="wlc-newtxt" rows="2" placeholder="Write a comment…" style="width:100%;padding:8px 10px;border:1px solid #e5e7eb;border-radius:8px;font-size:13px;font-family:inherit;resize:vertical"></textarea>
         <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px">
-          <button class="btn btn-primary" style="background:#0f766e;font-size:13px;padding:8px 18px" onclick="wlcSubmitNew('${workLogId}','${workLogOwnerEmail||''}')">💬 Post comment</button>
+          <button class="btn btn-primary" style="background:#0f766e;font-size:13px;padding:8px 18px" onclick="wlcSubmitNew('${workLogId}','${(workLogOwnerEmail||'').replace(/'/g,'&#39;')}','${workLogDate||''}')">💬 Post comment</button>
         </div>
       </div>
     </div>
   `;
   document.body.appendChild(overlay);
-  await wlcRefreshList(workLogId, workLogOwnerEmail);
+  await wlcRefreshList(workLogId, workLogOwnerEmail, workLogDate);
 }
 
-async function wlcRefreshList(workLogId, ownerEmail){
+async function wlcRefreshList(workLogId, ownerEmail, logDate){
   const list = document.getElementById('wlc-list');
   if(!list) return;
   list.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:1rem">Loading…</div>`;
   const flat = await wlcLoad(workLogId);
   if(flat.length === 0){
     list.innerHTML = `<div style="text-align:center;color:var(--muted);font-size:13px;padding:2rem">No comments yet. Be the first to comment.</div>`;
+    list.dataset.workLogId = workLogId;
+    list.dataset.ownerEmail = ownerEmail || '';
+    list.dataset.logDate = logDate || '';
     return;
   }
   const tree = _wlcBuildTree(flat);
@@ -666,19 +670,20 @@ async function wlcRefreshList(workLogId, ownerEmail){
   list.innerHTML = tree.map(c => _wlcRenderNode(c, 0, actor, ownerEmail)).join('');
   list.dataset.workLogId = workLogId;
   list.dataset.ownerEmail = ownerEmail || '';
+  list.dataset.logDate = logDate || '';
 }
 
-async function wlcSubmitNew(workLogId, ownerEmail){
+async function wlcSubmitNew(workLogId, ownerEmail, logDate){
   const ta = document.getElementById('wlc-newtxt');
   if(!ta) return;
   const body = ta.value.trim();
   if(!body){ ta.focus(); return; }
   ta.disabled = true;
-  const r = await wlcPost(workLogId, null, body, ownerEmail);
+  const r = await wlcPost(workLogId, null, body, ownerEmail, logDate);
   ta.disabled = false;
   if(r){
     ta.value = '';
-    await wlcRefreshList(workLogId, ownerEmail);
+    await wlcRefreshList(workLogId, ownerEmail, logDate);
   }
 }
 
@@ -697,11 +702,12 @@ async function wlcSubmitReply(parentId, ownerEmail){
   if(!body){ ta.focus(); return; }
   const list = document.getElementById('wlc-list');
   const workLogId = list ? list.dataset.workLogId : null;
+  const logDate = list ? list.dataset.logDate : '';
   if(!workLogId) return;
   ta.disabled = true;
-  const r = await wlcPost(workLogId, parentId, body, ownerEmail || (list?list.dataset.ownerEmail:''));
+  const r = await wlcPost(workLogId, parentId, body, ownerEmail || (list?list.dataset.ownerEmail:''), logDate);
   ta.disabled = false;
-  if(r){ ta.value=''; await wlcRefreshList(workLogId, ownerEmail || (list?list.dataset.ownerEmail:'')); }
+  if(r){ ta.value=''; await wlcRefreshList(workLogId, ownerEmail || (list?list.dataset.ownerEmail:''), logDate); }
 }
 
 function wlcShowEdit(commentId){
@@ -719,25 +725,28 @@ async function wlcSubmitEdit(commentId){
   if(!body){ ta.focus(); return; }
   const list = document.getElementById('wlc-list');
   const workLogId = list ? list.dataset.workLogId : null;
+  const logDate = list ? list.dataset.logDate : '';
   ta.disabled = true;
   const ok = await wlcEdit(commentId, body);
   ta.disabled = false;
-  if(ok && workLogId){ await wlcRefreshList(workLogId, list?list.dataset.ownerEmail:''); }
+  if(ok && workLogId){ await wlcRefreshList(workLogId, list?list.dataset.ownerEmail:'', logDate); }
 }
 
 async function wlcConfirmDelete(commentId){
   if(!confirm('Delete this comment? It cannot be undone.')) return;
   const list = document.getElementById('wlc-list');
   const workLogId = list ? list.dataset.workLogId : null;
+  const logDate = list ? list.dataset.logDate : '';
   const ok = await wlcDelete(commentId);
-  if(ok && workLogId){ await wlcRefreshList(workLogId, list?list.dataset.ownerEmail:''); }
+  if(ok && workLogId){ await wlcRefreshList(workLogId, list?list.dataset.ownerEmail:'', logDate); }
 }
 
 async function wlcDoTogglePin(commentId, currentPinned){
   const list = document.getElementById('wlc-list');
   const workLogId = list ? list.dataset.workLogId : null;
+  const logDate = list ? list.dataset.logDate : '';
   const ok = await wlcTogglePin(commentId, currentPinned);
-  if(ok && workLogId){ await wlcRefreshList(workLogId, list?list.dataset.ownerEmail:''); }
+  if(ok && workLogId){ await wlcRefreshList(workLogId, list?list.dataset.ownerEmail:'', logDate); }
 }
 // ───── END WORK LOG COMMENTS MODULE ─────
 
@@ -12042,7 +12051,7 @@ function pgNotifications(){
 }
 
 // Unified handler: marks read + routes to relevant page based on content
-function handleNotifClick(id){
+async function handleNotifClick(id){
   if(!id) return;
   const n=D.notifications.find(x=>x.id===id||x._uuid===id);
   if(!n) return;
@@ -12053,6 +12062,34 @@ function handleNotifClick(id){
   }
   // Smart routing based on notification content
   const msg=(n.msg||'').toLowerCase();
+
+  // Work log comment notifications — open the comment thread directly
+  // Messages look like: 'Admin commented on your work log (2026-04-30): "good"' or
+  // '... replied to your comment ...'
+  if(msg.includes('commented on your work log') || msg.includes('replied to your comment') || msg.includes('comment')){
+    // Extract date in YYYY-MM-DD format from the message
+    const dateMatch = (n.msg||'').match(/\d{4}-\d{2}-\d{2}/);
+    if(dateMatch){
+      const targetDate = dateMatch[0];
+      try{
+        // Find this employee's work log for that date
+        const myUuid = currentEmployee ? currentEmployee._uuid : null;
+        const myEmail = currentEmployee ? (currentEmployee.email||'').toLowerCase() : (currentCompany ? (currentCompany.admin_email||'').toLowerCase() : null);
+        let logQuery = `?log_date=eq.${targetDate}&select=id,emp_email,emp_uuid&limit=1`;
+        if(myUuid) logQuery = `?log_date=eq.${targetDate}&emp_uuid=eq.${myUuid}&select=id,emp_email,emp_uuid&limit=1`;
+        const rows = await sb('work_logs','GET',null,logQuery);
+        if(rows && rows.length){
+          const wl = rows[0];
+          openWorkLogComments(wl.id, wl.emp_email || myEmail || '', targetDate);
+          return;
+        }
+      }catch(e){console.warn('Could not open work log comments from notification:',e);}
+    }
+    // Fallback if we couldn't locate the work log — go to work log page
+    currentRole==='admin' ? nav('worklogs') : navEmp('emp-worklog');
+    return;
+  }
+
   if(msg.includes('kyc')||msg.includes('aadhaar')||msg.includes('pan')){
     if(currentRole==='admin') nav('kycrequests'); else navEmp('emp-profile');
     return;
@@ -13776,7 +13813,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v15-2026-04-30-worklog-comments';
+const APP_VERSION = 'v16-2026-04-30-clickable-comment-notifs';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
