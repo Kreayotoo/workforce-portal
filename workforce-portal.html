@@ -73,6 +73,10 @@ tr:hover td{background:#fafafa}
 .tb-logo span{color:#60a5fa}
 .sidebar{width:72px;background:var(--navy3);display:flex;flex-direction:column;align-items:flex-start;padding:12px 0;gap:2px;min-height:calc(100vh - 62px);position:sticky;top:62px;height:calc(100vh - 62px);transition:width .25s ease;overflow:hidden;overflow-y:auto;z-index:50;flex-shrink:0}
 .sidebar:hover{width:240px}
+/* Attendance page: side-by-side cards on wide screens, stacked on narrow */
+@media (min-width:980px){
+  .att-grid{grid-template-columns:minmax(360px, 480px) 1fr !important; align-items:start}
+}
 .si{width:100%;height:56px;border-radius:0;display:flex;align-items:center;cursor:pointer;color:rgba(255,255,255,.6);transition:.15s;position:relative;padding:0 14px;gap:14px;white-space:nowrap}
 .si:hover{background:rgba(255,255,255,.1);color:rgba(255,255,255,.95)}
 .si.act{background:rgba(255,255,255,.15);color:#fff;border-left:3px solid #60a5fa}
@@ -283,12 +287,58 @@ tr:hover td{background:#fafafa}
   .modules-grid{grid-template-columns:repeat(8,minmax(0,1fr))}
   .two-col{grid-template-columns:2fr 1fr}
   .frow{grid-template-columns:1fr 1fr}
+  /* Cap main content width on very wide monitors so reading line-length stays comfortable.
+     Below ~1600px the content fills naturally; above that it caps at 1400px and centers. */
+  .main{max-width:100%;}
 }
 
 @media (min-width:1200px){
   .main{padding:1.5rem}
   .stat-val{font-size:26px}
   .pg-title{font-size:20px}
+}
+
+/* ─── GLOBAL RESPONSIVE SAFETY NETS ─────────────────────────────────
+   These rules apply across all pages (employee + admin) to make sure
+   layouts behave well on any screen size, without per-page changes. */
+
+/* Tables in cards: scroll horizontally on mobile rather than break layout. */
+.card { box-sizing: border-box; }
+.card table { width:100%; }
+
+/* Images and media never overflow their container */
+.card img, .card video, .card canvas, .main img, .main video {
+  max-width:100%;
+  height:auto;
+}
+
+/* Text never breaks layout by being too long (long URLs, no-space strings) */
+.card, .card * { word-wrap: break-word; overflow-wrap: break-word; }
+
+/* On tablets and small desktops (769–980px), tighten gaps & font sizes a little
+   to fit comfortably between true mobile and big desktop. */
+@media (min-width:769px) and (max-width:980px){
+  .stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  .modules-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+}
+
+/* On very wide screens (≥1600px), keep main content readable by capping width */
+@media (min-width:1600px){
+  .main{max-width:1500px;margin-left:auto;margin-right:auto}
+}
+
+/* Touch-friendly tap targets on mobile (avoid tiny buttons) */
+@media (max-width:768px){
+  button, .btn, .si, .btn-link {
+    min-height: 36px;
+  }
+  /* Form inputs comfortable on mobile */
+  input[type="text"], input[type="email"], input[type="password"],
+  input[type="tel"], input[type="number"], input[type="date"],
+  input[type="time"], select, textarea {
+    font-size: 16px !important; /* prevents iOS zoom on focus */
+    min-height: 40px;
+  }
 }
 </style>
 </head>
@@ -4995,7 +5045,8 @@ function empAttendance(){
   return `
   <div class="page-hd"><div class="pg-title">Mark attendance</div></div>
 
-  <div class="card" style="max-width:520px;margin-bottom:1rem">
+  <div class="att-grid" style="display:grid;grid-template-columns:1fr;gap:1rem">
+  <div class="card" style="margin-bottom:0">
     <div class="card-hd"><h3>Today — ${today}</h3>
       <span style="font-size:12px;color:var(--muted)">${sessions.length} session${sessions.length!==1?'s':''} · ${totalHrs}h ${totalMin}m total</span>
     </div>
@@ -5046,7 +5097,7 @@ function empAttendance(){
     </div>`:''}
   </div>
 
-  <div class="card" style="max-width:520px;padding:0">
+  <div class="card" style="padding:0">
     <div class="card-hd" style="padding:1rem 1rem 0"><h3>My attendance history</h3></div>
     <table style="margin-top:8px"><thead><tr>
       <th style="width:20%;padding-left:12px">Date</th>
@@ -5058,6 +5109,7 @@ function empAttendance(){
     <tbody id="att-history-body">
       <tr><td colspan="5" style="text-align:center;padding:1rem;color:var(--muted)">Loading…</td></tr>
     </tbody></table>
+  </div>
   </div>
 
   <!-- Face capture modal (hidden by default, opened by Check In/Out) -->
@@ -14031,7 +14083,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v21-2026-04-30-smart-login-hash-fix';
+const APP_VERSION = 'v24-2026-04-30-global-responsive';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
