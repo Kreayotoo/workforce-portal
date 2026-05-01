@@ -11366,7 +11366,7 @@ function pgTeams(){
       const tl = t.teamLeadEmail ? emps.find(e=>e.email&&e.email.toLowerCase()===t.teamLeadEmail.toLowerCase()) : null;
       const members = emps.filter(e=>e.teamId===t._uuid && e.status==='Active');
       return `<div class="card" style="padding:0;overflow:hidden">
-        <div style="padding:14px 16px;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff">
+        <div style="padding:14px 16px;background:linear-gradient(135deg,#1A1A4E,#2e2e6f);color:#fff">
           <div style="display:flex;justify-content:space-between;align-items:start;gap:10px">
             <div style="flex:1;min-width:0">
               <div style="font-size:16px;font-weight:800;margin-bottom:2px">${t.name}</div>
@@ -15182,7 +15182,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v43-2026-04-30-projects-company-wide';
+const APP_VERSION = 'v44-2026-04-30-midnight-team-cards';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
