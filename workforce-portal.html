@@ -972,16 +972,27 @@ async function membersOfProject(projectId){
     .filter(Boolean);
 }
 
-// Calculate total hours worked on this project from member work logs (any log with proj-tag)
+// Calculate total hours worked on this project from member work logs.
+// Prefers the new structured `projectEntries` field; falls back to tag-based detection
+// (proj-<kebab-name>) for backward compatibility.
 async function projectTotalHours(project){
   const tag = _projectTag(project.name);
-  // Use cached _wlAllCache if present, otherwise this returns 0 (best-effort)
+  const projectName = (project.name||'').trim().toLowerCase();
   const allLogs = window._wlAllCache || [];
   const members = await membersOfProject(project._uuid);
   const memberUuids = new Set(members.map(m=>m._uuid));
   let total = 0;
   allLogs.forEach(l=>{
-    if(memberUuids.has(l.empUuid) && (l.tags||[]).includes(tag)){
+    if(!memberUuids.has(l.empUuid)) return;
+    // Preferred: structured project_entries match
+    if(Array.isArray(l.projectEntries) && l.projectEntries.length){
+      l.projectEntries.forEach(pe=>{
+        if((pe.project||'').trim().toLowerCase() === projectName){
+          total += (parseInt(pe.hours)||0) + (parseInt(pe.minutes)||0)/60;
+        }
+      });
+    } else if((l.tags||[]).includes(tag)){
+      // Fallback: tag-based (legacy)
       total += parseFloat(l.totalHours)||0;
     }
   });
@@ -1662,6 +1673,14 @@ function navEmp(page){
   empPage = page;
   try{ localStorage.setItem('wf_last_emp_page', page); }catch(e){}
   renderEmployeeApp();
+  // Post-render hook: refresh project-entries total badge if the work log page is showing
+  if(page === 'emp-worklog'){
+    setTimeout(()=>{
+      if(typeof recomputeProjectTotal === 'function' && document.getElementById('wl-proj-total')){
+        try{ recomputeProjectTotal(); }catch(e){}
+      }
+    }, 50);
+  }
 }
 function navEmpBack(){
   if(empPageHistory.length > 1){
@@ -11856,13 +11875,23 @@ function empMyProjects(){
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:1rem">
     ${myProjects.map(p => {
       const projMembers = members.filter(mm => mm.projectId === p._uuid);
-      // Sync time-worked calc (no await)
+      // Sync time-worked calc (no await). Prefer project_entries; fall back to tag.
       const tag = _projectTag(p.name);
+      const projNameLC = (p.name||'').trim().toLowerCase();
       const allLogs = window._wlAllCache || [];
       const memberSet = new Set(projMembers.map(mm=>mm.empUuid));
       let hours = 0;
       allLogs.forEach(l=>{
-        if(memberSet.has(l.empUuid) && (l.tags||[]).includes(tag)){ hours += parseFloat(l.totalHours)||0; }
+        if(!memberSet.has(l.empUuid)) return;
+        if(Array.isArray(l.projectEntries) && l.projectEntries.length){
+          l.projectEntries.forEach(pe=>{
+            if((pe.project||'').trim().toLowerCase() === projNameLC){
+              hours += (parseInt(pe.hours)||0) + (parseInt(pe.minutes)||0)/60;
+            }
+          });
+        } else if((l.tags||[]).includes(tag)){
+          hours += parseFloat(l.totalHours)||0;
+        }
       });
       const team = D.teams.find(t=>t._uuid===p.teamId);
       const statusBadge = p.status === 'completed'
@@ -13326,6 +13355,16 @@ async function sbSaveWorkLog(log){
   }
   log.totalHours=Math.round(totalHours*10)/10;
 
+  // Compute project_total_hours from log.projectEntries (if any)
+  // Each entry: {project, hours, minutes}. Total = sum across all entries in this log.
+  let projTotalMin = 0;
+  if(Array.isArray(log.projectEntries)){
+    log.projectEntries.forEach(pe=>{
+      projTotalMin += (parseInt(pe.hours)||0)*60 + (parseInt(pe.minutes)||0);
+    });
+  }
+  log.projectTotalHours = Math.round((projTotalMin/60)*10)/10;
+
   const payload={
     emp_uuid:log.empUuid||null,
     emp_name:log.empName,
@@ -13337,6 +13376,8 @@ async function sbSaveWorkLog(log){
     tags:log.tags||[],
     admin_comments:log.adminComments||[],
     total_hours:log.totalHours,
+    project_entries:log.projectEntries||[],
+    project_total_hours:log.projectTotalHours,
     company_id:currentCompany?currentCompany.company_id:'KSPL'
   };
 
@@ -13390,6 +13431,8 @@ async function sbLoadWorkLogs(filter={}){
       tags:r.tags||[],
       adminComments:r.admin_comments||[],
       totalHours:parseFloat(r.total_hours)||0,
+      projectEntries:Array.isArray(r.project_entries)?r.project_entries:[],
+      projectTotalHours:parseFloat(r.project_total_hours)||0,
       createdAt:r.created_at,
       updatedAt:r.updated_at
     }));
@@ -13710,6 +13753,215 @@ async function postTeamSummaryInline(date){
   setTimeout(()=>navEmp('emp-worklog'),700);
 }
 
+// Render the new project-entries section that appears in ALL log modes.
+// existing.projectEntries (if present) is an array of {project, hours, minutes}
+// where `project` is the project name (a UUID isn't used so the field also
+// supports custom typed values for projects not in the dropdown).
+function renderProjectEntriesSection(existing){
+  const myEmp = currentEmployee;
+  // Find projects this employee is a member of (assigned by admin)
+  const allProjects = window._projectsCache || [];
+  const allMembers = window._projectMembersCache || [];
+  const myUuid = myEmp ? myEmp._uuid : null;
+  const myProjects = myUuid
+    ? allProjects.filter(p => allMembers.some(m => m.projectId === p._uuid && m.empUuid === myUuid))
+    : [];
+  const entries = (existing && Array.isArray(existing.projectEntries) && existing.projectEntries.length)
+    ? existing.projectEntries
+    : [{project:'', hours:0, minutes:0}];
+
+  // Trigger background loading of projects if cache is empty (one-shot per session)
+  if(!window._projectsCache && !window._wlProjectsLoadKick){
+    window._wlProjectsLoadKick = true;
+    (async ()=>{
+      try{
+        await projectsLoad();
+        await projectMembersLoad();
+        // Re-render this page so the dropdown populates with projects
+        if(empPage==='emp-worklog') navEmp('emp-worklog');
+      }catch(e){console.warn(e);}
+    })();
+  }
+
+  const projectOptions = myProjects.map(p => `<option value="${_wlcEscape(p.name)}">${_wlcEscape(p.name)}</option>`).join('');
+  const presetHours = [0,1,2,3,4,5,6,7,8,9,10];
+  const presetMinutes = [0,15,30,45];
+
+  const rowHTML = (e, idx) => {
+    const project = e.project || '';
+    const isCustom = project && !myProjects.some(p => p.name === project);
+    const hours = parseInt(e.hours)||0;
+    const minutes = parseInt(e.minutes)||0;
+    return `<div class="wl-prow" data-idx="${idx}" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:center;padding:10px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;margin-bottom:8px">
+      <div>
+        <select data-k="project" onchange="onProjectEntryChange(this)" style="width:100%;padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
+          <option value="">— Pick a project —</option>
+          ${projectOptions}
+          <option value="__custom__" ${isCustom?'selected':''}>➕ Other (type custom)…</option>
+        </select>
+        <input type="text" data-k="custom_project" placeholder="Project name…" value="${isCustom ? _wlcEscape(project) : ''}" style="width:100%;margin-top:6px;padding:6px 8px;font-size:12px;border:1px solid #d8b4fe;border-radius:6px;${isCustom?'':'display:none'}" />
+      </div>
+      <select data-k="hours" style="padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
+        ${presetHours.map(h=>`<option value="${h}" ${h===hours?'selected':''}>${h}h</option>`).join('')}
+      </select>
+      <select data-k="minutes" style="padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
+        ${presetMinutes.map(m=>`<option value="${m}" ${m===minutes?'selected':''}>${String(m).padStart(2,'0')}m</option>`).join('')}
+      </select>
+      <button type="button" onclick="removeProjectEntryRow(this)" style="background:none;border:none;color:#dc2626;font-size:16px;cursor:pointer;padding:4px 8px" title="Remove this project entry">×</button>
+    </div>`;
+  };
+
+  // Pre-populate selected project after render. We have to do this for the SELECT
+  // because we can't put `selected` on dropdown options that match dynamic values.
+  // We render a `data-pickedproject` attribute on the row container and use a
+  // tiny script after to set the value. Simpler: just set it via inline option.
+  // Instead, generate options with `selected` attribute on the matching one:
+  const rowHTMLWithSelected = (e, idx) => {
+    const project = e.project || '';
+    const isCustom = project && !myProjects.some(p => p.name === project);
+    const hours = parseInt(e.hours)||0;
+    const minutes = parseInt(e.minutes)||0;
+    const optList = myProjects.map(p => `<option value="${_wlcEscape(p.name)}" ${p.name===project ? 'selected':''}>${_wlcEscape(p.name)}</option>`).join('');
+    return `<div class="wl-prow" data-idx="${idx}" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:start;padding:10px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;margin-bottom:8px">
+      <div>
+        <select data-k="project" onchange="onProjectEntryChange(this)" style="width:100%;padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
+          <option value="" ${!project?'selected':''}>— Pick a project —</option>
+          ${optList}
+          <option value="__custom__" ${isCustom?'selected':''}>➕ Other (type custom)…</option>
+        </select>
+        <input type="text" data-k="custom_project" placeholder="Project name…" value="${isCustom ? _wlcEscape(project) : ''}" style="width:100%;margin-top:6px;padding:6px 8px;font-size:12px;border:1px solid #d8b4fe;border-radius:6px;${isCustom?'':'display:none'}" />
+      </div>
+      <select data-k="hours" style="padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
+        ${presetHours.map(h=>`<option value="${h}" ${h===hours?'selected':''}>${h}h</option>`).join('')}
+      </select>
+      <select data-k="minutes" style="padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
+        ${presetMinutes.map(m=>`<option value="${m}" ${m===minutes?'selected':''}>${String(m).padStart(2,'0')}m</option>`).join('')}
+      </select>
+      <button type="button" onclick="removeProjectEntryRow(this)" style="background:none;border:none;color:#dc2626;font-size:16px;cursor:pointer;padding:6px 8px" title="Remove this project entry">×</button>
+    </div>`;
+  };
+
+  return `
+  <div style="margin-top:14px;padding:12px;background:#fdfaff;border:2px dashed #e9d5ff;border-radius:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#6b21a8">📁 Time on projects (counted toward project totals)</div>
+        <div style="font-size:11px;color:#7c3aed;margin-top:2px">Pick a project + how long you spent on it. ${myProjects.length===0?'Pick "Other" to type a custom project name.':''}</div>
+      </div>
+      <span id="wl-proj-total" style="background:#7c3aed;color:#fff;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:700">0h 0m</span>
+    </div>
+    <div style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:0 10px 4px 10px">
+      <div>Project</div>
+      <div>Hours</div>
+      <div>Minutes</div>
+      <div></div>
+    </div>
+    <div id="wl-proj-rows">
+      ${entries.map((e,i)=>rowHTMLWithSelected(e,i)).join('')}
+    </div>
+    <button type="button" onclick="addProjectEntryRow()" style="background:none;border:1px dashed #c084fc;color:#7c3aed;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;margin-top:4px">+ Add another project</button>
+    <div style="font-size:11px;color:#7c3aed;margin-top:6px">💡 Total project hours auto-update as you adjust the rows.</div>
+  </div>`;
+}
+
+// Helpers used by the projects section
+function onProjectEntryChange(sel){
+  const row = sel.closest('.wl-prow');
+  if(!row) return;
+  const customInput = row.querySelector('[data-k="custom_project"]');
+  if(!customInput) return;
+  if(sel.value === '__custom__'){
+    customInput.style.display = 'block';
+    customInput.focus();
+  } else {
+    customInput.style.display = 'none';
+    customInput.value = '';
+  }
+  recomputeProjectTotal();
+}
+
+function addProjectEntryRow(){
+  const wrap = document.getElementById('wl-proj-rows');
+  if(!wrap) return;
+  const myEmp = currentEmployee;
+  const allProjects = window._projectsCache || [];
+  const allMembers = window._projectMembersCache || [];
+  const myProjects = myEmp ? allProjects.filter(p => allMembers.some(m => m.projectId === p._uuid && m.empUuid === myEmp._uuid)) : [];
+  const presetHours = [0,1,2,3,4,5,6,7,8,9,10];
+  const presetMinutes = [0,15,30,45];
+  const div = document.createElement('div');
+  div.className = 'wl-prow';
+  div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:start;padding:10px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;margin-bottom:8px';
+  div.innerHTML = `
+    <div>
+      <select data-k="project" onchange="onProjectEntryChange(this)" style="width:100%;padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
+        <option value="" selected>— Pick a project —</option>
+        ${myProjects.map(p => `<option value="${_wlcEscape(p.name)}">${_wlcEscape(p.name)}</option>`).join('')}
+        <option value="__custom__">➕ Other (type custom)…</option>
+      </select>
+      <input type="text" data-k="custom_project" placeholder="Project name…" value="" style="width:100%;margin-top:6px;padding:6px 8px;font-size:12px;border:1px solid #d8b4fe;border-radius:6px;display:none" />
+    </div>
+    <select data-k="hours" onchange="recomputeProjectTotal()" style="padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
+      ${presetHours.map(h=>`<option value="${h}">${h}h</option>`).join('')}
+    </select>
+    <select data-k="minutes" onchange="recomputeProjectTotal()" style="padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
+      ${presetMinutes.map(m=>`<option value="${m}">${String(m).padStart(2,'0')}m</option>`).join('')}
+    </select>
+    <button type="button" onclick="removeProjectEntryRow(this)" style="background:none;border:none;color:#dc2626;font-size:16px;cursor:pointer;padding:6px 8px" title="Remove this project entry">×</button>
+  `;
+  wrap.appendChild(div);
+  recomputeProjectTotal();
+}
+
+function removeProjectEntryRow(btn){
+  const row = btn.closest('.wl-prow');
+  if(!row) return;
+  const wrap = document.getElementById('wl-proj-rows');
+  if(wrap && wrap.querySelectorAll('.wl-prow').length <= 1){
+    // Don't remove the last one — just clear it instead
+    row.querySelectorAll('select,input').forEach(el=>{
+      if(el.tagName==='SELECT') el.selectedIndex = 0;
+      else el.value = '';
+    });
+    const ci = row.querySelector('[data-k="custom_project"]');
+    if(ci) ci.style.display = 'none';
+  } else {
+    row.remove();
+  }
+  recomputeProjectTotal();
+}
+
+function recomputeProjectTotal(){
+  const total = collectProjectEntries().reduce((acc,e)=>{
+    return acc + (parseInt(e.hours)||0)*60 + (parseInt(e.minutes)||0);
+  }, 0);
+  const totalH = Math.floor(total/60);
+  const totalM = total%60;
+  const badge = document.getElementById('wl-proj-total');
+  if(badge) badge.textContent = `${totalH}h ${totalM}m`;
+}
+
+function collectProjectEntries(){
+  const rows = document.querySelectorAll('.wl-prow');
+  const out = [];
+  rows.forEach(row=>{
+    const sel = row.querySelector('[data-k="project"]');
+    const custom = row.querySelector('[data-k="custom_project"]');
+    const hSel = row.querySelector('[data-k="hours"]');
+    const mSel = row.querySelector('[data-k="minutes"]');
+    if(!sel) return;
+    let proj = sel.value;
+    if(proj === '__custom__'){ proj = (custom && custom.value || '').trim(); }
+    const hours = parseInt(hSel?.value)||0;
+    const minutes = parseInt(mSel?.value)||0;
+    // Only keep rows that have BOTH a project name AND some time
+    if(proj && (hours>0 || minutes>0)){
+      out.push({project: proj, hours, minutes});
+    }
+  });
+  return out;
+}
+
 function renderHourlyForm(existing){
   const entries=existing&&existing.mode==='hourly'?existing.entries:[
     {from:'09:00',to:'10:00',work:''},
@@ -13725,7 +13977,8 @@ function renderHourlyForm(existing){
   <div class="fld" style="margin-top:14px">
     <label>📝 End-of-day summary (optional)</label>
     <textarea id="wl-summary" rows="2" placeholder="Overall thoughts, blockers, tomorrow's plan…">${existing?.summary||''}</textarea>
-  </div>`;
+  </div>
+  ${renderProjectEntriesSection(existing)}`;
 }
 
 function hourlyRow(e,i){
@@ -13763,7 +14016,8 @@ function renderSessionForm(existing){
   <div class="fld" style="margin-top:14px">
     <label>📝 End-of-day summary (optional)</label>
     <textarea id="wl-summary" rows="2" placeholder="Overall thoughts, blockers, tomorrow's plan…">${existing?.summary||''}</textarea>
-  </div>`;
+  </div>
+  ${renderProjectEntriesSection(existing)}`;
 }
 
 function sessionRow(e,i){
@@ -13784,7 +14038,8 @@ function renderDailyForm(existing){
   <div class="fld">
     <label>📝 Additional notes (optional)</label>
     <textarea id="wl-summary" rows="2" placeholder="Blockers, tomorrow's plan, reflections…">${existing?.summary||''}</textarea>
-  </div>`;
+  </div>
+  ${renderProjectEntriesSection(existing)}`;
 }
 
 async function saveMyWorkLog(){
@@ -13827,6 +14082,9 @@ async function saveMyWorkLog(){
   const tagsRaw=$('wl-tags')?.value?.trim()||'';
   const tags=tagsRaw?tagsRaw.split(',').map(t=>t.trim().replace(/^#/,'').toLowerCase()).filter(Boolean):[];
 
+  // Capture project entries (the new Time-on-projects section)
+  const projectEntries = collectProjectEntries();
+
   // Update existing or create new
   const existing=(window._wlCache||[]).find(l=>l.empUuid===emp._uuid&&l.date===date);
   const log={
@@ -13835,6 +14093,7 @@ async function saveMyWorkLog(){
     empName:emp.name,
     empEmail:emp.email,
     date, mode, entries, summary, tags,
+    projectEntries,
     adminComments:existing?.adminComments||[]
   };
   if(msg) msg.innerHTML=`<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">💾 Saving…</div>`;
@@ -14059,9 +14318,15 @@ function pgWorkLogs(){
   const activeEmps=new Set(weekLogs.map(l=>l.empName)).size;
 
   // PRODUCTIVITY METRICS: hours logged vs attended
+  // Prefer project-based hours (the new accurate measurement) when available;
+  // fall back to mode-based total_hours for old logs that don't have project entries.
   const activeEmpList=D.employees.filter(e=>e.status==='Active');
   const totalAttendedHours=activeEmpList.length * 9 * 5; // 5 weekdays × 9hrs
-  const totalLoggedHours=weekLogs.reduce((s,l)=>s+(parseFloat(l.totalHours)||0),0);
+  const totalLoggedHours=weekLogs.reduce((s,l)=>{
+    const projHrs = parseFloat(l.projectTotalHours)||0;
+    if(projHrs > 0) return s + projHrs;
+    return s + (parseFloat(l.totalHours)||0);
+  },0);
   const productivityPct=totalAttendedHours>0?Math.round((totalLoggedHours/totalAttendedHours)*100):0;
 
   // Extract unique tags
@@ -14762,7 +15027,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v39-2026-04-30-team-buttons-navy';
+const APP_VERSION = 'v40-2026-04-30-project-hours';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
