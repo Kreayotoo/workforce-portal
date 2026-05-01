@@ -1155,7 +1155,7 @@ function initData(){
     user:{email:'claudekreayotoo@gmail.com',password:'Kreayotoo@123',name:'Kreayotoo Solutions'},
     employees:[],attendance:[],leaves:[],expenses:[],performance:[],
     notifications:[{id:1,type:'success',msg:'Welcome to Kreayotoo Solutions Portal!',time:'Just now',read:false}],
-    settings:{company:'Kreayotoo Solutions',email:'claudekreayotoo@gmail.com',tz:'Asia/Kolkata',currency:'INR',hours:9,officeRadius:500,officeLat:17.3850,officeLng:78.4867},
+    settings:{company:'Kreayotoo Solutions',email:'claudekreayotoo@gmail.com',tz:'Asia/Kolkata',currency:'INR',hours:9,officeRadius:500,officeLat:17.3850,officeLng:78.4867,allowedLogModes:{hourly:true,session:true,daily:true}},
     officeLocations:[{id:'LOC-1',name:'Head Office — Hyderabad',lat:17.3850,lng:78.4867,radius:500,color:'#3b82f6'}],
     loginLogs:[],loggedIn:false,
     companies:[],
@@ -1260,7 +1260,7 @@ async function syncFromSupabase(){
     if(exp!==null) D.expenses=exp.map(e=>({_uuid:e.id,id:e.id,emp:e.employee_name,cat:e.category,amount:e.amount,date:e.expense_date,desc:e.description,status:e.status}));
     if(perf!==null) D.performance=perf.map(p=>({_uuid:p.id,id:p.id,emp:p.employee_name,quarter:p.quarter,rating:p.rating,goals:p.goals_set,achieved:p.goals_achieved,notes:p.review_notes}));
     if(notifs!==null) D.notifications=notifs.map(n=>({_uuid:n.id,id:n.id,type:n.type,msg:n.message,time:new Date(n.created_at).toLocaleString('en-IN'),read:n.is_read}));
-    if(sets!==null&&sets.length){const s=sets[0];D.settings={...D.settings,company:s.company_name||D.settings.company,email:s.company_email||D.settings.email,tz:s.timezone||D.settings.tz,currency:s.currency||D.settings.currency,hours:s.work_hours||D.settings.hours,officeLat:s.office_lat||D.settings.officeLat,officeLng:s.office_lng||D.settings.officeLng,officeRadius:s.office_radius||D.settings.officeRadius,_uuid:s.id};}
+    if(sets!==null&&sets.length){const s=sets[0];D.settings={...D.settings,company:s.company_name||D.settings.company,email:s.company_email||D.settings.email,tz:s.timezone||D.settings.tz,currency:s.currency||D.settings.currency,hours:s.work_hours||D.settings.hours,officeLat:s.office_lat||D.settings.officeLat,officeLng:s.office_lng||D.settings.officeLng,officeRadius:s.office_radius||D.settings.officeRadius,allowedLogModes:(s.allowed_log_modes&&typeof s.allowed_log_modes==='object')?s.allowed_log_modes:(D.settings.allowedLogModes||{hourly:true,session:true,daily:true}),_uuid:s.id};}
     if(companies!==null) D.companies=companies;
     if(teams!==null) D.teams=teams.map(t=>({
       _uuid:t.id, id:t.id,
@@ -1502,7 +1502,8 @@ async function sbSaveSettings(){
     work_hours:s.hours,
     office_lat:s.officeLat||null,
     office_lng:s.officeLng||null,
-    office_radius:s.officeRadius||null
+    office_radius:s.officeRadius||null,
+    allowed_log_modes:s.allowedLogModes||{hourly:true,session:true,daily:true}
   };
   console.log('[SETTINGS SAVE] payload:', payload, 'uuid:', s._uuid);
   try{
@@ -11746,6 +11747,38 @@ async function renderProjectMembersTab(container, projectId, teamUuid){
   const memberUuids = new Set(members.map(m=>m._uuid));
   const availableEmps = allEmps.filter(e => !memberUuids.has(e._uuid));
 
+  // Compute "Active loggers" — employees who have logged time on this project
+  // but are NOT currently assigned as members. This is a self-reporting signal
+  // that gives admins data without requiring manual assignment.
+  const project = (window._projectsCache||[]).find(p=>p._uuid===projectId);
+  const projName = project ? (project.name||'').trim().toLowerCase() : '';
+  const projLabel = project ? projectDisplayLabel(project).trim().toLowerCase() : '';
+  const allLogs = window._wlAllCache || [];
+  const loggerHours = {}; // empUuid -> hours
+  const loggerLogs = {};  // empUuid -> log count
+  allLogs.forEach(l=>{
+    if(!l.empUuid) return;
+    if(memberUuids.has(l.empUuid)) return; // skip already-members
+    if(!Array.isArray(l.projectEntries) || !l.projectEntries.length) return;
+    l.projectEntries.forEach(pe=>{
+      const peVal = (pe.project||'').trim().toLowerCase();
+      if(peVal === projName || peVal === projLabel){
+        const h = (parseInt(pe.hours)||0) + (parseInt(pe.minutes)||0)/60;
+        if(h > 0){
+          loggerHours[l.empUuid] = (loggerHours[l.empUuid]||0) + h;
+          loggerLogs[l.empUuid] = (loggerLogs[l.empUuid]||0) + 1;
+        }
+      }
+    });
+  });
+  const activeLoggers = Object.keys(loggerHours)
+    .map(uuid => {
+      const emp = allEmps.find(e=>e._uuid===uuid);
+      return emp ? {emp, hours:loggerHours[uuid], logs:loggerLogs[uuid]} : null;
+    })
+    .filter(Boolean)
+    .sort((a,b)=>b.hours - a.hours);
+
   container.innerHTML = `
     ${isAdmin ? `
     <div style="display:flex;gap:8px;margin-bottom:12px">
@@ -11755,21 +11788,48 @@ async function renderProjectMembersTab(container, projectId, teamUuid){
       </select>
       <button class="btn btn-primary" style="background:#7c3aed" onclick="doAddProjectMember('${projectId}','${teamUuid}')">+ Add</button>
     </div>` : ''}
+
+    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${members.length>0?`👥 Assigned members (${members.length})`:'👥 Assigned members'}</div>
     ${members.length===0 ? `
-    <div style="text-align:center;padding:1.5rem;color:var(--muted);font-size:13px">No members yet.${isAdmin?' Add one from the dropdown above.':''}</div>` : `
+    <div style="text-align:center;padding:1rem;color:var(--muted);font-size:12px;background:#fafafa;border-radius:8px;font-style:italic">No assigned members.${isAdmin?' Add one from the dropdown above, or scroll down — employees who logged time on this project appear automatically.':''}</div>` : `
     <div style="display:flex;flex-direction:column;gap:8px">
       ${members.map(m=>{
         const memberRow = (window._projectMembersCache||[]).find(x => x.projectId===projectId && x.empUuid===m._uuid);
+        const myHours = loggerHours[m._uuid] || 0;
         return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:#fafafa;border-radius:8px">
           ${av(m.name,32)}
           <div style="flex:1;min-width:0">
             <div style="font-size:13px;font-weight:600">${_wlcEscape(m.name)}</div>
-            <div style="font-size:11px;color:var(--muted)">${_wlcEscape(m.id||'')} · ${_wlcEscape(m.role||'—')}</div>
+            <div style="font-size:11px;color:var(--muted)">${_wlcEscape(m.id||'')} · ${_wlcEscape(m.role||'—')}${myHours>0?` · <strong style="color:#7c3aed">${myHours.toFixed(1)}h logged</strong>`:''}</div>
           </div>
           ${isAdmin && memberRow?`<button onclick="doRemoveProjectMember('${memberRow._uuid}','${projectId}','${teamUuid}')" style="background:none;border:none;cursor:pointer;color:#dc2626;font-size:18px;padding:4px 8px;border-radius:4px" title="Remove from project">×</button>`:''}
         </div>`;
       }).join('')}
-    </div>`}`;
+    </div>`}
+
+    ${activeLoggers.length > 0 ? `
+    <div style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.5px;margin-top:14px;margin-bottom:6px">⏱ Active loggers (${activeLoggers.length}) <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">— logged time but not assigned</span></div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${activeLoggers.map(({emp, hours, logs})=>{
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px;background:#faf5ff;border:1px dashed #d8b4fe;border-radius:8px">
+          ${av(emp.name,32)}
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:600">${_wlcEscape(emp.name)}</div>
+            <div style="font-size:11px;color:#6b21a8"><strong>${hours.toFixed(1)}h</strong> across ${logs} log${logs!==1?'s':''} · ${_wlcEscape(emp.id||'')} · ${_wlcEscape(emp.role||'—')}</div>
+          </div>
+          ${isAdmin?`<button onclick="doPromoteLoggerToMember('${projectId}','${emp._uuid}','${teamUuid}')" style="background:#7c3aed;border:none;color:#fff;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600" title="Officially add this employee as a project member">+ Assign</button>`:''}
+        </div>`;
+      }).join('')}
+    </div>` : ''}`;
+}
+
+async function doPromoteLoggerToMember(projectId, empUuid, teamUuid){
+  const ok = await projectAddMember(projectId, empUuid);
+  if(!ok){ showToast('Could not assign','info'); return; }
+  showToast('Assigned as member','success');
+  const members = await membersOfProject(projectId);
+  const mEl = $('proj-stat-members'); if(mEl) mEl.textContent = `👥 ${members.length} member${members.length!==1?'s':''}`;
+  await renderProjectMembersTab($('proj-tab-content'), projectId, teamUuid);
 }
 
 async function doAddProjectMember(projectId, teamUuid){
@@ -12973,7 +13033,33 @@ function pgSettings(){
       <button class="btn btn-primary" onclick="saveProfile()">Update profile</button>
     </div>
 
-    <!-- 🔒 Security card -->
+    <!-- 📝 Work log preferences card -->
+    <div class="card" style="grid-column:1/-1;background:linear-gradient(135deg,#faf5ff,#f3e8ff);border:1px solid #e9d5ff">
+      <div class="card-hd"><h3>📝 Work log preferences</h3></div>
+      <div style="font-size:13px;color:#6b21a8;margin-bottom:12px">Choose which log styles employees can use. Disabled styles are greyed out for them. <strong>At least one style must be enabled.</strong></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+        ${(()=>{
+          const m = (s.allowedLogModes && typeof s.allowedLogModes==='object') ? s.allowedLogModes : {hourly:true,session:true,daily:true};
+          const card = (key,emoji,title,desc) => {
+            const on = m[key] !== false;
+            return `<label style="display:flex;flex-direction:column;gap:4px;padding:14px;border:2px solid ${on?'#a855f7':'#e2e8f0'};border-radius:10px;cursor:pointer;background:#fff;transition:.15s" onclick="event.stopPropagation()">
+              <div style="display:flex;justify-content:space-between;align-items:center">
+                <div style="font-size:22px">${emoji}</div>
+                <input type="checkbox" id="st-mode-${key}" ${on?'checked':''} onchange="onToggleLogMode('${key}')" style="width:18px;height:18px;cursor:pointer">
+              </div>
+              <div style="font-weight:700;font-size:13px">${title}</div>
+              <div style="font-size:11px;color:var(--muted)">${desc}</div>
+            </label>`;
+          };
+          return [
+            card('hourly','⏱','Hourly','Time blocks, From-To slots'),
+            card('session','📍','Session','Morning + Evening summaries'),
+            card('daily','📋','Daily','One-shot end-of-day journal'),
+          ].join('');
+        })()}
+      </div>
+      <div id="st-mode-msg" style="margin-top:10px"></div>
+    </div>
     <div class="card" style="grid-column:1/-1;background:linear-gradient(135deg,#eff6ff,#dbeafe);border:1px solid #bfdbfe">
       <div class="card-hd"><h3>🔒 Security & Data</h3></div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
@@ -13115,6 +13201,45 @@ async function saveSettings(){
     showToast('❌ Settings save failed','info');
   }
   setTimeout(()=>{if($('st-msg'))$('st-msg').innerHTML='';},3000);
+}
+
+// Toggle a single work-log mode (admin only). Persists immediately to localStorage
+// AND attempts to push to Supabase via sbSaveSettings. At least one mode must remain enabled.
+async function onToggleLogMode(key){
+  const cb = document.getElementById('st-mode-'+key);
+  if(!cb) return;
+  const cur = (D.settings.allowedLogModes && typeof D.settings.allowedLogModes==='object')
+    ? {...D.settings.allowedLogModes}
+    : {hourly:true,session:true,daily:true};
+  const newVal = cb.checked;
+  // Build proposed state and check at-least-one rule
+  const proposed = {...cur, [key]: newVal};
+  const enabledCount = Object.values(proposed).filter(v=>v!==false).length;
+  if(enabledCount === 0){
+    // Revert the checkbox change
+    cb.checked = true;
+    const msg = document.getElementById('st-mode-msg');
+    if(msg) msg.innerHTML = `<div class="alert alert-e">⚠️ At least one log style must stay enabled.</div>`;
+    setTimeout(()=>{if(msg)msg.innerHTML='';}, 3500);
+    return;
+  }
+  D.settings = {...D.settings, allowedLogModes: proposed};
+  save(); // localStorage backup
+  // Update card border colour live
+  const lbl = cb.closest('label');
+  if(lbl) lbl.style.borderColor = newVal ? '#a855f7' : '#e2e8f0';
+  // Push to Supabase (best-effort)
+  try{
+    await sbSaveSettings();
+    const msg = document.getElementById('st-mode-msg');
+    if(msg) msg.innerHTML = `<div class="alert alert-s">✓ Saved — ${key.charAt(0).toUpperCase()+key.slice(1)} ${newVal?'enabled':'disabled'} for employees.</div>`;
+    setTimeout(()=>{if(msg)msg.innerHTML='';}, 2500);
+  }catch(e){
+    console.warn('Could not sync log-mode setting to Supabase (kept in localStorage):', e);
+    const msg = document.getElementById('st-mode-msg');
+    if(msg) msg.innerHTML = `<div class="alert" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a">⚠️ Saved locally, sync to server failed. Will retry next time.</div>`;
+    setTimeout(()=>{if(msg)msg.innerHTML='';}, 3500);
+  }
 }
 function useMyLocation(){
   if(!navigator.geolocation){alert('Geolocation not supported');return;}
@@ -13620,14 +13745,32 @@ function empWorkLog(){
       <div style="flex:1;min-width:280px">
         <label style="font-size:13px;color:var(--muted);font-weight:600;display:block;margin-bottom:6px">Personal log style (pick one)</label>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${[
-            ['hourly','⏱ Hourly','Log work by hour (time slots)'],
-            ['session','📍 Session','Log work by session (morning/afternoon/etc)'],
-            ['daily','📋 Daily','Single summary of the whole day']
-          ].map(([m,lbl,tooltip])=>`
-            <button onclick="window._wlMode='${m}';navEmp('emp-worklog')" title="${tooltip}" style="padding:9px 14px;border-radius:10px;border:2px solid ${mode===m?'#0f766e':'var(--border)'};background:${mode===m?'#f0fdf4':'#fff'};color:${mode===m?'#0f766e':'var(--text)'};cursor:pointer;font-size:13px;font-weight:700;transition:.15s">
-              ${lbl}
-            </button>`).join('')}
+          ${(()=>{
+            const allowed = (D.settings && D.settings.allowedLogModes && typeof D.settings.allowedLogModes==='object')
+              ? D.settings.allowedLogModes
+              : {hourly:true, session:true, daily:true};
+            // If current mode is disabled, fall back to the first allowed one
+            const currentAllowed = allowed[mode] !== false;
+            if(!currentAllowed){
+              const fallback = ['hourly','session','daily'].find(k => allowed[k] !== false) || 'daily';
+              if(fallback !== mode){
+                window._wlMode = fallback;
+                // Trigger a re-render after this paint cycle
+                setTimeout(()=>{ if(empPage==='emp-worklog') navEmp('emp-worklog'); }, 0);
+              }
+            }
+            return [
+              ['hourly','⏱ Hourly','Log work by hour (time slots)'],
+              ['session','📍 Session','Log work by session (morning/afternoon/etc)'],
+              ['daily','📋 Daily','Single summary of the whole day']
+            ].map(([m,lbl,tooltip])=>{
+              const enabled = allowed[m] !== false;
+              if(!enabled){
+                return `<button disabled title="🔒 ${lbl.split(' ').slice(1).join(' ')} mode disabled by admin" style="padding:9px 14px;border-radius:10px;border:2px solid #e5e7eb;background:#f8fafc;color:#94a3b8;cursor:not-allowed;font-size:13px;font-weight:700;opacity:.6;position:relative">${lbl} <span style="font-size:10px;font-weight:400;opacity:.7">🔒</span></button>`;
+              }
+              return `<button onclick="window._wlMode='${m}';navEmp('emp-worklog')" title="${tooltip}" style="padding:9px 14px;border-radius:10px;border:2px solid ${mode===m?'#0f766e':'var(--border)'};background:${mode===m?'#f0fdf4':'#fff'};color:${mode===m?'#0f766e':'var(--text)'};cursor:pointer;font-size:13px;font-weight:700;transition:.15s">${lbl}</button>`;
+            }).join('');
+          })()}
         </div>
       </div>
     </div>
@@ -15026,7 +15169,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v41-2026-04-30-project-codes';
+const APP_VERSION = 'v42-2026-04-30-modes-and-loggers';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
