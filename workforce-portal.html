@@ -824,12 +824,18 @@ async function projectsLoad(force){
     const cid = currentCompany ? currentCompany.company_id : 'KSPL';
     const rows = await sb('projects','GET',null,`?company_id=eq.${encodeURIComponent(cid)}&order=created_at.desc&select=*`);
     window._projectsCache = (rows||[]).map(r=>({
-      _uuid:r.id, name:r.name, description:r.description||'',
+      _uuid:r.id, code:r.code||'', name:r.name, description:r.description||'',
       teamId:r.team_id, companyId:r.company_id,
       status:r.status||'active', createdAt:r.created_at
     }));
     return window._projectsCache;
   }catch(e){console.warn('[projects] load failed:',e); return [];}
+}
+
+// Returns "CODE — Name" or just "Name" if no code
+function projectDisplayLabel(p){
+  if(!p) return '';
+  return p.code ? `${p.code} — ${p.name}` : p.name;
 }
 
 async function projectMembersLoad(force){
@@ -857,10 +863,11 @@ async function projectUpdatesLoad(projectId, force){
 }
 
 async function projectCreate(data){
-  // data: {name, description, teamId}
+  // data: {name, description, teamId, code}
   if(!data.name || !data.name.trim()){ showToast('Project name is required','info'); return null; }
   if(!data.teamId){ showToast('Team is required','info'); return null; }
   const payload = {
+    code: (data.code||'').trim() || null,
     name: data.name.trim(),
     description: (data.description||'').trim(),
     team_id: data.teamId,
@@ -876,6 +883,7 @@ async function projectCreate(data){
 
 async function projectUpdate(projectId, data){
   const payload = {};
+  if(data.code !== undefined) payload.code = (data.code||'').trim() || null;
   if(data.name !== undefined) payload.name = data.name.trim();
   if(data.description !== undefined) payload.description = (data.description||'').trim();
   if(data.status !== undefined) payload.status = data.status;
@@ -973,21 +981,23 @@ async function membersOfProject(projectId){
 }
 
 // Calculate total hours worked on this project from member work logs.
-// Prefers the new structured `projectEntries` field; falls back to tag-based detection
-// (proj-<kebab-name>) for backward compatibility.
+// Match logic: a project entry's `project` field can be either the bare name
+// ("Foundation Work") or the labelled form ("STM-001 — Foundation Work").
+// We accept both to support old and new entries.
 async function projectTotalHours(project){
   const tag = _projectTag(project.name);
   const projectName = (project.name||'').trim().toLowerCase();
+  const projectLabel = projectDisplayLabel(project).trim().toLowerCase();
   const allLogs = window._wlAllCache || [];
   const members = await membersOfProject(project._uuid);
   const memberUuids = new Set(members.map(m=>m._uuid));
   let total = 0;
   allLogs.forEach(l=>{
     if(!memberUuids.has(l.empUuid)) return;
-    // Preferred: structured project_entries match
     if(Array.isArray(l.projectEntries) && l.projectEntries.length){
       l.projectEntries.forEach(pe=>{
-        if((pe.project||'').trim().toLowerCase() === projectName){
+        const peVal = (pe.project||'').trim().toLowerCase();
+        if(peVal === projectName || peVal === projectLabel){
           total += (parseInt(pe.hours)||0) + (parseInt(pe.minutes)||0)/60;
         }
       });
@@ -11578,7 +11588,10 @@ async function renderTeamProjectsList(teamUuid){
     return `<div style="border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px;cursor:pointer;transition:.15s;background:#fff" onclick="openProjectDetailModal('${p._uuid}','${teamUuid}')" onmouseover="this.style.background='#faf5ff';this.style.borderColor='#c4b5fd'" onmouseout="this.style.background='#fff';this.style.borderColor='var(--border)'">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px">
         <div style="flex:1;min-width:0">
-          <div style="font-size:14px;font-weight:700;color:var(--text)">${_wlcEscape(p.name)}</div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            ${p.code?`<span style="background:#1A1A4E;color:#fff;font-family:monospace;font-size:11px;font-weight:700;padding:2px 7px;border-radius:4px;letter-spacing:.5px">${_wlcEscape(p.code)}</span>`:''}
+            <div style="font-size:14px;font-weight:700;color:var(--text)">${_wlcEscape(p.name)}</div>
+          </div>
           ${p.description?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${_wlcEscape(p.description.substring(0,140))}${p.description.length>140?'…':''}</div>`:''}
         </div>
         ${statusBadge}
@@ -11605,8 +11618,13 @@ function openProjectEditModal(projectId, teamUuid){
         <button class="xbtn" onclick="closeModal('project-detail-modal-wrap')">×</button>
       </div>
       <div id="proj-form-err"></div>
-      <div class="fld"><label>Project name <span style="color:#ef4444">*</span></label>
-        <input type="text" id="proj-name" value="${existing?_wlcEscape(existing.name):''}" placeholder="e.g. Website Redesign Q3" autocomplete="off">
+      <div style="display:grid;grid-template-columns:120px 1fr;gap:10px">
+        <div class="fld"><label>Code</label>
+          <input type="text" id="proj-code" value="${existing?_wlcEscape(existing.code||''):''}" placeholder="e.g. STM-001" autocomplete="off" style="text-transform:uppercase">
+        </div>
+        <div class="fld"><label>Project name <span style="color:#ef4444">*</span></label>
+          <input type="text" id="proj-name" value="${existing?_wlcEscape(existing.name):''}" placeholder="e.g. Foundation Work" autocomplete="off">
+        </div>
       </div>
       <div class="fld"><label>Description</label>
         <textarea id="proj-desc" rows="3" placeholder="What is this project about?">${existing?_wlcEscape(existing.description):''}</textarea>
@@ -11620,7 +11638,7 @@ function openProjectEditModal(projectId, teamUuid){
         </select>
       </div>`:''}
       <div style="background:#eef2ff;padding:10px 12px;border-radius:8px;margin:10px 0;font-size:11px;color:#3730a3">
-        💡 <strong>Tip:</strong> Time worked is auto-calculated. When members tag their work logs with <code style="background:#fff;padding:1px 5px;border-radius:3px;font-size:10px">${_projectTag(existing?existing.name:'project-name')}</code> the hours will sum here.
+        💡 <strong>Tip:</strong> Code is shown next to the project name everywhere (e.g. <code style="background:#fff;padding:1px 5px;border-radius:3px;font-size:10px">STM-001 — Foundation Work</code>). Code is optional but helps employees identify projects quickly.
       </div>
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:1rem">
         ${existing?`<button class="btn btn-sec" style="color:#dc2626;border-color:#fecaca;margin-right:auto" onclick="confirmDeleteProject('${existing._uuid}','${teamUuid}')">🗑 Delete</button>`:''}
@@ -11632,6 +11650,7 @@ function openProjectEditModal(projectId, teamUuid){
 }
 
 async function saveProject(projectId, teamUuid){
+  const code = ($('proj-code')||{}).value?.trim().toUpperCase() || '';
   const name = ($('proj-name')||{}).value?.trim();
   const desc = ($('proj-desc')||{}).value?.trim();
   const err = $('proj-form-err');
@@ -11640,11 +11659,11 @@ async function saveProject(projectId, teamUuid){
 
   if(projectId){
     const status = ($('proj-status')||{}).value || 'active';
-    const ok = await projectUpdate(projectId, {name, description:desc, status});
+    const ok = await projectUpdate(projectId, {code, name, description:desc, status});
     if(!ok){ if(err)err.innerHTML='<div class="alert alert-e">Save failed</div>'; return; }
     showToast(`Project "${name}" updated`,'success');
   } else {
-    const created = await projectCreate({name, description:desc, teamId:teamUuid});
+    const created = await projectCreate({code, name, description:desc, teamId:teamUuid});
     if(!created){ if(err)err.innerHTML='<div class="alert alert-e">Create failed</div>'; return; }
     showToast(`Project "${name}" created`,'success');
   }
@@ -13755,17 +13774,15 @@ async function postTeamSummaryInline(date){
 
 // Render the new project-entries section that appears in ALL log modes.
 // existing.projectEntries (if present) is an array of {project, hours, minutes}
-// where `project` is the project name (a UUID isn't used so the field also
-// supports custom typed values for projects not in the dropdown).
+// where `project` is the project's display label (e.g. "STM-001 — Foundation Work")
+// or a custom typed value for projects not in the dropdown.
 function renderProjectEntriesSection(existing){
-  const myEmp = currentEmployee;
-  // Find projects this employee is a member of (assigned by admin)
-  const allProjects = window._projectsCache || [];
-  const allMembers = window._projectMembersCache || [];
-  const myUuid = myEmp ? myEmp._uuid : null;
-  const myProjects = myUuid
-    ? allProjects.filter(p => allMembers.some(m => m.projectId === p._uuid && m.empUuid === myUuid))
-    : [];
+  // ALL company projects are visible to every employee — no membership restriction.
+  // Active projects appear first; on-hold/completed are deprioritized.
+  const allProjects = (window._projectsCache || []).slice().sort((a,b)=>{
+    const sOrd = {active:0, 'on-hold':1, completed:2};
+    return (sOrd[a.status]||0) - (sOrd[b.status]||0);
+  });
   const entries = (existing && Array.isArray(existing.projectEntries) && existing.projectEntries.length)
     ? existing.projectEntries
     : [{project:'', hours:0, minutes:0}];
@@ -13776,65 +13793,44 @@ function renderProjectEntriesSection(existing){
     (async ()=>{
       try{
         await projectsLoad();
-        await projectMembersLoad();
         // Re-render this page so the dropdown populates with projects
         if(empPage==='emp-worklog') navEmp('emp-worklog');
       }catch(e){console.warn(e);}
     })();
   }
 
-  const projectOptions = myProjects.map(p => `<option value="${_wlcEscape(p.name)}">${_wlcEscape(p.name)}</option>`).join('');
   const presetHours = [0,1,2,3,4,5,6,7,8,9,10];
   const presetMinutes = [0,15,30,45];
 
-  const rowHTML = (e, idx) => {
-    const project = e.project || '';
-    const isCustom = project && !myProjects.some(p => p.name === project);
-    const hours = parseInt(e.hours)||0;
-    const minutes = parseInt(e.minutes)||0;
-    return `<div class="wl-prow" data-idx="${idx}" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:center;padding:10px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;margin-bottom:8px">
-      <div>
-        <select data-k="project" onchange="onProjectEntryChange(this)" style="width:100%;padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
-          <option value="">— Pick a project —</option>
-          ${projectOptions}
-          <option value="__custom__" ${isCustom?'selected':''}>➕ Other (type custom)…</option>
-        </select>
-        <input type="text" data-k="custom_project" placeholder="Project name…" value="${isCustom ? _wlcEscape(project) : ''}" style="width:100%;margin-top:6px;padding:6px 8px;font-size:12px;border:1px solid #d8b4fe;border-radius:6px;${isCustom?'':'display:none'}" />
-      </div>
-      <select data-k="hours" style="padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
-        ${presetHours.map(h=>`<option value="${h}" ${h===hours?'selected':''}>${h}h</option>`).join('')}
-      </select>
-      <select data-k="minutes" style="padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
-        ${presetMinutes.map(m=>`<option value="${m}" ${m===minutes?'selected':''}>${String(m).padStart(2,'0')}m</option>`).join('')}
-      </select>
-      <button type="button" onclick="removeProjectEntryRow(this)" style="background:none;border:none;color:#dc2626;font-size:16px;cursor:pointer;padding:4px 8px" title="Remove this project entry">×</button>
-    </div>`;
-  };
-
-  // Pre-populate selected project after render. We have to do this for the SELECT
-  // because we can't put `selected` on dropdown options that match dynamic values.
-  // We render a `data-pickedproject` attribute on the row container and use a
-  // tiny script after to set the value. Simpler: just set it via inline option.
-  // Instead, generate options with `selected` attribute on the matching one:
+  // Render each row, pre-selecting the saved project (matched by display label)
   const rowHTMLWithSelected = (e, idx) => {
-    const project = e.project || '';
-    const isCustom = project && !myProjects.some(p => p.name === project);
+    const savedLabel = e.project || '';
+    // Try to match against any project's display label OR raw name
+    const matchedProj = allProjects.find(p =>
+      projectDisplayLabel(p) === savedLabel ||
+      p.name === savedLabel
+    );
+    const isCustom = savedLabel && !matchedProj;
     const hours = parseInt(e.hours)||0;
     const minutes = parseInt(e.minutes)||0;
-    const optList = myProjects.map(p => `<option value="${_wlcEscape(p.name)}" ${p.name===project ? 'selected':''}>${_wlcEscape(p.name)}</option>`).join('');
+    const selectedLabel = matchedProj ? projectDisplayLabel(matchedProj) : '';
+    const optList = allProjects.map(p => {
+      const lbl = projectDisplayLabel(p);
+      return `<option value="${_wlcEscape(lbl)}" ${lbl===selectedLabel?'selected':''}>${_wlcEscape(lbl)}${p.status!=='active'?' · '+p.status:''}</option>`;
+    }).join('');
     return `<div class="wl-prow" data-idx="${idx}" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;align-items:start;padding:10px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:8px;margin-bottom:8px">
       <div>
         <select data-k="project" onchange="onProjectEntryChange(this)" style="width:100%;padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
-          <option value="" ${!project?'selected':''}>— Pick a project —</option>
+          <option value="" ${!savedLabel?'selected':''}>— Pick a project —</option>
           ${optList}
           <option value="__custom__" ${isCustom?'selected':''}>➕ Other (type custom)…</option>
         </select>
-        <input type="text" data-k="custom_project" placeholder="Project name…" value="${isCustom ? _wlcEscape(project) : ''}" style="width:100%;margin-top:6px;padding:6px 8px;font-size:12px;border:1px solid #d8b4fe;border-radius:6px;${isCustom?'':'display:none'}" />
+        <input type="text" data-k="custom_project" placeholder="Project name…" value="${isCustom ? _wlcEscape(savedLabel) : ''}" style="width:100%;margin-top:6px;padding:6px 8px;font-size:12px;border:1px solid #d8b4fe;border-radius:6px;${isCustom?'':'display:none'}" />
       </div>
-      <select data-k="hours" style="padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
+      <select data-k="hours" onchange="recomputeProjectTotal()" style="padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
         ${presetHours.map(h=>`<option value="${h}" ${h===hours?'selected':''}>${h}h</option>`).join('')}
       </select>
-      <select data-k="minutes" style="padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
+      <select data-k="minutes" onchange="recomputeProjectTotal()" style="padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
         ${presetMinutes.map(m=>`<option value="${m}" ${m===minutes?'selected':''}>${String(m).padStart(2,'0')}m</option>`).join('')}
       </select>
       <button type="button" onclick="removeProjectEntryRow(this)" style="background:none;border:none;color:#dc2626;font-size:16px;cursor:pointer;padding:6px 8px" title="Remove this project entry">×</button>
@@ -13846,7 +13842,7 @@ function renderProjectEntriesSection(existing){
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <div>
         <div style="font-size:13px;font-weight:700;color:#6b21a8">📁 Time on projects (counted toward project totals)</div>
-        <div style="font-size:11px;color:#7c3aed;margin-top:2px">Pick a project + how long you spent on it. ${myProjects.length===0?'Pick "Other" to type a custom project name.':''}</div>
+        <div style="font-size:11px;color:#7c3aed;margin-top:2px">Pick a project + how long you spent on it. ${allProjects.length===0?'No projects yet — pick "Other" to type a custom name, or ask admin to create one.':'Pick "Other" if your project is not listed.'}</div>
       </div>
       <span id="wl-proj-total" style="background:#7c3aed;color:#fff;padding:4px 10px;border-radius:12px;font-size:12px;font-weight:700">0h 0m</span>
     </div>
@@ -13860,7 +13856,6 @@ function renderProjectEntriesSection(existing){
       ${entries.map((e,i)=>rowHTMLWithSelected(e,i)).join('')}
     </div>
     <button type="button" onclick="addProjectEntryRow()" style="background:none;border:1px dashed #c084fc;color:#7c3aed;padding:7px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;margin-top:4px">+ Add another project</button>
-    <div style="font-size:11px;color:#7c3aed;margin-top:6px">💡 Total project hours auto-update as you adjust the rows.</div>
   </div>`;
 }
 
@@ -13883,10 +13878,11 @@ function onProjectEntryChange(sel){
 function addProjectEntryRow(){
   const wrap = document.getElementById('wl-proj-rows');
   if(!wrap) return;
-  const myEmp = currentEmployee;
-  const allProjects = window._projectsCache || [];
-  const allMembers = window._projectMembersCache || [];
-  const myProjects = myEmp ? allProjects.filter(p => allMembers.some(m => m.projectId === p._uuid && m.empUuid === myEmp._uuid)) : [];
+  // No member-restriction anymore — show ALL company projects
+  const allProjects = (window._projectsCache || []).slice().sort((a,b)=>{
+    const sOrd = {active:0, 'on-hold':1, completed:2};
+    return (sOrd[a.status]||0) - (sOrd[b.status]||0);
+  });
   const presetHours = [0,1,2,3,4,5,6,7,8,9,10];
   const presetMinutes = [0,15,30,45];
   const div = document.createElement('div');
@@ -13896,7 +13892,10 @@ function addProjectEntryRow(){
     <div>
       <select data-k="project" onchange="onProjectEntryChange(this)" style="width:100%;padding:7px 8px;font-size:13px;border:1px solid #d8b4fe;border-radius:6px;background:#fff">
         <option value="" selected>— Pick a project —</option>
-        ${myProjects.map(p => `<option value="${_wlcEscape(p.name)}">${_wlcEscape(p.name)}</option>`).join('')}
+        ${allProjects.map(p => {
+          const lbl = projectDisplayLabel(p);
+          return `<option value="${_wlcEscape(lbl)}">${_wlcEscape(lbl)}${p.status!=='active'?' · '+p.status:''}</option>`;
+        }).join('')}
         <option value="__custom__">➕ Other (type custom)…</option>
       </select>
       <input type="text" data-k="custom_project" placeholder="Project name…" value="" style="width:100%;margin-top:6px;padding:6px 8px;font-size:12px;border:1px solid #d8b4fe;border-radius:6px;display:none" />
@@ -15027,7 +15026,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v40-2026-04-30-project-hours';
+const APP_VERSION = 'v41-2026-04-30-project-codes';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
