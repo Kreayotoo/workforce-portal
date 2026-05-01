@@ -1883,7 +1883,7 @@ function renderApp(){
       </div>
       <div style="flex:1"></div>
       <button onclick="syncFromSupabase().then(()=>{nav(currentPage);})" title="Sync latest data from database" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600">🔄 Refresh</button>
-      ${currentCompany?`<div class="tb-mobile-hide" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">🏢 ${currentCompany.name}</div>`:`<div class="tb-mobile-hide" style="background:rgba(96,165,250,.2);border:1px solid rgba(96,165,250,.4);color:#93c5fd;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">👑 Super Admin</div>`}
+      ${currentCompany?`<div class="tb-mobile-hide" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700">🏢 ${currentCompany.name}</div>`:''}
       <div style="position:relative;cursor:pointer;font-size:16px;color:#fff" onclick="nav('notifications')">
         🔔${uc>0?`<div class="si-dot" style="top:-2px;right:-2px"></div>`:''}
       </div>
@@ -15182,7 +15182,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v45-2026-04-30-super-admin-badge';
+const APP_VERSION = 'v46-2026-04-30-remove-blue-pill';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
