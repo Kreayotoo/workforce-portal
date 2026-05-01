@@ -11393,8 +11393,8 @@ function pgTeams(){
             <button class="btn btn-sec" style="font-size:12px;padding:7px;color:#dc2626;border-color:#fecaca" onclick="deleteTeam('${t._uuid}')" title="Delete team">🗑</button>
           </div>
           <div style="display:flex;gap:6px;margin-top:6px">
-            <button class="btn btn-primary" style="flex:1;font-size:12px;padding:8px;background:linear-gradient(135deg,#0f766e,#14b8a6)" onclick="viewTeamWorkLogs('${t._uuid}')">📊 Work Logs</button>
-            <button class="btn btn-primary" style="flex:1;font-size:12px;padding:8px;background:linear-gradient(135deg,#7c3aed,#a855f7)" onclick="openTeamProjects('${t._uuid}')">📁 Projects</button>
+            <button class="btn btn-primary" style="flex:1;font-size:12px;padding:8px;background:#1A1A4E" onclick="viewTeamWorkLogs('${t._uuid}')">📊 Work Logs</button>
+            <button class="btn btn-primary" style="flex:1;font-size:12px;padding:8px;background:#1A1A4E" onclick="openTeamProjects('${t._uuid}')">📁 Projects</button>
           </div>
         </div>
       </div>`;
@@ -14762,7 +14762,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v38-2026-04-30-corporate-navy';
+const APP_VERSION = 'v39-2026-04-30-team-buttons-navy';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
