@@ -1894,7 +1894,7 @@ function renderApp(){
           <span style="font-size:10px;color:rgba(255,255,255,.6)">${currentCompany?currentCompany.admin_email:D.user.email}</span>
         </div>
       </div>
-      <div class="tb-mobile-hide" style="background:#fbbf24;color:#78350f;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:800;letter-spacing:1px">🛡 ADMIN</div>
+      <div class="tb-mobile-hide" style="background:#fbbf24;color:#78350f;padding:3px 10px;border-radius:6px;font-size:10px;font-weight:800;letter-spacing:1px">🛡 SUPER ADMIN</div>
       <button class="btn btn-sec" style="font-size:12px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff" onclick="logout()">Log out</button>
     </div>
     <div class="body-row">
@@ -15182,7 +15182,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v44-2026-04-30-midnight-team-cards';
+const APP_VERSION = 'v45-2026-04-30-super-admin-badge';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
