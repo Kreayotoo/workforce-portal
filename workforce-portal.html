@@ -1840,15 +1840,13 @@ function renderApp(){
             #fff;
             filter:blur(10px);opacity:.75;z-index:0"></div>
           <!-- Inner white pill -->
-          <div style="position:relative;display:flex;align-items:center;background:#fff;border-radius:24px;padding:0 6px 0 16px;z-index:1;box-shadow:0 2px 12px rgba(0,0,0,.15)">
-            <span style="font-size:14px;line-height:1;flex-shrink:0;color:#4285f4;font-weight:700">|</span>
+          <div style="position:relative;display:flex;align-items:center;background:#fff;border-radius:24px;padding:0 16px;z-index:1;box-shadow:0 2px 12px rgba(0,0,0,.15)">
             <input type="text" id="universal-search" placeholder="AI search — employees, leaves, projects…" autocomplete="off"
               oninput="runUniversalSearch(this.value)"
               onfocus="runUniversalSearch(this.value)"
               onkeydown="if(event.key==='Enter')runUniversalSearch(this.value,true)"
               onblur="setTimeout(()=>{const r=document.getElementById('univ-search-results');if(r)r.style.display='none'},200)"
-              style="flex:1;min-width:0;padding:9px 10px;border:none;background:transparent;color:#1f2937;font-size:14px;outline:none" />
-            <button onclick="runUniversalSearch(document.getElementById('universal-search').value,true)" title="Search" style="background:#f1f5f9;border:none;color:#475569;width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;transition:.15s" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">🔍</button>
+              style="flex:1;min-width:0;padding:9px 0;border:none;background:transparent;color:#1f2937;font-size:14px;outline:none" />
           </div>
           <div id="univ-search-results" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:#fff;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.2);max-height:400px;overflow-y:auto;z-index:200"></div>
         </div>
@@ -14764,7 +14762,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v34-2026-04-30-static-glow';
+const APP_VERSION = 'v35-2026-04-30-clean-search-pill';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
