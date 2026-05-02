@@ -14559,24 +14559,39 @@ function pgWorkLogs(){
       <div style="font-size:14px;font-weight:600">No work logs match the filter</div>
     </div>`:`
     <table style="margin-top:8px"><thead><tr>
-      <th style="padding-left:12px;width:18%">Employee</th>
-      <th style="width:10%">Date</th>
-      <th style="width:9%">Style</th>
+      <th style="padding-left:12px;width:16%">Employee</th>
+      <th style="width:9%">Date</th>
+      <th style="width:8%">Style</th>
       <th style="width:7%">Hours</th>
-      <th style="width:31%">Preview</th>
-      <th style="width:20%">Tags</th>
+      <th style="width:18%">Projects</th>
+      <th style="width:25%">Preview</th>
+      <th style="width:12%">Tags</th>
       <th style="width:5%">View</th>
     </tr></thead><tbody>${filtered.map(l=>{
       const emp=D.employees.find(e=>e._uuid===l.empUuid||e.name===l.empName);
       const preview=l.mode==='daily'?(l.entries[0]?.work||''):(l.entries||[]).map(e=>e.work||'').filter(w=>w).slice(0,2).join(' · ');
       const tagChips=(l.tags||[]).slice(0,3).map(t=>`<span style="background:#eef2ff;color:#4338ca;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-right:3px">#${t}</span>`).join('');
       const commentBadge=(l.adminComments&&l.adminComments.length)?`<span style="background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:700;margin-left:4px">💬 ${l.adminComments.length}</span>`:'';
+      // Project entries summary — show first 2 projects + total time
+      const pe = Array.isArray(l.projectEntries) ? l.projectEntries : [];
+      const projChips = pe.slice(0,2).map(p=>{
+        const h = parseInt(p.hours)||0;
+        const m = parseInt(p.minutes)||0;
+        const tStr = (h>0?h+'h ':'')+(m>0?m+'m':'') || '0m';
+        return `<span style="background:#f3e8ff;color:#6b21a8;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-right:3px;display:inline-block">📁 ${(p.project||'?').substring(0,18)}${(p.project||'').length>18?'…':''} · ${tStr}</span>`;
+      }).join('');
+      const projMore = pe.length > 2 ? `<span style="font-size:10px;color:var(--muted)">+${pe.length-2} more</span>` : '';
+      const projTotal = parseFloat(l.projectTotalHours)||0;
+      const projDisplay = pe.length === 0
+        ? '<span style="color:var(--muted);font-size:11px">—</span>'
+        : `${projChips}${projMore}${projTotal>0?`<div style="font-size:10px;color:#7c3aed;font-weight:700;margin-top:2px">∑ ${projTotal.toFixed(1)}h on projects</div>`:''}`;
       return `<tr style="cursor:pointer" onclick="viewWorkLogDetail('${l._uuid}')">
         <td style="padding-left:12px"><div style="display:flex;align-items:center;gap:8px">${av(l.empName,28)}<div><div style="font-weight:600">${l.empName}${commentBadge}</div><div style="font-size:11px;color:var(--muted)">${emp?.dept||''}</div></div></div></td>
         <td><strong>${l.date}</strong></td>
         <td><span style="background:#eff6ff;color:#1e40af;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:700">${l.mode==='hourly'?'⏱':l.mode==='session'?'📍':'📋'} ${l.mode}</span></td>
         <td><strong style="color:#0f766e">${(parseFloat(l.totalHours)||0).toFixed(1)}h</strong></td>
-        <td style="white-space:normal;font-size:12px;color:var(--muted)">${(preview||'—').substring(0,100)}${preview&&preview.length>100?'…':''}</td>
+        <td style="white-space:normal">${projDisplay}</td>
+        <td style="white-space:normal;font-size:12px;color:var(--muted)">${(preview||'—').substring(0,80)}${preview&&preview.length>80?'…':''}</td>
         <td style="white-space:normal">${tagChips||'<span style="color:var(--muted);font-size:11px">—</span>'}</td>
         <td>
           <button class="btn-link" onclick="event.stopPropagation();viewWorkLogDetail('${l._uuid}')" style="font-size:12px">View →</button>
@@ -14620,6 +14635,23 @@ function viewWorkLogDetail(uuid){
             <div style="font-size:13px;white-space:pre-wrap">${(l.entries[0]?.work||'')}</div>
           </div>`}
       </div>
+      ${(Array.isArray(l.projectEntries)&&l.projectEntries.length)?`
+      <div style="margin-top:1rem;padding:12px;background:#faf5ff;border:1px solid #e9d5ff;border-radius:10px">
+        <div style="font-size:11px;font-weight:700;color:#6b21a8;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+          <span>📁 Time on projects (${l.projectEntries.length} ${l.projectEntries.length===1?'project':'projects'})</span>
+          <span style="background:#7c3aed;color:#fff;padding:3px 9px;border-radius:10px;font-size:11px;letter-spacing:0">∑ ${(parseFloat(l.projectTotalHours)||0).toFixed(1)}h</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${l.projectEntries.map(p=>{
+            const h=parseInt(p.hours)||0,m=parseInt(p.minutes)||0;
+            const tStr=(h>0?h+'h ':'')+(m>0?m+'m':'')||'0m';
+            return `<div style="background:#fff;border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;border:1px solid #f3e8ff">
+              <span style="font-size:13px;font-weight:600;color:#4c1d95">📁 ${p.project||'(unnamed)'}</span>
+              <span style="font-size:12px;font-weight:700;color:#7c3aed">${tStr}</span>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`:''}
       ${l.summary?`<div style="margin-top:1rem;padding:10px 14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px">
         <div style="font-size:11px;font-weight:700;color:#9a3412;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">📝 Summary / Notes</div>
         <div style="font-size:13px;color:#7c2d12;white-space:pre-wrap">${l.summary}</div>
@@ -15182,7 +15214,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v46-2026-04-30-remove-blue-pill';
+const APP_VERSION = 'v47-2026-05-02-show-project-hours-admin';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
