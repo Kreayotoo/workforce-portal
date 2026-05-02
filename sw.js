@@ -4,7 +4,7 @@
 //   - Static assets (icons, logos): cache-first for fast loads
 //   - External APIs (Supabase, CDNs, EmailJS): bypass SW entirely
 //   - Old caches cleaned on activate; clients claimed immediately
-const CACHE_VERSION = 'v46-2026-04-30-remove-blue-pill';
+const CACHE_VERSION = 'v47-2026-05-02-show-project-hours-admin';
 const CACHE_NAME = `kreayotoo-${CACHE_VERSION}`;
 const NETWORK_TIMEOUT_MS = 4000; // give up on network after 4s and serve cache
 
