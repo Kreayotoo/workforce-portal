@@ -1,5 +1,5 @@
 // Kreayotoo Workforce Portal - Service Worker
-const CACHE_VERSION = 'v60-2026-05-04-auto-close-stale-sessions';
+const CACHE_VERSION = 'v61-2026-05-04-attendance-inline-view';
 const CACHE_NAME = `kreayotoo-portal-${CACHE_VERSION}`;
 
 const ASSETS = [
