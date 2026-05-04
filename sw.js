@@ -1,5 +1,5 @@
 // Kreayotoo Workforce Portal - Service Worker
-const CACHE_VERSION = 'v48-2026-05-04-header-user-dropdown';
+const CACHE_VERSION = 'v49-2026-05-04-kreayotoo-id-card-design';
 const CACHE_NAME = `kreayotoo-portal-${CACHE_VERSION}`;
 
 const ASSETS = [
