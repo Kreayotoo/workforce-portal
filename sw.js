@@ -1,5 +1,5 @@
 // Kreayotoo Workforce Portal - Service Worker
-const CACHE_VERSION = 'v54-2026-05-04-new-make-in-india-logo';
+const CACHE_VERSION = 'v55-2026-05-04-id-card-uniform-height';
 const CACHE_NAME = `kreayotoo-portal-${CACHE_VERSION}`;
 
 const ASSETS = [
