@@ -1,5 +1,5 @@
 // Kreayotoo Workforce Portal - Service Worker
-const CACHE_VERSION = 'v50-2026-05-04-kreayotoo-id-card-v2';
+const CACHE_VERSION = 'v51-2026-05-04-kreayotoo-id-card-v3';
 const CACHE_NAME = `kreayotoo-portal-${CACHE_VERSION}`;
 
 const ASSETS = [
