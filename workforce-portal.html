@@ -13466,60 +13466,95 @@ function pgIDCards(){
   return `
   <div class="page-hd"><div><div class="pg-title">Employee ID Cards</div><div class="pg-sub">Generate and print ID cards for all employees</div></div>
   <button class="btn btn-primary" onclick="printAllCards()">🖨 Print all</button></div>
-  <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem" id="id-cards-grid">
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1.5rem;justify-items:center" id="id-cards-grid">
     ${D.employees.filter(e=>e.status==='Active').map(e=>idCardHTML(e)).join('')}
   </div>`;
 }
 function idCardHTML(e,mini=false){
-  const color=e.empType==='field'?'#f59e0b':e.empType==='remote'?'#10b981':'#1a1a4e';
-  const companyName=D.settings.company||'KREAYOTOO SOLUTIONS';
-  const hasPhoto=!!e.photoUrl;
-  const photoHtml=hasPhoto
-    ? `<img src="${e.photoUrl}" alt="${e.name}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-       <div style="display:none;width:100%;height:100%;align-items:center;justify-content:center;background:${color};color:#fff;font-weight:800;font-size:28px">${initials(e.name)}</div>`
-    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:${color};color:#fff;font-weight:800;font-size:28px">${initials(e.name)}</div>`;
+  // Kreayotoo physical-card design (v48): portrait, navy + cyan, hexagonal photo, ISO header, Made in India footer
+  const NAVY='#1e3a8a', CYAN='#22d3ee', CYAN_LT='#67e8f9', INK='#0f172a', SUBINK='#1e3a8a';
+  const phone = e.phone || '';
+  const doj = e.joined ? new Date(e.joined).toLocaleDateString('en-IN',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+  const empId = e.id || '—';
+  const designation = (e.role || 'EMPLOYEE').toUpperCase();
+  const blood = e.bloodGroup || '—';
+  const fullName = (e.name || '').toUpperCase();
+  const hasPhoto = !!e.photoUrl;
 
-  return `<div onclick="showEmpPopup('${e.id}')" style="background:#fff;border:0.5px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.08)${mini?';max-width:260px':''};transition:transform .2s, box-shadow .2s;position:relative;cursor:pointer" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 10px 24px rgba(0,0,0,.15)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 12px rgba(0,0,0,.08)'" title="Click to view profile">
-    <!-- Header strip with company name -->
-    <div style="background:${color};color:#fff;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;position:relative">
-      <div style="font-size:10px;letter-spacing:2px;font-weight:700;opacity:.9">${companyName}</div>
-      ${e.bloodGroup?`<div style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:800;letter-spacing:.5px">🩸 ${e.bloodGroup}</div>`:''}
+  // Hexagonal photo via SVG clipPath for crisp edges (works in print + screen)
+  // Each card gets a unique clipPath id so multiple cards on the page don't collide
+  const cid = 'kc_' + (e.id || Math.random().toString(36).slice(2,8)).replace(/[^a-zA-Z0-9]/g,'_');
+
+  const hexPhoto = `
+    <svg viewBox="0 0 200 220" style="width:170px;height:187px;display:block;margin:0 auto" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <clipPath id="${cid}_clip">
+          <polygon points="100,8 188,55 188,165 100,212 12,165 12,55"/>
+        </clipPath>
+      </defs>
+      <!-- Navy hex border -->
+      <polygon points="100,8 188,55 188,165 100,212 12,165 12,55"
+               fill="#ffffff" stroke="${NAVY}" stroke-width="6" stroke-linejoin="round"/>
+      ${hasPhoto
+        ? `<image href="${e.photoUrl}" x="12" y="8" width="176" height="204" preserveAspectRatio="xMidYMid slice" clip-path="url(#${cid}_clip)"/>`
+        : `<rect x="12" y="8" width="176" height="204" fill="${NAVY}" clip-path="url(#${cid}_clip)"/>
+           <text x="100" y="125" text-anchor="middle" fill="#fff" font-size="44" font-weight="800" font-family="Arial,sans-serif">${initials(e.name)}</text>`
+      }
+    </svg>`;
+
+  // Diagonal cyan rays background behind the hex (CSS conic + gradients)
+  const raysBg = `
+    background:
+      linear-gradient(135deg, transparent 0%, transparent 38%, ${CYAN_LT} 38%, ${CYAN_LT} 62%, transparent 62%) ,
+      linear-gradient(45deg,  transparent 0%, transparent 30%, ${CYAN} 30%, ${CYAN} 50%, transparent 50%) ,
+      linear-gradient(180deg, ${CYAN_LT} 0%, #e0f7ff 100%);
+    background-blend-mode: normal, normal, normal;`;
+
+  const cardWidth = mini ? '220px' : '100%';
+  const maxW = mini ? '220px' : '300px';
+
+  return `<div onclick="showEmpPopup('${e.id}')" class="kreayotoo-id-card" style="background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 6px 20px rgba(0,0,0,.12);max-width:${maxW};width:${cardWidth};margin:0 auto;cursor:pointer;transition:transform .2s, box-shadow .2s;font-family:Arial,Helvetica,sans-serif;position:relative" onmouseover="this.style.transform='translateY(-4px)';this.style.boxShadow='0 14px 32px rgba(0,0,0,.18)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 6px 20px rgba(0,0,0,.12)'" title="Click to view profile">
+
+    <!-- HEADER: Logo + KREAYOTOO wordmark + ISO line, all on cyan-tinted band -->
+    <div style="background:linear-gradient(180deg,#bdeaff 0%,#a5dff5 100%);padding:14px 14px 12px;display:flex;align-items:center;gap:10px">
+      <img src="kreayotoo-logo.png" alt="logo" style="width:40px;height:40px;object-fit:contain;flex-shrink:0" onerror="this.style.display='none'">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:22px;font-weight:900;color:${NAVY};letter-spacing:1px;line-height:1">KREAYOTOO</div>
+        <div style="font-size:7px;font-weight:700;color:${SUBINK};letter-spacing:.8px;margin-top:3px">SOLUTIONS (P) LTD &middot; WE CREATE FOR YOU</div>
+        <div style="font-size:7px;font-weight:700;color:${SUBINK};letter-spacing:.8px;margin-top:1px">ISO 9001 : 2015 &amp; 14001 : 2015</div>
+      </div>
     </div>
 
-    <!-- Photo section -->
-    <div style="background:linear-gradient(to bottom,${color} 0%,${color} 30%,#fff 30%,#fff 100%);padding:0 14px 14px;text-align:center">
-      <div style="width:100px;height:100px;border-radius:50%;overflow:hidden;background:#fff;margin:0 auto;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.15);position:relative">
-        ${photoHtml}
-      </div>
-      <!-- Name & role -->
-      <div style="margin-top:10px">
-        <div style="font-weight:800;font-size:15px;color:var(--text);letter-spacing:-.2px">${e.name}</div>
-        <div style="font-size:11px;color:var(--muted);margin-top:3px">${e.role||'Employee'}</div>
+    <!-- PHOTO section with diagonal cyan rays background -->
+    <div style="${raysBg};padding:18px 14px 22px;position:relative">
+      ${hexPhoto}
+    </div>
+
+    <!-- DETAILS section -->
+    <div style="padding:14px 16px 8px;text-align:center">
+      <div style="font-weight:900;font-size:16px;color:${INK};letter-spacing:.3px;line-height:1.15">${fullName}</div>
+      <div style="font-weight:700;font-size:11px;color:${CYAN};letter-spacing:1px;margin-top:5px">${designation}</div>
+
+      <div style="margin-top:14px;display:flex;flex-direction:column;gap:6px;text-align:left;padding:0 4px">
+        <div style="display:flex;align-items:baseline;font-size:12px"><span style="color:${INK};font-weight:600;min-width:90px">Emp ID</span><span style="color:${INK};font-weight:600">: <span style="font-weight:700">${empId}</span></span></div>
+        <div style="display:flex;align-items:baseline;font-size:12px"><span style="color:${INK};font-weight:600;min-width:90px">D.O.J</span><span style="color:${INK};font-weight:600">: <span style="font-weight:700">${doj}</span></span></div>
+        <div style="display:flex;align-items:baseline;font-size:12px"><span style="color:${INK};font-weight:600;min-width:90px">Blood Group</span><span style="color:${INK};font-weight:600">: <span style="font-weight:700">${blood}</span></span></div>
       </div>
     </div>
 
-    <!-- Info strip -->
-    <div style="padding:0 14px 14px">
-      <div style="background:#f8fafc;border-radius:8px;padding:8px 12px;text-align:center;margin-bottom:8px">
-        <div style="font-family:'SF Mono',Consolas,monospace;font-size:12px;font-weight:700;letter-spacing:1.5px;color:${color}">${e.id}</div>
+    <!-- FOOTER: phone + Made in India badge -->
+    <div style="padding:8px 16px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:${INK};font-weight:600">
+        <span style="font-size:13px">📞</span><span>${phone || '—'}</span>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:10px">
-        <div style="background:#f1f5f9;border-radius:6px;padding:5px 8px;text-align:center">
-          <div style="color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px">Dept</div>
-          <div style="font-weight:700;color:var(--text);font-size:11px">${e.dept||'—'}</div>
-        </div>
-        <div style="background:#f1f5f9;border-radius:6px;padding:5px 8px;text-align:center">
-          <div style="color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px">Joined</div>
-          <div style="font-weight:700;color:var(--text);font-size:11px">${e.joined?new Date(e.joined).toLocaleDateString('en-IN',{month:'short',year:'2-digit'}):'—'}</div>
-        </div>
+      <div title="Made in India" style="display:flex;align-items:center;gap:2px;font-size:8px;font-weight:800;color:${INK};line-height:1">
+        <span style="display:inline-block;width:14px;height:3px;background:#ff9933;border-radius:1px"></span>
+        <span style="display:inline-block;width:14px;height:3px;background:#ffffff;border-top:1px solid #ccc;border-bottom:1px solid #ccc"></span>
+        <span style="display:inline-block;width:14px;height:3px;background:#138808;border-radius:1px"></span>
+        <span style="margin-left:3px;font-size:7px;letter-spacing:.5px">MADE IN INDIA</span>
       </div>
     </div>
 
-    <!-- Footer band -->
-    <div style="background:${color};color:#fff;padding:4px 14px;display:flex;align-items:center;justify-content:space-between;font-size:9px;opacity:.95">
-      <span style="opacity:.7">${e.email||''}</span>
-      <span style="font-weight:700;letter-spacing:1px;opacity:.9">AUTHORIZED</span>
-    </div>
   </div>`;
 }
 function empIDCard(){
@@ -15263,7 +15298,7 @@ async function init(){
 }
 
 // Register PWA service worker + auto-update banner
-const APP_VERSION = 'v48-2026-05-04-header-user-dropdown';
+const APP_VERSION = 'v49-2026-05-04-kreayotoo-id-card-design';
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
