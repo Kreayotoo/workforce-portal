@@ -1,5 +1,5 @@
 // Kreayotoo Workforce Portal - Service Worker
-const CACHE_VERSION = 'v56-2026-05-04-navy-gold-template';
+const CACHE_VERSION = 'v57-2026-05-04-emp-photo-upload';
 const CACHE_NAME = `kreayotoo-portal-${CACHE_VERSION}`;
 
 const ASSETS = [
