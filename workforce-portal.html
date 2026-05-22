@@ -3164,17 +3164,24 @@ async function empSignupSendOTP(){
     }
     const company = companies[0];
 
-    const existing = await sb('employees','GET',null,`?email=eq.${encodeURIComponent(email)}&company_id=eq.${encodeURIComponent(code)}&select=id`);
-    if(existing && existing.length){
+    // Check existing email — allow offboarded (Inactive) employees to re-signup
+    const existing = await sb('employees','GET',null,`?email=eq.${encodeURIComponent(email)}&company_id=eq.${encodeURIComponent(code)}&select=id,emp_id,status`);
+    const offboardedRow = (existing && existing.length && existing[0].status === 'Inactive') ? existing[0] : null;
+    if(existing && existing.length && !offboardedRow){
+      // Active account — block
       if(err) err.innerHTML = `<div class="alert alert-e">This email is already registered in ${company.name}. <a href="#" onclick="event.preventDefault();showSignin()" style="font-weight:700">Sign in instead?</a></div>`;
       return;
     }
 
     // Dedup-check the typed Employee ID within this company
-    const idDup = await sb('employees','GET',null,`?emp_id=eq.${encodeURIComponent(empIdInput)}&company_id=eq.${encodeURIComponent(code)}&select=id`);
+    // Skip the offboarded employee's own row (they're allowed to reuse their old ID)
+    const idDup = await sb('employees','GET',null,`?emp_id=eq.${encodeURIComponent(empIdInput)}&company_id=eq.${encodeURIComponent(code)}&select=id,status`);
     if(idDup && idDup.length){
-      if(err) err.innerHTML = `<div class="alert alert-e">Employee ID <strong>${empIdInput}</strong> is already in use at ${company.name}. Please use a different ID or contact your HR.</div>`;
-      return;
+      const blockingRow = idDup.find(r => !offboardedRow || r.id !== offboardedRow.id);
+      if(blockingRow){
+        if(err) err.innerHTML = `<div class="alert alert-e">Employee ID <strong>${empIdInput}</strong> is already in use at ${company.name}. Please use a different ID or contact your HR.</div>`;
+        return;
+      }
     }
 
     if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">📧 Sending verification code…</div>`;
@@ -3276,7 +3283,19 @@ async function doEmployeeSignup(prefilledData){
       // If they were previously offboarded, reactivate instead of blocking
       if(row.status === 'Inactive'){
         if(err) err.innerHTML = `<div class="alert" style="background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe">🔄 Reactivating your previous account…</div>`;
+        // If user typed a different emp_id, make sure the new one isn't taken by someone else
+        let finalEmpId = row.emp_id;
+        if(empIdTyped && empIdTyped !== row.emp_id){
+          const idDup = await sb('employees','GET',null,`?emp_id=eq.${encodeURIComponent(empIdTyped)}&company_id=eq.${encodeURIComponent(code)}&select=id`);
+          const blocking = (idDup||[]).find(r => r.id !== row.id);
+          if(blocking){
+            if(err) err.innerHTML = `<div class="alert alert-e">Employee ID <strong>${empIdTyped}</strong> is already in use. Please go back and use a different ID.</div>`;
+            return;
+          }
+          finalEmpId = empIdTyped;
+        }
         const reactivatePayload = {
+          emp_id: finalEmpId,
           name,
           phone: phone || null,
           status: 'Active',
@@ -3294,10 +3313,10 @@ async function doEmployeeSignup(prefilledData){
           if(err) err.innerHTML = `<div class="alert alert-e">Could not reactivate: ${errText.substring(0,200)}</div>`;
           return;
         }
-        if(err) err.innerHTML = `<div class="alert alert-s">✅ Welcome back to ${finalCompany.name}! Employee ID: <strong>${row.emp_id}</strong></div>`;
+        if(err) err.innerHTML = `<div class="alert alert-s">✅ Welcome back to ${finalCompany.name}! Employee ID: <strong>${finalEmpId}</strong></div>`;
         try{
           await sbSaveNotification({
-            msg: `🔄 ${name} rejoined as an employee (ID: ${row.emp_id})`,
+            msg: `🔄 ${name} rejoined as an employee (ID: ${finalEmpId})`,
             type: 'success',
             to: finalCompany.admin_email,
             company_id: code
