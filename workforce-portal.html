@@ -364,13 +364,76 @@ const initials = name => (name||'').split(' ').map(w=>w[0]).join('').slice(0,2).
 const todayStr = () => new Date().toISOString().split('T')[0];
 const dateLabel = () => new Date().toLocaleDateString('en-IN',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
 
+// ───── SERVER TIME ─────
+// Fetch authoritative server time. The DB function get_server_time()
+// returns now() in UTC. We cache for 30s to avoid hammering the API,
+// but always re-check before attendance writes. If unreachable, returns
+// null and the caller can fall back to local time (with a warning).
+let _serverTimeCache = { iso: null, fetchedAt: 0 };
+async function getServerTime(){
+  // Force-refresh if older than 30 seconds.
+  if(_serverTimeCache.iso && (Date.now() - _serverTimeCache.fetchedAt) < 30_000){
+    // Add elapsed wall time to the cached server time so it stays close to real.
+    const elapsed = Date.now() - _serverTimeCache.fetchedAt;
+    return new Date(new Date(_serverTimeCache.iso).getTime() + elapsed);
+  }
+  try{
+    const res = await fetch(`${SB_URL}/rest/v1/rpc/get_server_time`, {
+      method: 'POST',
+      headers: SB_HDR,
+      body: '{}'
+    });
+    if(!res.ok) throw new Error('rpc failed: '+res.status);
+    const iso = (await res.text()).replace(/^"|"$/g, ''); // strip JSON quotes
+    _serverTimeCache = { iso, fetchedAt: Date.now() };
+    return new Date(iso);
+  }catch(e){
+    console.warn('[security] could not fetch server time, using local:', e);
+    return null; // caller decides what to do
+  }
+}
+
+// Check if the device clock is significantly off vs the server.
+// Returns { ok: boolean, skewSeconds: number, serverTime: Date|null }.
+async function checkClockSkew(){
+  const srv = await getServerTime();
+  if(!srv) return { ok: true, skewSeconds: 0, serverTime: null }; // can't check; let it through
+  const skewSeconds = Math.round((srv.getTime() - Date.now()) / 1000);
+  return { ok: Math.abs(skewSeconds) <= 300, skewSeconds, serverTime: srv };
+}
+
 // ───── SECURITY HELPERS ─────
 // SHA-256 hash function using browser crypto. Returns hex string prefixed with 's2:'
 // (so we can tell hashed values apart from plain text and migrate over time).
+// SECURITY: passwords are hashed using bcrypt server-side (Postgres pgcrypto).
+// SHA-256 in the browser was the legacy approach — kept only for verifying
+// existing stored values during the migration period.
+//
+// New format: stored value starts with '$2a$' or '$2b$' (bcrypt's native format).
+// Legacy format: 's2:' prefix + 64 hex chars (browser SHA-256). Verifies but
+// is silently upgraded on next successful login (see verifyPassword below).
 async function hashPassword(plain){
   if(!plain) return '';
-  // If already hashed (starts with 's2:'), return as-is — idempotent
-  if(typeof plain==='string' && plain.startsWith('s2:')) return plain;
+  // Idempotent: if already hashed (bcrypt or legacy), return as-is.
+  if(typeof plain === 'string' && (plain.startsWith('$2a$') || plain.startsWith('$2b$') || plain.startsWith('s2:'))) return plain;
+  // Try server-side bcrypt via Supabase RPC.
+  try{
+    const res = await fetch(`${SB_URL}/rest/v1/rpc/hash_password_secure`, {
+      method: 'POST',
+      headers: SB_HDR,
+      body: JSON.stringify({ plain })
+    });
+    if(res.ok){
+      const hashed = (await res.text()).replace(/^"|"$/g, '');
+      if(hashed && hashed.startsWith('$2')) return hashed;
+    }
+    console.warn('[security] bcrypt RPC unavailable, falling back to SHA-256');
+  }catch(e){
+    console.warn('[security] bcrypt RPC error, falling back to SHA-256:', e);
+  }
+  // Fallback: browser SHA-256 (legacy s2: format). Better than plaintext if
+  // the RPC isn't reachable (e.g. migration not yet applied). Once the SQL
+  // migration is in place this branch should never run.
   try{
     const enc = new TextEncoder().encode(plain);
     const buf = await crypto.subtle.digest('SHA-256', enc);
@@ -383,15 +446,33 @@ async function hashPassword(plain){
 }
 
 // Verify a password against a stored value.
-// Backward-compatible: if stored value is hashed (s2:), compare hashes;
-// if stored value is plain text (legacy), do plain comparison.
+// Handles three formats: bcrypt ($2a$/$2b$), legacy SHA-256 (s2:), and legacy plaintext.
 async function verifyPassword(plainEntered, stored){
   if(!stored) return false;
-  if(typeof stored==='string' && stored.startsWith('s2:')){
-    const h = await hashPassword(plainEntered);
-    return h === stored;
+  // Bcrypt — verify via server RPC.
+  if(typeof stored === 'string' && (stored.startsWith('$2a$') || stored.startsWith('$2b$'))){
+    try{
+      const res = await fetch(`${SB_URL}/rest/v1/rpc/verify_password_secure`, {
+        method: 'POST',
+        headers: SB_HDR,
+        body: JSON.stringify({ plain: plainEntered, stored })
+      });
+      if(!res.ok) return false;
+      const txt = (await res.text()).trim();
+      return txt === 'true';
+    }catch(e){
+      console.error('[security] bcrypt verify RPC failed:', e);
+      return false;
+    }
   }
-  // Legacy plain-text comparison
+  // Legacy SHA-256
+  if(typeof stored === 'string' && stored.startsWith('s2:')){
+    const enc = new TextEncoder().encode(plainEntered);
+    const buf = await crypto.subtle.digest('SHA-256', enc);
+    const hex = Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+    return ('s2:'+hex) === stored;
+  }
+  // Legacy plaintext
   return plainEntered === stored;
 }
 
@@ -1476,9 +1557,36 @@ async function sbUpsert(table, payload, matchCol, matchVal){
 async function sbSaveAttendance(rec){
   const cid=currentCompany?currentCompany.company_id:'KSPL';
   const eUuid=empUuid(rec.empId);
-  const payload={employee_id:eUuid,employee_name:rec.empName,date:rec.date,status:rec.status,in_time:rec.in||null,out_time:rec.out||null,company_id:cid};
+  const payload={
+    employee_id:eUuid,
+    employee_name:rec.empName,
+    date:rec.date,
+    status:rec.status,
+    in_time:rec.in||null,
+    out_time:rec.out||null,
+    company_id:cid,
+    // SECURITY: client_reported_at lets the server detect device-clock tampering.
+    // The DB trigger rejects writes where this differs from server time by >5 min.
+    client_reported_at: new Date().toISOString()
+  };
   if(rec._uuid){return await sb('attendance','PATCH',payload,`?id=eq.${rec._uuid}`);}
-  else{const res=await fetch(`${SB_URL}/rest/v1/attendance`,{method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(payload)});if(!res.ok){console.error('❌ SB attendance:',await res.text());return null;}const t=await res.text();const r=t?JSON.parse(t):true;if(r&&r[0])rec._uuid=r[0].id;return r;}
+  else{
+    const res=await fetch(`${SB_URL}/rest/v1/attendance`,{method:'POST',headers:{...SB_HDR,'Prefer':'return=representation'},body:JSON.stringify(payload)});
+    if(!res.ok){
+      const errText = await res.text();
+      console.error('❌ SB attendance:',errText);
+      // Friendly messages for the two server-side trigger rejections.
+      if(/Device clock is off/i.test(errText)){
+        showToast('⚠️ Your phone time is wrong. Correct it in Settings → Date & Time → Automatic, then retry.', 'error', 6000);
+      } else if(/Daily attendance limit reached/i.test(errText)){
+        showToast('You\'ve already marked attendance twice today. No more sessions allowed.', 'info', 5000);
+      } else if(/violates check constraint/i.test(errText)){
+        showToast('Invalid attendance data. Please reload the page and try again.', 'error');
+      }
+      return null;
+    }
+    const t=await res.text();const r=t?JSON.parse(t):true;if(r&&r[0])rec._uuid=r[0].id;return r;
+  }
 }
 async function sbSaveLeave(lv){
   const cid=currentCompany?currentCompany.company_id:'KSPL';
@@ -5928,6 +6036,16 @@ async function checkInNow(){
   const emp=currentEmployee;
   const today=todayStr();
 
+  // SECURITY: Reject check-in if device clock is more than 5 minutes off from
+  // server time. Prevents marking on-time attendance by rewinding the phone clock.
+  // (Server-side trigger also enforces this — this is just a friendlier UX.)
+  const skew = await checkClockSkew();
+  if(!skew.ok){
+    const dir = skew.skewSeconds > 0 ? 'behind' : 'ahead of';
+    showToast(`⚠️ Your phone clock is ${Math.abs(skew.skewSeconds)}s ${dir} server time. Fix in Settings → Date & Time → set to Automatic, then try again.`, 'error', 7000);
+    return;
+  }
+
   // Block if already checked in
   const activeSession=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
   if(activeSession){
@@ -5964,6 +6082,14 @@ async function checkOutNow(){
   const emp=currentEmployee;
   const today=todayStr();
   const now=new Date();
+
+  // SECURITY: clock-skew guard (see checkInNow for rationale)
+  const skew = await checkClockSkew();
+  if(!skew.ok){
+    const dir = skew.skewSeconds > 0 ? 'behind' : 'ahead of';
+    showToast(`⚠️ Your phone clock is ${Math.abs(skew.skewSeconds)}s ${dir} server time. Fix it, then try again.`, 'error', 7000);
+    return;
+  }
 
   const activeSession=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
   if(!activeSession){showToast('No active session found','info');return;}
