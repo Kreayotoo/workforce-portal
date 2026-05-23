@@ -6961,12 +6961,35 @@ function empPayslip(){
 function printPayslip(){
   const area=document.getElementById('payslip-print-area');
   if(!area){window.print();return;}
-  const w=window.open('','_blank','width=900,height=700');
-  if(!w){window.print();return;}
-  w.document.write(`<!DOCTYPE html><html><head><title>Payslip</title>
+
+  // Use a hidden iframe instead of window.open() to avoid the popup-blocker
+  const old = document.getElementById('payslip-print-iframe');
+  if(old) old.remove();
+
+  const iframe = document.createElement('iframe');
+  iframe.id = 'payslip-print-iframe';
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  document.body.appendChild(iframe);
+
+  const html = `<!DOCTYPE html><html><head><title>Payslip</title>
     <style>body{margin:0;padding:20px;font-family:Arial,sans-serif}@media print{body{padding:0}}</style>
-    </head><body>${area.outerHTML}<script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script></body></html>`);
-  w.document.close();
+    </head><body>${area.outerHTML}</body></html>`;
+
+  const doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  setTimeout(()=>{
+    try{
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    }catch(e){
+      console.error('Print failed:', e);
+      window.print();
+    }
+    setTimeout(()=>{ if(iframe && iframe.parentNode) iframe.remove(); }, 60000);
+  }, 250);
 }
 
 function empPerformance(){
@@ -9401,8 +9424,16 @@ function showEmployeeDetail(empIdOrUuid){
       </div>
 
       <!-- KYC (mirrors employee KYC tab) -->
+      ${(()=>{
+        const _kycOn = (D.settings && typeof D.settings.kycEnabled==='boolean') ? D.settings.kycEnabled : true;
+        return _kycOn ? '' : `
+        <div style="background:#f1f5f9;border:1px dashed #94a3b8;border-radius:8px;padding:8px 12px;font-size:11px;color:#475569;margin-bottom:10px;display:flex;gap:8px;align-items:center">
+          <span style="font-size:13px">🔒</span>
+          <span><strong style="color:#334155">Collection disabled.</strong> Your company has turned off KYC &amp; bank-detail collection. Any data shown below is from before the change.</span>
+        </div>`;
+      })()}
       <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between">
-        <span>🪪 KYC &amp; Identity documents</span>
+        <span>🪪 KYC &amp; Identity documents ${((D.settings && D.settings.kycEnabled===false))?'<span style="font-size:9px;background:#e2e8f0;color:#475569;padding:2px 8px;border-radius:8px;margin-left:6px;letter-spacing:.3px">COLLECTION DISABLED</span>':''}</span>
         <button onclick="toggleRevealIdentity(this)" data-revealed="0" style="background:#f1f5f9;border:none;color:#475569;padding:3px 10px;border-radius:12px;cursor:pointer;font-size:10px;font-weight:700">👁 Reveal</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
@@ -9419,7 +9450,7 @@ function showEmployeeDetail(empIdOrUuid){
       </div>
 
       <!-- Bank (mirrors employee Bank tab) -->
-      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🏦 Bank details</div>
+      <div style="font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🏦 Bank details ${((D.settings && D.settings.kycEnabled===false))?'<span style="font-size:9px;background:#e2e8f0;color:#475569;padding:2px 8px;border-radius:8px;margin-left:6px;letter-spacing:.3px">COLLECTION DISABLED</span>':''}</div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:1rem">
         ${infoCardMasked('Account', e.bankAccount||'', maskAccount(e.bankAccount), e.bankAccount||'—')}
         ${infoCard('IFSC',e.bankIfsc||'—')}
@@ -10178,9 +10209,19 @@ function printAttView(){
     ? (D.employees.find(e=>e.id===window._attViewEmp)?.name || 'Selected employee')
     : 'All employees';
   const company = (currentCompany?.name || D.settings?.company || 'Kreayotoo Solutions');
-  const w = window.open('','_blank');
-  if(!w){ showToast('Please allow popups to print','info'); return; }
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Attendance — ${empName}</title>
+
+  // Use a hidden iframe instead of window.open() — iframes don't trigger
+  // popup-blockers, and the print dialog still appears from this same window.
+  // Remove any previous print iframe first.
+  const old = document.getElementById('att-print-iframe');
+  if(old) old.remove();
+
+  const iframe = document.createElement('iframe');
+  iframe.id = 'att-print-iframe';
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  document.body.appendChild(iframe);
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Attendance — ${empName}</title>
     <style>
       body{margin:0;padding:24px;font-family:Arial,sans-serif;color:#0f172a}
       h1{font-size:18px;margin:0 0 4px}
@@ -10195,9 +10236,26 @@ function printAttView(){
     <h1>${company} — Attendance Records</h1>
     <div class="meta">${empName} · ${window._attViewFrom} to ${window._attViewTo} · Generated ${new Date().toLocaleString('en-IN')}</div>
     ${area.outerHTML}
-    <script>window.onload=()=>setTimeout(()=>window.print(),300)<\/script>
-  </body></html>`);
-  w.document.close();
+  </body></html>`;
+
+  const doc = iframe.contentDocument || iframe.contentWindow.document;
+  doc.open();
+  doc.write(html);
+  doc.close();
+
+  // Wait one tick so the iframe's document parses + lays out, then print.
+  // Some browsers need a slightly longer wait when rendering tables.
+  setTimeout(()=>{
+    try{
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    }catch(e){
+      console.error('Print failed:', e);
+      showToast('Print failed. Try Download Excel instead.', 'info');
+    }
+    // Clean up after the print dialog closes (give it 60s max).
+    setTimeout(()=>{ if(iframe && iframe.parentNode) iframe.remove(); }, 60000);
+  }, 250);
 }
 
 async function exportAttendanceExcel(){
