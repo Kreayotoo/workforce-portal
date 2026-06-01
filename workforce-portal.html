@@ -1172,7 +1172,8 @@ function generateOTP(){ return String(Math.floor(100000 + Math.random()*900000))
 async function sendOTP(email, name){
   initEmailJS();
   const otp = generateOTP();
-  _otpStore[email] = { otp, expiry: Date.now() + 10*60*1000, verified: false };
+  const _key = (email||'').trim().toLowerCase();
+  _otpStore[_key] = { otp, expiry: Date.now() + 10*60*1000, verified: false };
   console.log('📧 Sending OTP', otp, 'to', email);
   try{
     const res = await emailjs.send(EJS_SERVICE, EJS_TEMPLATE, {
@@ -1194,10 +1195,13 @@ async function sendOTP(email, name){
 }
 
 function verifyOTP(email, enteredOtp){
-  const rec = _otpStore[email];
+  const key = (email||'').trim().toLowerCase();
+  const rec = _otpStore[key] || _otpStore[email];
   if(!rec) return { valid: false, msg: 'No OTP sent to this email. Please request again.' };
-  if(Date.now() > rec.expiry){ delete _otpStore[email]; return { valid: false, msg: 'OTP expired. Please request a new one.' }; }
-  if(rec.otp !== enteredOtp.trim()) return { valid: false, msg: 'Incorrect OTP. Please try again.' };
+  if(Date.now() > rec.expiry){ delete _otpStore[key]; delete _otpStore[email]; return { valid: false, msg: 'OTP expired. Please request a new one.' }; }
+  const cleanEntered = String(enteredOtp||'').replace(/\D/g,'');
+  const cleanStored = String(rec.otp||'').replace(/\D/g,'');
+  if(cleanStored !== cleanEntered) return { valid: false, msg: 'Incorrect OTP. Please try again.' };
   rec.verified = true;
   return { valid: true };
 }
