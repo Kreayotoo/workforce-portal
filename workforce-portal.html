@@ -6152,6 +6152,11 @@ async function doCheckInWithPhoto(photoDataUrl){
     return;
   }
   await new Promise(resolve=>initAttGeo(resolve));
+  // ENFORCEMENT: location is mandatory. Block check-in if GPS was denied/failed.
+  if(_attGeoState.status!=='ok' || _attGeoState.lat==null || _attGeoState.lng==null){
+    showToast('📍 Location is required to mark attendance. Please enable location access and try again.','error',6000);
+    return;
+  }
   const session={
     _localId:Date.now(),empName:emp.name,empId:emp._uuid||emp.id,date:today,
     checkIn:now.toISOString(),checkOut:null,
@@ -6180,6 +6185,11 @@ async function doCheckOutWithPhoto(photoDataUrl){
   const openSessions = D.attSessions?D.attSessions.filter(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):[];
   if(openSessions.length===0){ showToast('No active session','info'); return; }
   await new Promise(resolve=>initAttGeo(resolve));
+  // ENFORCEMENT: location is mandatory for check-out too.
+  if(_attGeoState.status!=='ok' || _attGeoState.lat==null || _attGeoState.lng==null){
+    showToast('📍 Location is required to check out. Please enable location access and try again.','error',6000);
+    return;
+  }
   const coLat=_attGeoState.lat||null, coLng=_attGeoState.lng||null, coAddr=_attGeoState.address||'';
   // Close all open sessions
   for(const active of openSessions){
@@ -6258,6 +6268,12 @@ async function faceCheckIn(timeStr, photo=''){
       {timeout:5000,enableHighAccuracy:true}
     );
   });
+
+  // ENFORCEMENT: location is mandatory for face check-in/out.
+  if(_attGeoState.status!=='ok' || _attGeoState.lat==null || _attGeoState.lng==null){
+    showToast('📍 Location is required to mark attendance. Please enable location access and try again.','error',6000);
+    return;
+  }
 
   const activeSession=D.attSessions?D.attSessions.find(s=>s.empName===emp.name&&s.date===today&&!s.checkOut):null;
 
