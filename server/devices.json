@@ -1,0 +1,59 @@
+{
+ "SIM-FLOW-1": {
+  "name": "Demo bulk flow (SIMULATED)",
+  "kind": "flow",
+  "utility": "water",
+  "unit": "LPS",
+  "protocol": "sim",
+  "enabled": true,
+  "block": "Z1B_B5",
+  "config": {
+   "base": 120,
+   "amp": 25,
+   "period_s": 600,
+   "noise": 4
+  },
+  "thresholds": {
+   "lo": 60,
+   "hi": 170
+  }
+ },
+ "SIM-PRES-1": {
+  "name": "Demo pressure (SIMULATED)",
+  "kind": "pressure",
+  "utility": "water",
+  "unit": "m",
+  "protocol": "sim",
+  "enabled": true,
+  "block": "Z1B_B5",
+  "config": {
+   "base": 32,
+   "amp": 6,
+   "period_s": 420,
+   "noise": 1.2
+  },
+  "thresholds": {
+   "lo": 15,
+   "hi": 45
+  }
+ },
+ "SIM-CL2-1": {
+  "name": "Demo residual chlorine (SIMULATED)",
+  "kind": "quality",
+  "utility": "water",
+  "unit": "mg/L",
+  "protocol": "sim",
+  "enabled": true,
+  "block": "Z1B_B5",
+  "config": {
+   "base": 0.8,
+   "amp": 0.25,
+   "period_s": 900,
+   "noise": 0.05
+  },
+  "thresholds": {
+   "lo": 0.2,
+   "hi": 1.5
+  }
+ }
+}

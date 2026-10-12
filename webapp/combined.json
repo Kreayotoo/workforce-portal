@@ -1,0 +1,72 @@
+[
+ {
+  "code": "ZONE_1B",
+  "kind": "zone",
+  "zone": "1B",
+  "file": "blocks/AmaravatiTwin_ZONE_1B.html",
+  "pipes": 975,
+  "manholes": 418,
+  "km": 35.96,
+  "blocks": 1
+ },
+ {
+  "code": "ZONE_5A",
+  "kind": "zone",
+  "zone": "5A",
+  "file": "blocks/AmaravatiTwin_ZONE_5A.html",
+  "pipes": 14898,
+  "manholes": 8388,
+  "km": 400.96,
+  "blocks": 4
+ },
+ {
+  "code": "ZONE_5C",
+  "kind": "zone",
+  "zone": "5C",
+  "file": "blocks/AmaravatiTwin_ZONE_5C.html",
+  "pipes": 12406,
+  "manholes": 7843,
+  "km": 385.34,
+  "blocks": 4
+ },
+ {
+  "code": "ZONE_5D",
+  "kind": "zone",
+  "zone": "5D",
+  "file": "blocks/AmaravatiTwin_ZONE_5D.html",
+  "pipes": 9152,
+  "manholes": 5873,
+  "km": 292.69,
+  "blocks": 3
+ },
+ {
+  "code": "ZONE_10",
+  "kind": "zone",
+  "zone": "10",
+  "file": "blocks/AmaravatiTwin_ZONE_10.html",
+  "pipes": 16258,
+  "manholes": 8350,
+  "km": 399.79,
+  "blocks": 3
+ },
+ {
+  "code": "ZONE_12",
+  "kind": "zone",
+  "zone": "12",
+  "file": "blocks/AmaravatiTwin_ZONE_12.html",
+  "pipes": 24364,
+  "manholes": 12813,
+  "km": 616.45,
+  "blocks": 6
+ },
+ {
+  "code": "CITY",
+  "kind": "city",
+  "zone": "ALL",
+  "file": "blocks/AmaravatiTwin_CITY.html",
+  "pipes": 80372,
+  "manholes": 43685,
+  "km": 2248.59,
+  "blocks": 21
+ }
+]

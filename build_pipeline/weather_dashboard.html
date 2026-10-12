@@ -1,0 +1,272 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live Weather & Storm-water — Amaravati</title>
+<style>
+:root{--bg:#060f1c;--pan:#0c1a2e;--pan2:#0e2138;--line:#1d3a57;--ink:#eaf2f9;--dim:#9bb1c6;--teal:#5fe0d2;--cy:#19C6F0;--amber:#f5c542;--red:#ff5d5d;--grn:#57d98a;--mono:ui-monospace,monospace}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,Arial,sans-serif;overflow-y:auto}
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;padding:11px 18px;background:linear-gradient(180deg,#081b30,#07162a);border-bottom:1px solid var(--line)}
+.top img{height:36px}
+.tt b{font-size:15px;font-weight:800;color:#fff;display:block;line-height:1.1}
+.tt span{font-size:10px;color:var(--teal);letter-spacing:.13em;text-transform:uppercase}
+.upd{margin-left:auto;text-align:right;font-family:var(--mono);font-size:10.5px;color:var(--dim)}
+.btn{background:var(--pan2);border:1px solid var(--line);color:var(--teal);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;margin-left:10px}
+.btn:hover{border-color:var(--teal)}
+.wbtn{background:var(--pan2);border:1px solid var(--line);color:var(--dim);border-radius:7px;padding:6px 11px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}
+.wbtn:hover{border-color:var(--teal)}.wbtn.on{border-color:var(--teal);background:#0e2c44;color:var(--teal)}
+.wrap{padding:16px 18px 40px;max-width:1400px;margin:0 auto}
+.sec{margin-bottom:22px}
+.sh{display:flex;align-items:center;gap:10px;margin:0 0 11px}
+.sh b{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--teal);font-family:var(--mono)}
+.sh .ln{flex:1;height:1px;background:var(--line)}
+.sh .tag{font-size:9.5px;font-family:var(--mono);padding:2px 8px;border-radius:20px}
+.tag.live{background:rgba(87,217,138,.14);color:var(--grn);border:1px solid rgba(87,217,138,.4)}
+.tag.sim{background:rgba(245,197,66,.12);color:var(--amber);border:1px solid rgba(245,197,66,.4)}
+.grid{display:grid;gap:12px}
+.g5{grid-template-columns:repeat(5,1fr)}.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:1.4fr 1fr}
+.card{background:var(--pan);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.card .lbl{font-size:10px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase;font-family:var(--mono)}
+.card .val{font-size:30px;font-weight:800;color:#fff;margin-top:4px;line-height:1}
+.card .val small{font-size:14px;color:var(--dim);font-weight:600}
+.card .sub{font-size:11px;color:var(--dim);margin-top:5px}
+.wc{font-size:38px;line-height:1}
+#hbars{display:flex;align-items:flex-end;gap:3px;height:130px;padding-top:6px}
+.hb{flex:1;background:linear-gradient(180deg,var(--cy),#0f6d94);border-radius:3px 3px 0 0;min-height:2px;position:relative}
+.hb.now{outline:2px solid var(--teal)}
+.hb span{position:absolute;bottom:-16px;left:50%;transform:translateX(-50%);font-size:7.5px;color:var(--dim);font-family:var(--mono);white-space:nowrap}
+.hb i{position:absolute;top:-14px;left:50%;transform:translateX(-50%);font-size:8px;color:var(--cy);font-family:var(--mono);font-style:normal}
+.days{display:flex;gap:8px}
+.day{flex:1;background:var(--pan2);border:1px solid var(--line);border-radius:9px;padding:9px;text-align:center}
+.day .dn{font-size:10px;color:var(--dim);font-family:var(--mono)}
+.day .di{font-size:22px;margin:3px 0}
+.day .dr{font-size:13px;font-weight:700;color:var(--cy)}
+.day .dt{font-size:10px;color:var(--dim);margin-top:2px}
+.gauge{display:flex;align-items:center;gap:16px}
+.grisk{width:120px;height:120px;flex-shrink:0}
+.zrow{display:grid;grid-template-columns:70px 1fr 92px;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid rgba(29,58,87,.5)}
+.zrow b{font-family:var(--mono);font-size:12px}
+.bar{height:16px;background:#12233a;border-radius:8px;overflow:hidden;position:relative}
+.bar .fill{height:100%;border-radius:8px;transition:width .5s}
+.zst{font-family:var(--mono);font-size:10.5px;text-align:right}
+.pill{display:inline-block;font-size:9.5px;font-weight:700;padding:2px 8px;border-radius:20px;font-family:var(--mono)}
+.foot{margin-top:24px;font-size:10.5px;color:var(--dim);font-family:var(--mono);border-top:1px solid var(--line);padding-top:12px;line-height:1.6}
+.load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:var(--bg);z-index:20;font-family:var(--mono);color:var(--teal)}
+.spin{width:36px;height:36px;border:3px solid var(--line);border-top-color:var(--teal);border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media(max-width:820px){.g5{grid-template-columns:repeat(2,1fr)}.g4{grid-template-columns:repeat(2,1fr)}.g3,.g2{grid-template-columns:1fr}.days{flex-wrap:wrap}.day{min-width:calc(25% - 8px)}}
+</style></head>
+<body>
+<div class="top">
+  <img src="__LOGO__" alt="Kreayotoo">
+  <div class="tt"><b>Live Weather &amp; Storm-water Response</b><span>Amaravati Capital City · Digital Twin</span></div>
+  <div class="upd" id="upd">loading…</div>
+  <button class="btn" id="refresh">↻ Refresh</button>
+</div>
+<div class="wrap" id="wrap" style="display:none">
+
+  <div class="sec">
+    <div class="sh"><b>Current conditions</b><span class="ln"></span><span class="tag live">● LIVE · Open-Meteo</span></div>
+    <div class="grid g5" id="cur"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sh"><b>Rainfall forecast — next 24 hours</b><span class="ln"></span><span class="tag live">● LIVE</span></div>
+    <div class="card"><div id="hbars"></div></div>
+  </div>
+
+  <div class="sec">
+    <div class="sh"><b>7-day outlook</b><span class="ln"></span><span class="tag live">● LIVE</span></div>
+    <div class="days" id="days"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sh"><b>Live rain &amp; wind radar — Amaravati</b><span class="ln"></span><span class="tag live">● LIVE · Windy.com</span></div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="display:flex;gap:6px;padding:9px 12px;flex-wrap:wrap;border-bottom:1px solid var(--line)">
+        <button class="wbtn on" data-ov="rain">Rain / radar</button>
+        <button class="wbtn" data-ov="wind">Wind</button>
+        <button class="wbtn" data-ov="temp">Temperature</button>
+        <button class="wbtn" data-ov="clouds">Clouds</button>
+        <button class="wbtn" data-ov="rainAccu">Rain accumulation</button>
+      </div>
+      <iframe id="windy" title="Windy Amaravati" style="width:100%;height:440px;border:0;display:block"
+        src="https://embed.windy.com/embed2.html?lat=__LAT__&lon=__LON__&detailLat=__LAT__&detailLon=__LON__&zoom=10&level=surface&overlay=rain&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1"></iframe>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sh"><b>Storm-water network response</b><span class="ln"></span><span class="tag sim">◐ SIMULATED · real capacity + live rain</span></div>
+    <div class="grid g4" id="sinp" style="margin-bottom:12px"></div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="lbl">Storm-load over the next 24 h — most-loaded zone (<span id="tlzone" style="color:var(--cy)">—</span>) · driven by the live rainfall curve</div>
+      <svg id="stimeline" viewBox="0 0 800 152" preserveAspectRatio="none" style="width:100%;height:150px;margin-top:8px"></svg>
+    </div>
+    <div class="grid g2">
+      <div class="card">
+        <div class="lbl">Per-zone storm-drain utilisation (at forecast peak intensity)</div>
+        <div id="zones" style="margin-top:8px"></div>
+      </div>
+      <div class="card gauge">
+        <svg class="grisk" id="grisk" viewBox="0 0 120 120"></svg>
+        <div>
+          <div class="lbl">City-wide overflow risk</div>
+          <div class="val" id="riskLbl" style="font-size:22px">—</div>
+          <div class="sub" id="riskSub"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="sh"><b>Demand &amp; raw-water outlook</b><span class="ln"></span><span class="tag sim">◐ SIMULATED · driven by live temp &amp; rain</span></div>
+    <div class="grid g3" id="dem"></div>
+  </div>
+
+  <div class="foot" id="foot"></div>
+</div>
+<div class="load" id="load"><div class="spin"></div><div>fetching live weather for Amaravati…</div></div>
+
+<script>
+const LAT=__LAT__, LON=__LON__;
+const ZONESTORM=__ZONESTORM__;   // {zone:{count,length_m,avg_dia,max_dia,area_m2}}
+const WMO={0:['Clear','☀️'],1:['Mainly clear','🌤️'],2:['Partly cloudy','⛅'],3:['Overcast','☁️'],45:['Fog','🌫️'],48:['Rime fog','🌫️'],51:['Light drizzle','🌦️'],53:['Drizzle','🌦️'],55:['Dense drizzle','🌧️'],61:['Light rain','🌦️'],63:['Rain','🌧️'],65:['Heavy rain','🌧️'],66:['Freezing rain','🌧️'],67:['Freezing rain','🌧️'],71:['Snow','🌨️'],80:['Rain showers','🌦️'],81:['Rain showers','🌧️'],82:['Violent showers','⛈️'],95:['Thunderstorm','⛈️'],96:['Thunderstorm+hail','⛈️'],99:['Thunderstorm+hail','⛈️']};
+const wmo=c=>WMO[c]||['—','🌡️'];
+// --- simulation constants (transparent rational-method + Manning) ---
+const C_RUNOFF=0.70, N_MAN=0.014, SLOPE=0.002, I_DESIGN=55; // mm/hr design storm
+function manningCap(dmm){ const D=(dmm||600)/1000; return 0.312/N_MAN*Math.pow(D,8/3)*Math.sqrt(SLOPE); } // m³/s full-flow
+function riskColor(u){ return u>100?'var(--red)':u>70?'var(--amber)':'var(--grn)'; }
+function riskName(u){ return u>100?'HIGH':u>70?'ELEVATED':'LOW'; }
+function drawTimeline(vals, hours){
+  const W=800,Hh=152,pad=18, mx=Math.max(100,...vals)*1.1;
+  const x=k=>pad+k/(vals.length-1)*(W-2*pad), y=v=>Hh-pad-(v/mx)*(Hh-2*pad);
+  let path=vals.map((v,k)=>(k?'L':'M')+x(k).toFixed(1)+' '+y(v).toFixed(1)).join(' ');
+  let area=path+` L${x(vals.length-1).toFixed(1)} ${Hh-pad} L${x(0).toFixed(1)} ${Hh-pad} Z`;
+  const y100=y(100);
+  let ticks=''; for(let k=0;k<vals.length;k+=3){ ticks+=`<text x="${x(k)}" y="${Hh-4}" fill="#7f97ad" font-size="9" text-anchor="middle" font-family="ui-monospace">${hours[k]}h</text>`; }
+  const peak=Math.max(...vals), col=peak>100?'#ff5d5d':peak>70?'#f5c542':'#57d98a';
+  document.getElementById('stimeline').innerHTML=`
+    <defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity="0.45"/><stop offset="1" stop-color="${col}" stop-opacity="0.03"/></linearGradient></defs>
+    <line x1="${pad}" y1="${y100}" x2="${W-pad}" y2="${y100}" stroke="#ff5d5d" stroke-width="1" stroke-dasharray="5 4" opacity="0.7"/>
+    <text x="${W-pad}" y="${y100-4}" fill="#ff8a8a" font-size="9" text-anchor="end" font-family="ui-monospace">100% capacity</text>
+    <path d="${area}" fill="url(#tg)"/><path d="${path}" fill="none" stroke="${col}" stroke-width="2"/>
+    ${ticks}`;
+}
+function fmtFoot(){}
+
+async function load(){
+  document.getElementById('load').style.display='flex';
+  const url=`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,rain,weather_code,wind_speed_10m,wind_direction_10m&hourly=precipitation,temperature_2m&daily=precipitation_sum,temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&past_days=2&forecast_days=7`;
+  let d;
+  try{ const r=await fetch(url); d=await r.json(); }catch(e){
+    document.getElementById('load').innerHTML='<div style="max-width:340px;text-align:center">Could not reach the live weather service.<br>An internet connection is required.</div>'; return; }
+  render(d);
+  document.getElementById('load').style.display='none';
+  document.getElementById('wrap').style.display='block';
+}
+
+function render(d){
+  const cur=d.current, H=d.hourly, D=d.daily;
+  const [desc,ico]=wmo(cur.weather_code);
+  document.getElementById('upd').innerHTML='Amaravati '+LAT.toFixed(3)+', '+LON.toFixed(3)+'<br>updated '+new Date().toLocaleTimeString();
+  // current cards
+  document.getElementById('cur').innerHTML=[
+    `<div class="card"><div class="lbl">Temperature</div><div class="val">${Math.round(cur.temperature_2m)}<small>°C</small></div><div class="sub">feels ${Math.round(cur.apparent_temperature)}°C</div></div>`,
+    `<div class="card"><div class="lbl">Rain now</div><div class="val">${cur.precipitation.toFixed(1)}<small>mm/h</small></div><div class="sub">${cur.precipitation>0?'raining':'dry'}</div></div>`,
+    `<div class="card"><div class="lbl">Humidity</div><div class="val">${cur.relative_humidity_2m}<small>%</small></div><div class="sub">relative</div></div>`,
+    `<div class="card"><div class="lbl">Wind</div><div class="val">${Math.round(cur.wind_speed_10m)}<small>km/h</small></div><div class="sub">${cur.wind_direction_10m}°</div></div>`,
+    `<div class="card"><div class="lbl">Condition</div><div class="wc">${ico}</div><div class="sub">${desc}</div></div>`
+  ].join('');
+
+  // next 24h hourly rain (+ antecedent wetness from the past 48h, + rolling-window intensities)
+  const now=new Date(); let nowIdx=H.time.findIndex(t=>new Date(t)>=now); if(nowIdx<1)nowIdx=1;
+  let ante=0; for(let i=Math.max(0,nowIdx-48);i<nowIdx;i++) ante+=H.precipitation[i]||0;   // last 48h rain (mm)
+  const idx=[]; for(let i=nowIdx;i<nowIdx+24&&i<H.time.length;i++) idx.push(i);
+  const rains=idx.map(i=>H.precipitation[i]||0);
+  const maxR=Math.max(0.5,...rains);
+  const rain24=rains.reduce((a,b)=>a+b,0);
+  const peak1h=Math.max(0,...rains);
+  function rollMax(a,w){let m=0;for(let i=0;i+w<=a.length;i++){let s=0;for(let j=0;j<w;j++)s+=a[i+j];m=Math.max(m,s/w);}return m;}
+  const peak3h=rollMax(rains,3);                       // worst 3-hour average intensity (mm/hr)
+  const peakI=Math.max(peak1h,peak3h);                 // design driver for capacity check
+  const wet=Math.min(ante/60,1);                       // ~60 mm / 48h => saturated ground
+  const C_eff=Math.min(0.95, C_RUNOFF + wet*0.22);     // antecedent wetness raises runoff coefficient
+  document.getElementById('hbars').innerHTML=idx.map((i,k)=>{
+    const h=new Date(H.time[i]).getHours();
+    const isNow=k===0;
+    const ht=Math.max(2,(rains[k]/maxR)*118);
+    return `<div class="hb ${isNow?'now':''}" style="height:${ht}px" title="${rains[k].toFixed(1)} mm">${rains[k]>=1?`<i>${rains[k].toFixed(0)}</i>`:''}<span>${h}h</span></div>`;
+  }).join('');
+
+  // 7-day — find today in the daily array (past_days=2 shifts array start by 2 days)
+  const todayStr=new Date().toISOString().slice(0,10);
+  let dayStart=D.time.findIndex(t=>t>=todayStr); if(dayStart<0) dayStart=0;
+  document.getElementById('days').innerHTML=D.time.slice(dayStart,dayStart+7).map((t,i)=>{
+    const [ds,dic]=wmo(D.weather_code[dayStart+i]);
+    const dn=i===0?'Today':new Date(t+'T12:00:00').toLocaleDateString('en',{weekday:'short'});
+    return `<div class="day"><div class="dn">${dn}</div><div class="di">${dic}</div><div class="dr">${D.precipitation_sum[dayStart+i].toFixed(0)} mm</div><div class="dt">${Math.round(D.temperature_2m_max[dayStart+i])}°/${Math.round(D.temperature_2m_min[dayStart+i])}°</div></div>`;
+  }).join('');
+
+  // ---- storm-water response: rational method Q=C·i·A vs REAL Manning outfall capacity (from Civil 3D slopes+dia) ----
+  const zkeys=Object.keys(ZONESTORM);
+  let rows=''; let utils=[];
+  zkeys.forEach(z=>{
+    const s=ZONESTORM[z];
+    const A=Math.max(s.area_m2, 50000);
+    const Qpeak=C_eff*peakI*A/3.6e6;                       // m³/s at forecast peak intensity
+    const Qcap=Math.max(0.02, s.capacity_m3s||0.1);        // REAL outfall conveyance (Manning on actual slopes+dia)
+    let u=Math.min(Qpeak/Qcap*100,200);
+    utils.push(u);
+    rows+=`<div class="zrow"><b>ZONE ${z}</b><div class="bar"><div class="fill" style="width:${Math.min(u,100)}%;background:${riskColor(u)}"></div></div><div class="zst" style="color:${riskColor(u)}">${u.toFixed(0)}% · ${riskName(u)}</div></div>`;
+  });
+  document.getElementById('zones').innerHTML=rows||'<div class="sub">No storm-drain data.</div>';
+  // storm-model input cards (so the drivers are visible)
+  document.getElementById('sinp').innerHTML=[
+    ['Peak 1-hr intensity',peak1h.toFixed(1),'mm/hr'],
+    ['Peak 3-hr intensity',peak3h.toFixed(1),'mm/hr'],
+    ['Antecedent rain 48 h',ante.toFixed(1),'mm'],
+    ['Runoff coeff. C',C_eff.toFixed(2),wet>0.3?'wet ground':'normal']
+  ].map(c=>`<div class="card"><div class="lbl">${c[0]}</div><div class="val" style="font-size:22px">${c[1]}<small> ${c[2]}</small></div></div>`).join('');
+  // 24h storm-load timeline for the most-loaded zone (driven by the live rain curve)
+  let worst=zkeys[0], wr=0;
+  zkeys.forEach(z=>{const r=Math.max(ZONESTORM[z].area_m2,50000)/Math.max(ZONESTORM[z].capacity_m3s,0.02); if(r>wr){wr=r;worst=z;}});
+  const ws=ZONESTORM[worst], Aw=Math.max(ws.area_m2,50000), Qcw=Math.max(0.02,ws.capacity_m3s);
+  const tl=rains.map((r,k)=>{let s=0,c=0;for(let j=Math.max(0,k-1);j<=Math.min(rains.length-1,k+1);j++){s+=rains[j];c++;} return C_eff*(s/c)*Aw/3.6e6/Qcw*100;});
+  document.getElementById('tlzone').textContent='Zone '+worst;
+  drawTimeline(tl, idx.map(i=>new Date(H.time[i]).getHours()));
+
+  // city-wide risk = max zone utilisation
+  const cityU=utils.length?Math.max(...utils):0;
+  const col=riskColor(cityU);
+  const ang=Math.min(cityU,100)/100*270-135;
+  document.getElementById('grisk').innerHTML=`
+    <circle cx="60" cy="60" r="46" fill="none" stroke="#12233a" stroke-width="12"/>
+    <circle cx="60" cy="60" r="46" fill="none" stroke="${col}" stroke-width="12" stroke-linecap="round"
+      stroke-dasharray="${Math.min(cityU,100)/100*216} 360" transform="rotate(135 60 60)"/>
+    <text x="60" y="58" text-anchor="middle" fill="#fff" font-size="26" font-weight="800" font-family="ui-monospace">${cityU.toFixed(0)}%</text>
+    <text x="60" y="76" text-anchor="middle" fill="#9bb1c6" font-size="9" font-family="ui-monospace">utilisation</text>`;
+  document.getElementById('riskLbl').textContent=riskName(cityU); document.getElementById('riskLbl').style.color=col;
+  document.getElementById('riskSub').innerHTML=`Design intensity (worst 1-hr/3-hr) <b style="color:var(--cy)">${peakI.toFixed(1)} mm/hr</b>, runoff C=${C_eff.toFixed(2)}${wet>0.3?' (ground wet)':''}.<br>${cityU>100?'One or more zones exceed drain capacity — surcharge/overflow likely.':cityU>70?'Approaching capacity in the busiest zones — monitor.':'Network has ample capacity for the forecast rain.'}`;
+
+  // ---- demand & raw-water (temp/rain driven) ----
+  const tmax=D.temperature_2m_max[dayStart];  // today's actual max temp
+  const rain7=D.precipitation_sum.slice(dayStart,dayStart+7).reduce((a,b)=>a+b,0);  // next 7 days only
+  const baseMLD=225;
+  const tempAdj=1+(tmax-32)*0.012; const rainAdj=1-Math.min(rain24/40,1)*0.08;
+  const demand=baseMLD*tempAdj*rainAdj;
+  const rawOut=rain7>60?['Good','var(--grn)']:rain7>15?['Moderate','var(--amber)']:['Low','var(--red)'];
+  document.getElementById('dem').innerHTML=[
+    `<div class="card"><div class="lbl">Estimated water demand today</div><div class="val">${demand.toFixed(0)}<small>MLD</small></div><div class="sub">base ${baseMLD} · ${tempAdj>1?'+':''}${((tempAdj-1)*100).toFixed(0)}% heat, ${((rainAdj-1)*100).toFixed(0)}% rain</div></div>`,
+    `<div class="card"><div class="lbl">Peak-day driver</div><div class="val" style="font-size:22px">${Math.round(tmax)}°C</div><div class="sub">high temperature raises outdoor &amp; cooling demand</div></div>`,
+    `<div class="card"><div class="lbl">Raw-water / reservoir outlook (7-day rain ${rain7.toFixed(0)} mm)</div><div class="val" style="font-size:22px;color:${rawOut[1]}">${rawOut[0]}</div><div class="sub">catchment inflow to intake &amp; WTP</div></div>`
+  ].join('');
+
+  document.getElementById('foot').innerHTML=`<b style="color:var(--grn)">● LIVE:</b> temperature, rainfall (incl. past 48 h) &amp; 7-day forecast from Open-Meteo for Amaravati (${LAT.toFixed(3)}, ${LON.toFixed(3)}). &nbsp; <b style="color:var(--amber)">◐ SIMULATED:</b> storm-drain utilisation — rational method Q=C·i·A where i = worst 1-hr/3-hr forecast intensity and C rises with antecedent (48 h) rainfall; outfall capacity is <b>real Manning conveyance</b> computed from your Civil 3D storm <b>pipe diameters &amp; invert-derived slopes</b> (n=${N_MAN}). Demand &amp; raw-water are temp/rain elasticity models. Full pipe-by-pipe hydraulic routing (SWMM-style) and live SCADA levels are the next step for measured-exact results.`;
+}
+document.querySelectorAll('.wbtn').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('.wbtn').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+  const fr=document.getElementById('windy'); if(fr) fr.src=fr.src.replace(/overlay=[a-zA-Z]+/, 'overlay='+b.dataset.ov);
+});
+document.getElementById('refresh').onclick=load;
+load(); setInterval(load, 10*60*1000);   // auto-refresh every 10 min
+</script>
+</body></html>

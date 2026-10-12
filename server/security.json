@@ -1,0 +1,9 @@
+{
+ "require_auth": true,
+ "token_hours": 8,
+ "allow_origins": [
+  "null",
+  "http://localhost:8000",
+  "http://127.0.0.1:8000"
+ ]
+}

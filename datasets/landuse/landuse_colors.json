@@ -1,0 +1,217 @@
+{
+ "C1 -Mixed use zone": [
+  104,
+  172,
+  255
+ ],
+ "I3-Non polluting industry zone": [
+  169,
+  0,
+  230
+ ],
+ "P1-Passive zone": [
+  0,
+  127,
+  63
+ ],
+ "P2-Active zone": [
+  0,
+  205,
+  52
+ ],
+ "P3-Protected zone": [
+  151,
+  219,
+  242
+ ],
+ "P3-Protected zone Hills": [
+  76,
+  115,
+  0
+ ],
+ "PGN-G": [
+  76,
+  115,
+  0
+ ],
+ "PGN-V": [
+  181,
+  150,
+  112
+ ],
+ "R2-Low density zone": [
+  255,
+  255,
+  127
+ ],
+ "R3-Medium to high density zone": [
+  255,
+  216,
+  104
+ ],
+ "C2- General commercial zone": [
+  78,
+  198,
+  241
+ ],
+ "R4-High density zone": [
+  230,
+  152,
+  0
+ ],
+ "RAA": [
+  255,
+  170,
+  0
+ ],
+ "Residential Vacant": [
+  255,
+  235,
+  175
+ ],
+ "SU2 - Road Network": [
+  0,
+  0,
+  0
+ ],
+ "S1-Government zone": [
+  230,
+  0,
+  0
+ ],
+ "S2-Education zone": [
+  255,
+  127,
+  127
+ ],
+ "S3-Special zone": [
+  215,
+  176,
+  158
+ ],
+ "SC1a-Mixed Use": [
+  0,
+  112,
+  255
+ ],
+ "SC1b - Mixed Use": [
+  115,
+  178,
+  255
+ ],
+ "SP1- Passive Zone": [
+  38,
+  115,
+  0
+ ],
+ "C3-Neighbourhood centre zone": [
+  83,
+  181,
+  255
+ ],
+ "SP2- Active Zone": [
+  56,
+  168,
+  0
+ ],
+ "SP3-Protected Zone": [
+  0,
+  197,
+  255
+ ],
+ "SR2 Low Density Housing": [
+  255,
+  255,
+  190
+ ],
+ "SR4 - High Density Private": [
+  255,
+  170,
+  0
+ ],
+ "SS1 - Government Zone": [
+  230,
+  0,
+  0
+ ],
+ "SS2a- Education Zone": [
+  255,
+  127,
+  127
+ ],
+ "SS2b Cultural Zone": [
+  169,
+  0,
+  230
+ ],
+ "SS2c Health Zone": [
+  211,
+  255,
+  190
+ ],
+ "SS3 - Special Zone": [
+  168,
+  56,
+  0
+ ],
+ "SU1-Reserve Zone": [
+  204,
+  204,
+  204
+ ],
+ "C4-Town centre zone": [
+  5,
+  148,
+  255
+ ],
+ "U1-Reserve zone": [
+  178,
+  178,
+  178
+ ],
+ "U2- Road reserve zone": [
+  255,
+  255,
+  255
+ ],
+ "NULL": [
+  238,
+  252,
+  199
+ ],
+ "C5-Regional centre zone": [
+  0,
+  125,
+  218
+ ],
+ "C6-Central business district zone": [
+  0,
+  112,
+  192
+ ],
+ "Commercial Vacant": [
+  190,
+  232,
+  255
+ ],
+ "I1-Business park zone": [
+  254,
+  168,
+  255
+ ],
+ "I2-Logistics zone": [
+  255,
+  115,
+  223
+ ],
+ "R1-Village planning zone": [
+  235,
+  235,
+  228
+ ],
+ "R5-Affordable / EWS Housing Zone": [
+  180,
+  110,
+  50
+ ]
+}

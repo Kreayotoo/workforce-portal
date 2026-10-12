@@ -1,0 +1,252 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WTP Admin Building — BIM</title>
+<style>
+:root{--pan:#0a1a2e;--line:#1d3a57;--ink:#eaf2f9;--dim:#9bb1c6;--teal:#5fe0d2;--cy:#19C6F0;--mono:ui-monospace,monospace}
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden;font-family:'Inter',system-ui,Arial,sans-serif}
+#app{position:fixed;inset:0;background:radial-gradient(120% 120% at 50% 12%, #1a1f29 0%, #0d1017 55%, #070a10 100%)}
+canvas{display:block}
+.top{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;gap:14px;padding:10px 16px;background:linear-gradient(180deg,rgba(8,22,42,.92),rgba(8,22,42,.6));backdrop-filter:blur(4px);z-index:5}
+.top img{height:34px}
+.ttl b{color:#fff;font-size:15px;font-weight:800;display:block;line-height:1.1}
+.ttl span{color:var(--teal);font-size:10px;letter-spacing:.14em;text-transform:uppercase}
+.kpis{margin-left:auto;display:flex;gap:8px}
+.kpi{background:rgba(12,33,56,.85);border:1px solid var(--line);border-radius:8px;padding:5px 11px;text-align:center;min-width:64px}
+.kpi b{font-family:var(--mono);color:var(--cy);font-size:14px;display:block;line-height:1.1}
+.kpi span{font-size:8px;color:var(--dim);letter-spacing:.08em;text-transform:uppercase}
+.tools{position:fixed;left:16px;bottom:16px;display:flex;gap:8px;z-index:5;flex-wrap:wrap}
+.btn{background:rgba(10,26,46,.9);border:1px solid var(--line);color:var(--ink);border-radius:9px;padding:9px 13px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:.15s;display:flex;align-items:center;gap:7px}
+.btn:hover{border-color:var(--teal)}
+.btn.on{border-color:var(--teal);background:#0e2c44;color:var(--teal)}
+.btn .d{width:9px;height:9px;border-radius:2px;background:var(--teal)}
+.hint{position:fixed;right:16px;bottom:16px;z-index:5;color:#e7edf3;font-size:10.5px;font-family:var(--mono);background:rgba(10,26,46,.72);border:1px solid var(--line);border-radius:8px;padding:7px 11px;max-width:230px;line-height:1.4}
+.fl-panel{position:fixed;top:96px;right:14px;z-index:6;width:192px;max-height:calc(100vh - 130px);overflow-y:auto;background:rgba(9,20,34,.92);backdrop-filter:blur(5px);border:1px solid var(--line);border-radius:12px;padding:8px}
+#lblLayer{position:fixed;inset:0;z-index:4;pointer-events:none;overflow:hidden}
+.rlbl{position:absolute;transform:translate(-50%,-50%);background:rgba(9,20,34,.85);border:1px solid var(--teal);color:#eaf2f9;font-size:10px;font-family:var(--mono);padding:2px 6px;border-radius:6px;white-space:nowrap;pointer-events:auto;cursor:pointer}
+.rlbl:hover{background:#0e2c44}
+.rlbl b{color:var(--teal);font-weight:600} .rlbl i{color:#9bb1c6;font-style:normal;font-size:9px}
+.rinfo{position:fixed;left:16px;top:96px;z-index:8;width:212px;background:rgba(9,20,34,.96);border:1px solid var(--teal);border-radius:12px;padding:14px 16px;display:none}
+.rinfo h4{margin:0 0 3px;color:#fff;font-size:14px}
+.rinfo .rf{font-size:10px;color:var(--teal);font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.rinfo .rrow{display:flex;justify-content:space-between;gap:10px;margin-top:7px;font-size:12px;align-items:baseline}
+.rinfo .rrow span{color:#9bb1c6} .rinfo .rrow b{color:var(--teal);font-family:var(--mono)}
+.rinfo .rx{position:absolute;top:7px;right:11px;color:#9bb1c6;cursor:pointer;font-size:17px;line-height:1}
+.fl-h{font-size:10px;letter-spacing:.14em;color:var(--teal);font-family:var(--mono);padding:5px 8px 8px}
+.fl-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;cursor:pointer;transition:.12s;border:1px solid transparent}
+.fl-row:hover{background:rgba(95,224,210,.08)}
+.fl-row.act{background:#0e2c44;border-color:var(--teal)}
+.fl-row b{font-size:12px;font-weight:600;color:var(--ink)}
+.fl-row.act b{color:var(--teal)}
+.fl-row span{font-size:10px;color:var(--dim);font-family:var(--mono);white-space:nowrap}
+.fl-row i{color:var(--teal);font-style:normal;font-size:9px;margin-right:6px}
+.fl-g{display:flex;align-items:center;gap:7px;padding:9px 10px 4px;font-size:10.5px;color:var(--dim);cursor:pointer}
+@media(max-width:820px){.fl-panel{width:150px;top:auto;bottom:70px;max-height:44vh}.hint{display:none}}
+.load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:#6f7883;color:#0c1e33;z-index:9;font-family:var(--mono);font-size:13px}
+.spin{width:38px;height:38px;border:4px solid rgba(12,30,51,.25);border-top-color:#0c1e33;border-radius:50%;animation:sp 1s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style></head>
+<body>
+<div id="app"></div>
+<div class="top">
+  <img src="__LOGO__" alt="Kreayotoo">
+  <div class="ttl"><b>WTP Admin Building</b><span>BIM Model · Revit → glTF</span></div>
+  <div class="kpis">
+    <div class="kpi"><b>16</b><span>Levels</span></div>
+    <div class="kpi"><b id="kH">33 m</b><span>Height</span></div>
+    <div class="kpi"><b id="kF">27×37</b><span>Footprint m</span></div>
+  </div>
+</div>
+<div class="tools">
+  <button class="btn on" id="tBldg"><span class="d"></span>Building</button>
+  <button class="btn" id="tXray">X-ray</button>
+  <button class="btn on" id="tEdge">Edges</button>
+  <button class="btn on" id="tRooms">Rooms</button>
+  <button class="btn" id="tSpin">Auto-rotate</button>
+  <button class="btn" id="tReset">Reset view</button>
+</div>
+<div class="hint" id="hint">Drag to orbit · two fingers / right-drag to pan · pinch / scroll to zoom</div>
+<div class="fl-panel" id="floors"></div>
+<div id="lblLayer"></div>
+<div id="roomInfo" class="rinfo"></div>
+<div class="load" id="load"><div class="spin"></div><div>loading BIM model…</div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+<script>
+const GLB="__GLB__";
+const app=document.getElementById('app');
+const scene=new THREE.Scene();
+scene.fog=new THREE.Fog(0x0b0e14, 140, 520);
+const camera=new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.5, 5000);
+const renderer=new THREE.WebGLRenderer({antialias:true, alpha:true});
+renderer.setSize(innerWidth,innerHeight); renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputEncoding=THREE.sRGBEncoding; renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+app.appendChild(renderer.domElement);
+
+// lighting — strong key + soft fill for form (dark bg makes the light building pop)
+scene.add(new THREE.HemisphereLight(0xcfe0f5, 0x0a0d14, 0.55));
+const sun=new THREE.DirectionalLight(0xffffff, 1.55); sun.position.set(70,140,60); sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048); sun.shadow.camera.near=1; sun.shadow.camera.far=520;
+sun.shadow.camera.left=-100; sun.shadow.camera.right=100; sun.shadow.camera.top=100; sun.shadow.camera.bottom=-100; sun.shadow.bias=-0.0004;
+scene.add(sun);
+const fill=new THREE.DirectionalLight(0x9fb6d8, 0.5); fill.position.set(-90,60,-40); scene.add(fill);
+scene.add(new THREE.AmbientLight(0xffffff,0.18));
+
+// ground + grid
+const ground=new THREE.Mesh(new THREE.CircleGeometry(300,64), new THREE.MeshStandardMaterial({color:0x11141c, roughness:1}));
+ground.rotation.x=-Math.PI/2; ground.receiveShadow=true; ground.position.y=-0.02; scene.add(ground);
+const grid=new THREE.GridHelper(400,80,0x263041,0x1a2130); grid.position.y=0; scene.add(grid);
+
+// camera control state
+let target=new THREE.Vector3(0,10,0);
+let camAngle={theta:Math.PI*0.25, phi:0.9, r:110};
+let ZMIN=6, ZMAX=520, autoRot=false;
+function updateCam(){
+  const x=target.x+camAngle.r*Math.sin(camAngle.phi)*Math.cos(camAngle.theta);
+  const y=target.y+camAngle.r*Math.cos(camAngle.phi);
+  const z=target.z+camAngle.r*Math.sin(camAngle.phi)*Math.sin(camAngle.theta);
+  camera.position.set(x,y,z); camera.lookAt(target);
+}
+function fit(box){
+  const c=box.getCenter(new THREE.Vector3()), sz=box.getSize(new THREE.Vector3());
+  target.copy(c); const span=Math.max(sz.x,sz.y,sz.z);
+  camAngle.r=span*1.7; ZMIN=Math.max(3,span*0.12); ZMAX=Math.max(400,span*4);
+  updateCam();
+}
+
+let model=null, xray=false, edgesOn=true;
+let floorMeshes={}, curFloor='all', ghost=false;
+const FLOORS=__FLOORS__;   // [{idx,name,elev,label}]
+const SPACES=__SPACES__;   // [{floor,name,full,area,x,y,z}]
+let roomLabels=[], labelsOn=true;
+function clearLabels(){ const L=document.getElementById('lblLayer'); if(L)L.innerHTML=''; roomLabels=[]; const ri=document.getElementById('roomInfo'); if(ri)ri.style.display='none'; }
+function buildLabels(fidx){
+  clearLabels(); if(!labelsOn) return;
+  const L=document.getElementById('lblLayer'); if(!L) return;
+  SPACES.filter(s=>s.floor===fidx).forEach(s=>{
+    const d=document.createElement('div'); d.className='rlbl'; d.innerHTML='<b>'+s.name+'</b>'+(s.area?' <i>'+Math.round(s.area)+'m²</i>':'');
+    d.onclick=(e)=>{ e.stopPropagation(); showRoom(s); };
+    L.appendChild(d); roomLabels.push({s, el:d, v:new THREE.Vector3(s.x,s.y,s.z)});
+  });
+}
+function updateLabels(){
+  if(!roomLabels.length||!model) return; model.updateMatrixWorld(); const w=innerWidth,h=innerHeight;
+  roomLabels.forEach(r=>{ const p=r.v.clone().applyMatrix4(model.matrixWorld).project(camera);
+    if(p.z>1){ r.el.style.display='none'; return; }
+    r.el.style.display='block'; r.el.style.left=((p.x*0.5+0.5)*w)+'px'; r.el.style.top=((-p.y*0.5+0.5)*h)+'px';
+    r.el.style.opacity=(p.z>0.92?0.35:0.95);
+  });
+}
+function showRoom(s){
+  const ri=document.getElementById('roomInfo'); const fl=FLOORS.find(f=>f.idx===s.floor);
+  ri.innerHTML='<span class="rx" onclick="document.getElementById(\'roomInfo\').style.display=\'none\'">&times;</span>'+
+    '<h4>'+s.name+'</h4><div class="rf">'+(fl?fl.label:'')+'</div>'+
+    (s.area?'<div class="rrow"><span>Floor area</span><b>'+s.area+' m²</b></div>':'')+
+    '<div class="rrow"><span>Level</span><b>'+(fl?(fl.elev>=0?'+':'')+fl.elev.toFixed(2)+' m':'')+'</b></div>'+
+    '<div class="rrow" style="border-top:1px solid var(--line);margin-top:8px;padding-top:8px"><span>IFC space</span><b style="font-size:10px;text-align:right">'+s.full+'</b></div>';
+  ri.style.display='block';
+}
+function buildFloorUI(){
+  const present=FLOORS.filter(f=>floorMeshes[f.idx]&&floorMeshes[f.idx].length).sort((a,b)=>b.elev-a.elev); // top->bottom
+  const roomCount={}; SPACES.forEach(s=>{roomCount[s.floor]=(roomCount[s.floor]||0)+1;});
+  let html='<div class="fl-h">FLOORS · tap to isolate</div>'+
+    `<div class="fl-row ${curFloor==='all'?'act':''}" data-f="all"><b>All floors</b><span>${present.length} levels</span></div>`;
+  present.forEach(f=>{ const rc=roomCount[f.idx]?`<i>${roomCount[f.idx]} rooms</i>`:''; html+=`<div class="fl-row ${curFloor===f.idx?'act':''}" data-f="${f.idx}"><b>${f.label}</b><span>${rc}${f.elev>=0?'+':''}${f.elev.toFixed(2)} m</span></div>`; });
+  html+='<label class="fl-g"><input type="checkbox" id="fghost"'+(ghost?' checked':'')+'> ghost other floors</label>';
+  const p=document.getElementById('floors'); p.innerHTML=html;
+  p.querySelectorAll('.fl-row').forEach(r=>r.onclick=()=>{ const v=r.dataset.f; selectFloor(v==='all'?'all':parseInt(v)); });
+  document.getElementById('fghost').onchange=e=>{ ghost=e.target.checked; applyFloor(); };
+}
+function selectFloor(f){ curFloor=f; applyFloor();
+  document.querySelectorAll('.fl-row').forEach(r=>r.classList.toggle('act', r.dataset.f===String(f)));
+  if(f!=='all'){ buildLabels(f); } else { clearLabels(); }
+  if(f!=='all' && floorMeshes[f]&&floorMeshes[f].length){ const b=new THREE.Box3(); floorMeshes[f].forEach(m=>b.expandByObject(m)); if(!b.isEmpty()) fit(b); }
+  else if(model) fit(new THREE.Box3().setFromObject(model));
+}
+function applyFloor(){
+  if(!model) return;
+  Object.keys(floorMeshes).forEach(k=>{ const on = (curFloor==='all')||(String(curFloor)===k);
+    floorMeshes[k].forEach(m=>{
+      if(curFloor==='all'){ m.visible=true; if(m.material){m.material.transparent=(m.material.userData.o<1);m.material.opacity=m.material.userData.o;} }
+      else if(on){ m.visible=true; if(m.material){m.material.transparent=(m.material.userData.o<1);m.material.opacity=m.material.userData.o;} m.traverse(c=>{if(c.userData.edge)c.visible=edgesOn;}); }
+      else if(ghost){ m.visible=true; if(m.material){m.material.transparent=true;m.material.opacity=0.06;} m.traverse(c=>{if(c.userData.edge)c.visible=false;}); }
+      else { m.visible=false; }
+    });
+  });
+}
+const draco=new THREE.DRACOLoader(); draco.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
+const loader=new THREE.GLTFLoader(); loader.setDRACOLoader(draco);
+loader.load(GLB, (gltf)=>{
+  model=gltf.scene;                               // Y-up, meshes named FL{idx}_{n}
+  floorMeshes={};
+  model.traverse(o=>{ if(o.isMesh){ o.castShadow=true; o.receiveShadow=true;
+    if(o.material){ o.material.side=THREE.DoubleSide;
+      o.material.userData.o=(o.material.opacity!==undefined?o.material.opacity:1);
+      if(o.material.transparent){ o.material.depthWrite=false; } }
+    let nm=o.name||''; if(!/^FL\d/.test(nm)&&o.parent) nm=o.parent.name||'';
+    const mo=nm.match(/FL(\d+)/); const fi=mo?parseInt(mo[1]):-1;
+    o.userData.floor=fi; (floorMeshes[fi]=floorMeshes[fi]||[]).push(o);
+    try{ const eg=new THREE.EdgesGeometry(o.geometry, 26);
+      const ls=new THREE.LineSegments(eg, new THREE.LineBasicMaterial({color:0x0b0e14,transparent:true,opacity:0.55}));
+      ls.userData.edge=true; ls.visible=edgesOn; o.add(ls); }catch(e){} } });
+  // drop to ground
+  let box=new THREE.Box3().setFromObject(model);
+  model.position.y -= box.min.y;
+  scene.add(model);
+  box=new THREE.Box3().setFromObject(model);
+  const sz=box.getSize(new THREE.Vector3());
+  document.getElementById('kH').textContent=Math.round(sz.y)+' m';
+  document.getElementById('kF').textContent=Math.round(sz.x)+'×'+Math.round(sz.z);
+  fit(box); buildFloorUI();
+  document.getElementById('load').style.display='none';
+}, undefined, (err)=>{
+  document.getElementById('load').innerHTML='<div style="max-width:320px;text-align:center">Could not load the model.<br>An internet connection is required (3D libraries + decoder).</div>';
+});
+
+// ---- controls: orbit / pan / zoom (mouse + touch) ----
+const el=renderer.domElement;
+let drag=null, pan=false;
+el.addEventListener('mousedown',e=>{autoRot=false; drag={x:e.clientX,y:e.clientY}; pan=(e.button===2||e.shiftKey);});
+addEventListener('mousemove',e=>{ if(!drag)return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y; drag={x:e.clientX,y:e.clientY};
+  if(pan){ const s=camAngle.r*0.0016; target.x-=dx*s*Math.cos(camAngle.theta); target.z+=dx*s*Math.sin(camAngle.theta); target.y+=dy*s; }
+  else { camAngle.theta-=dx*0.006; camAngle.phi=Math.max(0.08,Math.min(1.5,camAngle.phi-dy*0.006)); }
+  updateCam();
+});
+addEventListener('mouseup',()=>drag=null);
+el.addEventListener('contextmenu',e=>e.preventDefault());
+el.addEventListener('wheel',e=>{e.preventDefault(); camAngle.r=Math.max(ZMIN,Math.min(ZMAX,camAngle.r*(1+Math.sign(e.deltaY)*0.09))); updateCam();},{passive:false});
+// touch
+let lt=null,pinchD=0,twoPrev=null;
+el.addEventListener('touchstart',e=>{autoRot=false;
+  if(e.touches.length===1){lt={x:e.touches[0].clientX,y:e.touches[0].clientY};}
+  else if(e.touches.length===2){lt=null;const a=e.touches[0],b=e.touches[1];pinchD=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);twoPrev={x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2};}
+},{passive:false});
+el.addEventListener('touchmove',e=>{
+  if(e.touches.length===1&&lt){const dx=e.touches[0].clientX-lt.x,dy=e.touches[0].clientY-lt.y;lt={x:e.touches[0].clientX,y:e.touches[0].clientY};
+    camAngle.theta-=dx*0.006;camAngle.phi=Math.max(0.08,Math.min(1.5,camAngle.phi-dy*0.006));updateCam();}
+  else if(e.touches.length===2){e.preventDefault();const a=e.touches[0],b=e.touches[1];const d=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+    if(pinchD>0)camAngle.r=Math.max(ZMIN,Math.min(ZMAX,camAngle.r*(pinchD/d)));pinchD=d;
+    const mx=(a.clientX+b.clientX)/2,my=(a.clientY+b.clientY)/2;
+    if(twoPrev){const s=camAngle.r*0.0016;target.x-=(mx-twoPrev.x)*s*Math.cos(camAngle.theta);target.z+=(mx-twoPrev.x)*s*Math.sin(camAngle.theta);target.y+=(my-twoPrev.y)*s;}
+    twoPrev={x:mx,y:my};updateCam();}
+},{passive:false});
+el.addEventListener('touchend',e=>{if(e.touches.length<2){pinchD=0;twoPrev=null;}if(e.touches.length===0)lt=null;},{passive:false});
+
+// toolbar
+const bB=document.getElementById('tBldg'),bX=document.getElementById('tXray'),bS=document.getElementById('tSpin'),bR=document.getElementById('tReset');
+bB.onclick=()=>{ if(!model)return; const on=!model.visible; model.visible=on; bB.classList.toggle('on',on); };
+const bE=document.getElementById('tEdge');
+bE.onclick=()=>{ edgesOn=!edgesOn; bE.classList.toggle('on',edgesOn); if(model) model.traverse(o=>{ if(o.userData&&o.userData.edge) o.visible=edgesOn; }); };
+const bR2=document.getElementById('tRooms');
+bR2.onclick=()=>{ labelsOn=!labelsOn; bR2.classList.toggle('on',labelsOn); if(curFloor!=='all'){ if(labelsOn) buildLabels(curFloor); else clearLabels(); } };
+bX.onclick=()=>{ if(!model)return; xray=!xray; bX.classList.toggle('on',xray);
+  model.traverse(o=>{ if(o.isMesh&&o.material){ o.material.wireframe=xray; o.material.transparent=xray; o.material.opacity=xray?0.55:(o.material.userData.o??1);} }); };
+bS.onclick=()=>{ autoRot=!autoRot; bS.classList.toggle('on',autoRot); };
+bR.onclick=()=>{ if(model){ fit(new THREE.Box3().setFromObject(model)); } };
+
+addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+updateCam();
+(function loop(){ requestAnimationFrame(loop); if(autoRot){ camAngle.theta+=0.0025; updateCam(); } updateLabels(); renderer.render(scene,camera); })();
+</script>
+</body></html>

@@ -1,0 +1,471 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>User Manual — Amaravati Utility Digital Twin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Chakra+Petch:wght@600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#070a12;--paper:#0b1220;--paper2:#0e1728;--line:#1c2b42;--line2:#25384f;--ink:#e8eff8;--ink2:#c3d0e0;--dim:#8fa3bb;--faint:#5e7189;
+ --mint:#78ccc0;--cyan:#19c6f0;--amber:#f5c542;--red:#ff5c5c;--lav:#a98bff;
+ --mono:'JetBrains Mono',ui-monospace,monospace;--sans:'Space Grotesk',system-ui,sans-serif;--title:'Chakra Petch','Space Grotesk',sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.6}
+.wrap{display:grid;grid-template-columns:268px minmax(0,1fr);min-height:100vh}
+nav{position:sticky;top:0;height:100vh;overflow:auto;background:var(--paper);border-right:1px solid var(--line);padding:20px 16px 30px}
+.doc-id{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;color:var(--faint);text-transform:uppercase;margin:0 6px 8px}
+.brand{font-family:var(--title);font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--mint);margin:0 6px 2px;line-height:1.25}
+.brand small{display:block;font-family:var(--sans);font-weight:500;font-size:11px;letter-spacing:0;text-transform:none;color:var(--dim);margin-top:3px}
+.search{width:100%;background:var(--paper2);border:1px solid var(--line2);color:var(--ink);border-radius:8px;padding:9px 11px 9px 32px;font:500 12px var(--mono);outline:none;margin:14px 0 6px;
+ background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238fa3bb' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-size:14px;background-position:10px center}
+.search:focus{border-color:var(--mint)}
+.sr{font-family:var(--mono);font-size:10px;color:var(--faint);margin:0 6px 8px;min-height:14px}
+.toc{list-style:none;margin:6px 0 0;padding:0}
+.toc button{display:flex;gap:9px;align-items:baseline;width:100%;text-align:left;background:none;border:0;padding:6px 8px;border-radius:7px;color:var(--dim);font:500 12.5px var(--sans);cursor:pointer}
+.toc button:hover{background:var(--paper2);color:var(--ink)}
+.toc button.act{background:#12283a;color:var(--mint)}
+.toc .num{font-family:var(--mono);font-size:10.5px;color:var(--faint);min-width:22px}
+.toc button.act .num{color:var(--mint)}
+.toc .part{font-family:var(--mono);font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin:14px 8px 4px}
+main{padding:0 0 90px;max-width:1040px}
+.cover{padding:44px 56px 36px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#0b1526 0%,var(--bg) 100%)}
+.cover .kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--mint);margin-bottom:12px}
+.cover h1{font-family:var(--title);font-weight:700;font-size:30px;letter-spacing:.03em;text-transform:uppercase;margin:0 0 6px;color:#eef6ff;line-height:1.15}
+.cover .sub{font-size:15px;color:var(--ink2);max-width:680px;margin:0 0 22px}
+.meta{display:grid;grid-template-columns:repeat(4,auto);gap:18px 34px;font-size:12px}
+.meta div{border-left:2px solid var(--line2);padding-left:10px}
+.meta .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.meta .v{color:var(--ink2);margin-top:2px}
+.body{padding:10px 56px 0}
+section{padding:34px 0 8px;border-bottom:1px solid var(--line);scroll-margin-top:12px}
+section:last-of-type{border-bottom:0}
+h2{font-family:var(--title);font-weight:600;font-size:19px;letter-spacing:.05em;text-transform:uppercase;color:#eef6ff;margin:0 0 14px;display:flex;align-items:baseline;gap:12px}
+h2 .n{font-family:var(--mono);font-size:12px;color:var(--mint);letter-spacing:.1em}
+h3{font-size:14px;font-weight:600;color:var(--ink);margin:22px 0 7px}
+p{margin:0 0 10px;color:var(--ink2)}
+ul,ol{margin:4px 0 12px 22px;padding:0;color:var(--ink2)}li{margin:4px 0}
+b{color:var(--ink);font-weight:600}
+code{font-family:var(--mono);font-size:12px;background:var(--paper2);border:1px solid var(--line);padding:1px 6px;border-radius:5px;color:var(--ink)}
+kbd{font-family:var(--mono);font-size:11px;background:#0e1828;border:1px solid #2a3c55;border-bottom-width:2px;border-radius:5px;padding:1px 7px;color:#dbe7f5}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:12px 0}
+.card h3{margin-top:0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.kv{display:grid;grid-template-columns:190px 1fr;gap:7px 16px;font-size:13px;margin:6px 0 10px}
+.kv b{color:var(--ink)}.kv span{color:var(--ink2)}
+table{border-collapse:separate;border-spacing:0;width:100%;font-size:13px;margin:8px 0 16px;background:var(--paper);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink2)}
+th{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);background:var(--paper2)}
+tr:last-child td{border-bottom:0}td b{color:var(--ink)}
+.tag{display:inline-block;font-family:var(--mono);font-size:9.5px;font-weight:600;letter-spacing:.1em;padding:2px 8px;border-radius:5px;vertical-align:1px;white-space:nowrap}
+.real{background:rgba(120,204,192,.14);color:var(--mint);border:1px solid rgba(120,204,192,.45)}
+.sim{background:rgba(245,197,66,.12);color:var(--amber);border:1px solid rgba(245,197,66,.45)}
+.demo{background:rgba(169,139,255,.12);color:var(--lav);border:1px solid rgba(169,139,255,.45)}
+.note{border-left:3px solid var(--cyan);background:rgba(25,198,240,.06);padding:10px 14px;border-radius:0 9px 9px 0;margin:12px 0;font-size:13px;color:var(--ink2)}
+.note.warn{border-left-color:var(--amber);background:rgba(245,197,66,.06)}.note.stop{border-left-color:var(--red);background:rgba(255,92,92,.06)}.note.ok{border-left-color:var(--mint);background:rgba(120,204,192,.06)}
+.note b:first-child{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;margin-bottom:3px}
+.steps{counter-reset:s;margin:8px 0 12px}
+.steps div{position:relative;padding:6px 0 6px 40px;color:var(--ink2)}
+.steps div:before{counter-increment:s;content:counter(s);position:absolute;left:0;top:5px;width:26px;height:26px;border-radius:50%;background:#12283a;border:1px solid #1d4a52;color:var(--mint);font:700 12px var(--mono);display:flex;align-items:center;justify-content:center}
+.fig{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px 16px 10px;margin:14px 0}
+.fig svg{width:100%;height:auto;display:block}
+.fig .cap{font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:.06em;margin-top:8px}
+.fig .cap b{color:var(--dim);font-weight:600}
+.tb{display:grid;grid-template-columns:44px 1fr;gap:12px;align-items:start;padding:9px 0;border-bottom:1px solid var(--line)}
+.tb:last-child{border-bottom:0}
+.tb .ic{width:38px;height:38px;border-radius:9px;background:#0e1828;border:1px solid #2a3c55;display:flex;align-items:center;justify-content:center}
+.tb .ic svg{width:19px;height:19px;stroke:var(--cyan);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tb .t{font-weight:600;color:var(--ink)}.tb .d{color:var(--ink2);font-size:13px}
+.sw{display:inline-block;width:11px;height:11px;border-radius:3px;vertical-align:-1px;margin-right:7px}
+.hide{display:none!important}
+.foot{color:var(--faint);font-size:11.5px;font-family:var(--mono);border-top:1px solid var(--line);padding:16px 56px;margin-top:20px;line-height:1.7}
+@media(max-width:860px){.wrap{grid-template-columns:1fr}nav{position:relative;height:auto}.cover,.body{padding-left:20px;padding-right:20px}.grid2,.grid3,.kv{grid-template-columns:1fr}.meta{grid-template-columns:1fr 1fr}}
+@media print{nav{display:none}.wrap{grid-template-columns:1fr}body{background:#fff;color:#111}.cover,.card,table,.fig{background:#fff;border-color:#bbb}p,li,td,.kv span,.tb .d{color:#222}section{page-break-inside:avoid}}
+</style></head><body>
+<div class="wrap">
+<nav>
+  <div class="doc-id">KSPL · APCRDA · DOC UM-01 · REV 1.6</div>
+  <div class="brand">User Manual<small>Amaravati Utility Digital Twin</small></div>
+  <input class="search" id="q" placeholder="Search this manual" autocomplete="off" spellcheck="false">
+  <div class="sr" id="sr"></div>
+  <ul class="toc" id="toc">
+    <li class="part">Part A · Orientation</li>
+    <li><button data-t="s1"><span class="num">1</span>Introduction</button></li>
+    <li><button data-t="s2"><span class="num">2</span>Getting started</button></li>
+    <li><button data-t="s3"><span class="num">3</span>Screen layout</button></li>
+    <li><button data-t="s4"><span class="num">4</span>Views</button></li>
+    <li class="part">Part B · Working in 3D</li>
+    <li><button data-t="s5"><span class="num">5</span>Navigation</button></li>
+    <li><button data-t="s6"><span class="num">6</span>3D toolbar</button></li>
+    <li><button data-t="s7"><span class="num">7</span>Layers, sliders &amp; panels</button></li>
+    <li><button data-t="s8"><span class="num">8</span>Selecting &amp; reading data</button></li>
+    <li class="part">Part C · Data</li>
+    <li><button data-t="s9"><span class="num">9</span>Data labelling policy</button></li>
+    <li><button data-t="s10"><span class="num">10</span>Data sources</button></li>
+    <li><button data-t="s11"><span class="num">11</span>Master plan &amp; GIS map</button></li>
+    <li class="part">Part D · Modules</li>
+    <li><button data-t="s12"><span class="num">12</span>190 MLD WTP</button></li>
+    <li><button data-t="s13"><span class="num">13</span>Admin building BIM</button></li>
+    <li><button data-t="s14"><span class="num">14</span>O&amp;M maintenance</button></li>
+    <li><button data-t="s15"><span class="num">15</span>Decision support</button></li>
+    <li><button data-t="s16"><span class="num">16</span>Weather &amp; leak</button></li>
+    <li><button data-t="s17"><span class="num">17</span>Server, roles &amp; security</button></li>
+    <li class="part">Part E · Reference</li>
+    <li><button data-t="s18"><span class="num">18</span>Keyboard shortcuts</button></li>
+    <li><button data-t="s19"><span class="num">19</span>Troubleshooting</button></li>
+    <li><button data-t="s20"><span class="num">20</span>Glossary</button></li>
+    <li><button data-t="s21"><span class="num">21</span>Document control</button></li>
+  </ul>
+</nav>
+
+<main id="main">
+<div class="cover">
+  <div class="kicker">User Manual · Reference document</div>
+  <h1>Amaravati Underground Utility Digital Twin</h1>
+  <p class="sub">A reference for engineers, operators and reviewers. It explains what each screen shows, how to move around the three-dimensional model, and — most importantly — how to tell which values are measured and which are simulated.</p>
+  <div class="meta">
+    <div><div class="k">Prepared for</div><div class="v">APCRDA</div></div>
+    <div><div class="k">Prepared by</div><div class="v">Kreayotoo Solutions (P) Ltd · KSPL</div></div>
+    <div><div class="k">Revision</div><div class="v">1.4 · 16 September 2026</div></div>
+    <div><div class="k">Coordinate system</div><div class="v">UTM 44N · EPSG:32644</div></div>
+  </div>
+</div>
+
+<div class="body">
+
+<section id="s1"><h2><span class="n">01</span>Introduction</h2>
+<p>The Digital Twin is a single browser file that holds the complete underground utility network of the Amaravati capital city — <b>53 blocks across 11 zones</b>, five utilities, the transmission trunk main, the 190 MLD water treatment plant and its administration building — together with the APCRDA master plan and an operations &amp; maintenance module.</p>
+<p>It runs entirely in the browser. Nothing is uploaded; the only internet traffic is for map tiles, fonts, the weather feed and the 3D decoder, and all of those degrade gracefully when unavailable.</p>
+<div class="grid3">
+ <div class="card"><h3>Utilities</h3><ul><li><span class="sw" style="background:#19c6f0"></span>Potable water</li><li><span class="sw" style="background:#ff8a2b"></span>Sewerage</li><li><span class="sw" style="background:#3b6cff"></span>Storm water</li><li><span class="sw" style="background:#c44be0"></span>Reuse water</li><li><span class="sw" style="background:#ff3b3b"></span>Power / ICT duct bank</li></ul></div>
+ <div class="card"><h3>Scale</h3><ul><li>130,000+ pipe segments</li><li>44,000+ manholes and chambers</li><li>1,106 trunk pipes (2,291 segments), 121 km, up to 2,500 mm · R4 bypass</li><li>95,943 master-plan plots, 35 zoning classes</li></ul></div>
+ <div class="card"><h3>Engineering sources</h3><ul><li>WaterGEMS hydraulic models</li><li>AutoCAD DXF site plans</li><li>IFC / Revit building models</li><li>QGIS shapefiles and style files</li></ul></div>
+</div>
+<div class="note"><b>Who this manual is for</b>Anyone opening the twin for the first time. Sections 1–4 are enough to start; Section 9 is required reading before quoting any figure from the screen.</div>
+</section>
+
+<section id="s2"><h2><span class="n">02</span>Getting started</h2>
+<div class="steps">
+ <div><b>Open the file in Chrome or Edge.</b> The application starts on <b>Zone 1A</b>, at 1× vertical exaggeration with the road surface hidden.</div>
+ <div><b>Choose what to look at from the left sidebar.</b> Click a zone header for the whole zone, or a single block such as <b>1A · B10</b>. Special views — Entire City, Trunk + Ring Main, WTP, Admin Building, Weather, Decision Support, O&amp;M — are at the top of the sidebar.</div>
+ <div><b>Wait for the loader.</b> A block loads in 1–3 seconds; a zone in 2–8; <b>Entire City</b> in 10–20 seconds on a laptop. The spinner is normal.</div>
+ <div><b>Move around.</b> Left-drag pans, the wheel zooms, right-drag tilts. The toolbar on the right edge of the scene gives Top, Isometric and Explode.</div>
+ <div><b>Click on any pipe, manhole or structure</b> to read its data in the tooltip and the information panel.</div>
+ <div><b>Check the tag on every number.</b> <span class="tag real">REAL</span> means measured or drawn; <span class="tag sim">SIMULATED</span> means a placeholder value. See Section 9.</div>
+</div>
+<div class="note ok"><b>Recommended setup</b>Chrome or Edge (current), a screen of 1600 px or wider, and a machine with a dedicated or recent integrated GPU. Block views work on tablets; zone and city views are intended for desktops.</div>
+</section>
+
+<section id="s3"><h2><span class="n">03</span>Screen layout</h2>
+<div class="fig">
+<svg viewBox="0 0 900 470" xmlns="http://www.w3.org/2000/svg" font-family="JetBrains Mono, monospace" font-size="11">
+ <defs><style>.b{fill:#0e1728;stroke:#25384f}.l{fill:#8fa3bb}.a{fill:#78ccc0;font-weight:600}.h{fill:#12283a;stroke:#1d4a52}</style></defs>
+ <rect x="1" y="1" width="898" height="468" rx="10" fill="#070a12" stroke="#1c2b42"/>
+ <rect x="10" y="10" width="200" height="450" rx="8" class="b"/>
+ <text x="22" y="30" class="a">A  SIDEBAR</text>
+ <rect x="20" y="42" width="180" height="22" rx="5" class="h"/><text x="28" y="57" class="l">Entire City</text>
+ <rect x="20" y="68" width="180" height="22" rx="5" class="h"/><text x="28" y="83" class="l">Trunk + Ring Main</text>
+ <rect x="20" y="94" width="180" height="22" rx="5" class="h"/><text x="28" y="109" class="l">190 MLD WTP · Site</text>
+ <rect x="20" y="120" width="180" height="22" rx="5" class="h"/><text x="28" y="135" class="l">WTP Admin Building</text>
+ <rect x="20" y="146" width="180" height="22" rx="5" class="h"/><text x="28" y="161" class="l">Weather · Decision · O&amp;M</text>
+ <text x="22" y="196" class="l">▸ ZONE 1A · 5 blocks</text><text x="34" y="214" class="l">1A · B8   1A · B9 …</text>
+ <text x="22" y="236" class="l">▸ ZONE 1B · 7 blocks</text><text x="22" y="256" class="l">▸ ZONE 2A …</text>
+ <rect x="20" y="424" width="180" height="24" rx="5" class="h"/><text x="28" y="440" class="l">? Help &amp; User Guide</text>
+ <rect x="222" y="10" width="668" height="26" rx="6" class="b"/>
+ <text x="232" y="27" class="a">B</text><text x="250" y="27" class="l">AMARAVATI ▸ ZONE 1A ▸ BLOCK 10       (breadcrumb · click to go up)</text>
+ <rect x="222" y="42" width="668" height="52" rx="6" class="b"/>
+ <text x="232" y="60" class="a">C</text><text x="250" y="60" class="l">KREAYOTOO logo · UTILITY DIGITAL TWIN · zone/block pill · WTP / WDC badges · clock · alerts</text>
+ <text x="250" y="80" class="l">Twin header</text>
+ <rect x="222" y="100" width="668" height="56" rx="6" class="b"/>
+ <text x="232" y="118" class="a">D</text><text x="250" y="118" class="l">LIVE OPERATIONS — 8 KPI tiles · header states SCOPE (block / zone / city / trunk / plant)</text>
+ <text x="250" y="138" class="l">(all tiles are SIMULATED until SCADA / sensors are connected)</text>
+ <rect x="222" y="162" width="440" height="298" rx="6" class="b"/>
+ <text x="232" y="180" class="a">E</text><text x="250" y="180" class="l">UTILITY NETWORK — 3D TWIN | GIS MAP tabs</text>
+ <rect x="232" y="192" width="380" height="20" rx="4" fill="#0b1220" stroke="#1c2b42"/><text x="240" y="206" class="l">LAYERS  ● Water ● Sewer ● Storm ● Reuse ● Power  ▪ Structures ▪ Road</text>
+ <rect x="232" y="220" width="380" height="228" rx="4" fill="#05070d" stroke="#1c2b42"/>
+ <text x="380" y="340" fill="#25384f" font-size="13">3D scene</text>
+ <rect x="622" y="222" width="30" height="228" rx="6" class="h"/>
+ <text x="626" y="238" class="a">F</text>
+ <g fill="#19c6f0"><rect x="630" y="248" width="14" height="14" rx="3"/><rect x="630" y="270" width="14" height="14" rx="3"/><rect x="630" y="292" width="14" height="14" rx="3"/><rect x="630" y="314" width="14" height="14" rx="3"/><rect x="630" y="336" width="14" height="14" rx="3"/><rect x="630" y="358" width="14" height="14" rx="3"/><rect x="630" y="380" width="14" height="14" rx="3"/><rect x="630" y="402" width="14" height="14" rx="3"/></g>
+ <rect x="668" y="162" width="222" height="298" rx="6" class="b"/>
+ <text x="678" y="180" class="a">G</text><text x="696" y="180" class="l">RIGHT COLUMN</text>
+ <text x="678" y="204" class="l">WTP process control</text><text x="678" y="224" class="l">Chemical dosing</text><text x="678" y="244" class="l">Turbidity in / out</text><text x="678" y="264" class="l">KPIs &amp; live trends</text><text x="678" y="284" class="l">Utility throughput</text><text x="678" y="304" class="l">Selection info panel</text>
+</svg>
+<div class="cap"><b>Figure 3.1</b> · Main screen. A sidebar · B breadcrumb · C twin header · D live-operations strip · E network panel · F 3D toolbar · G right column</div>
+</div>
+<div class="kv">
+<b>A · Sidebar</b><span>Special views at the top; the 11 zones below, each expandable to its blocks with pipe count, manhole count and length.</span>
+<b>B · Breadcrumb</b><span>Shows where you are — AMARAVATI ▸ ZONE ▸ BLOCK. Each part is clickable and goes up a level.</span>
+<b>C · Twin header</b><span>Branding, the current zone/block pill, facility badges (WTP, WDC), local time and the alert bell.</span>
+<b>D · Live operations</b><span>Eight tiles summarising the <i>open view</i>. The header states the scope (block, zone, city, trunk or plant) and the basis of the figures; values scale with the view's network length and are simulated until live data is connected. Refreshes every 2 s.</span>
+<b>E · Network panel</b><span>The 3D scene or, via the GIS MAP tab, the same network on a Leaflet map. Layer chips sit along the top.</span>
+<b>F · 3D toolbar</b><span>View, explode, flow, scale, overlays and fullscreen. Described in Section 6.</span>
+<b>G · Right column</b><span>Plant process panels, trends and the information panel that fills when you select something.</span>
+</div>
+</section>
+
+<section id="s4"><h2><span class="n">04</span>Views</h2>
+<table><tr><th style="width:190px">View</th><th>Content</th><th style="width:110px">Typical load</th></tr>
+<tr><td><b>Block</b><br><span style="color:var(--faint);font-family:var(--mono);font-size:11px">e.g. 1B · B5</span></td><td>All five utilities for one block. Manholes and structures are optional (Structures chip).</td><td>1–3 s</td></tr>
+<tr><td><b>Zone</b><br><span style="color:var(--faint);font-family:var(--mono);font-size:11px">e.g. ZONE 1A</span></td><td>Every block in the zone merged into one scene. Same controls as a block.</td><td>2–8 s</td></tr>
+<tr><td><b>Entire City</b></td><td>All 53 blocks with flow animation in every utility (at this scale the flowing core is the pipe itself). Map-style pan only — automatic fly-ins and auto-zoom are deliberately disabled to protect the GPU.</td><td>10–20 s</td></tr>
+<tr><td><b>Trunk + Ring Main</b></td><td>Transmission network R4 bypass, 500–2,500 mm, with WaterGEMS flow directions and EPANET hydraulics. Includes the raw-water INTAKE, the WTP site and the admin building at their surveyed positions.</td><td>1–3 s</td></tr>
+<tr><td><b>190 MLD WTP · Site</b></td><td>Plant site plan draped at true scale, 17 unit-process volumes, the 9 real trunk tie-in nodes, the admin building BIM, and the trunk main within 1.1 km.</td><td>2–4 s</td></tr>
+<tr><td><b>WTP Admin Building</b></td><td>The BIM model on its own with floor isolation, rooms and orbit controls.</td><td>2–5 s</td></tr>
+<tr><td><b>O&amp;M · Maintenance</b></td><td>Six tabs: KPI dashboard, asset register, PM schedule, work orders, stores, live data. Monthly PDF report.</td><td>&lt; 1 s</td></tr>
+<tr><td><b>Decision Support</b></td><td>Place an incident on the map; GIS buffer and network trace show what is affected.</td><td>&lt; 1 s</td></tr>
+<tr><td><b>Live Weather &amp; Storm Risk</b></td><td>Real rainfall from Open-Meteo with a simulated storm-network response.</td><td>needs internet</td></tr>
+</table>
+</section>
+
+<section id="s5"><h2><span class="n">05</span>Navigation</h2>
+<div class="grid2">
+<div class="card"><h3>Mouse</h3><div class="kv">
+<b>Left-drag</b><span>Pan the scene (map style)</span>
+<b>Right-drag</b><span>Orbit and tilt</span>
+<b>Shift + left-drag</b><span>Orbit and tilt — useful on a trackpad</span>
+<b>Wheel</b><span>Zoom toward the pointer</span>
+<b>Click / double-click</b><span>Select an object</span>
+<b>Hover</b><span>Quick tooltip</span></div></div>
+<div class="card"><h3>Touch</h3><div class="kv">
+<b>One finger</b><span>Pan</span>
+<b>Two fingers</b><span>Pinch to zoom; twist to rotate</span>
+<b>Tap</b><span>Select</span></div>
+<p style="font-size:12.5px;color:var(--dim);margin-top:12px">The Admin Building view uses classic orbit controls: drag to orbit, two fingers or right-drag to pan.</p></div>
+</div>
+<div class="note"><b>Getting lost</b>Press <kbd>I</kbd> for the isometric view or <kbd>T</kbd> for plan view; both re-frame the whole network. In Entire City, use the GIS MAP tab to find a block, then click its outline to open it in 3D.</div>
+</section>
+
+<section id="s6"><h2><span class="n">06</span>3D toolbar</h2>
+<p>The toolbar runs down the right edge of the scene. Buttons light up when active. Some appear only where they apply.</p>
+<div class="card" style="padding:6px 18px">
+<div class="tb"><div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg></div><div><div class="t">Top view</div><div class="d">Plan view looking straight down. Best for tracing routes and reading the site plan.</div></div></div>
+<div class="tb"><div class="ic"><svg viewBox="0 0 24 24"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg></div><div><div class="t">Isometric</div><div class="d">The default three-quarter view. Re-frames the whole network.</div></div></div>
+<div class="tb"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></div><div><div class="t">Explode layers</div><div class="d">Lifts each utility onto its own shelf so overlapping networks can be inspected separately. Facilities, the WTP and the building are hidden while exploded.</div></div></div>
+<div class="tb"><div class="ic"><svg viewBox="0 0 24 24"><path d="M3 12c3-4 6-4 9 0s6 4 9 0"/></svg></div><div><div class="t">Toggle flow</div><div class="d">Animated flow inside the hollow pipe walls, always in the physical direction. <b>Raw water</b>: intake wells → MS 2000 mm main → WTP inlet (sand-coloured). <b>Inside the plant</b>: a schematic arrow path runs inlet → aerator → flocculators → settlers → filters → chlorination → clear water reservoir → pump house. <b>Treated water</b>: R-1 / PMP-1 → trunk main → WDC tapping points, following the WaterGEMS flow arrows <span class="tag real">REAL</span>; speed from EPANET. <b>Distribution</b>: each block's network flows outward from its feed point, marked <b>FEED ← WDC-xx</b> <span class="tag sim">feed location ASSUMED</span>. <b>Sewer and storm</b>: by gravity from the higher to the lower design invert <span class="tag real">REAL</span>.</div></div></div>
+<div class="tb"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 20 20 4M4 4h6M4 4v6M20 20h-6M20 20v-6"/></svg></div><div><div class="t">1 : 1 true scale</div><div class="d">Draws every pipe at its real diameter instead of a readable minimum. Small-bore pipes become hairlines; useful when comparing sizes.</div></div></div>
+<div class="tb"><div class="ic"><svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V8l7-5 7 5v13"/></svg></div><div><div class="t">Above-ground city / Toggle building</div><div class="d">Drapes the APCRDA master-plan land-use as a coloured ground layer. In views that contain the admin building, this button instead shows or hides the building.</div></div></div>
+<div class="tb"><div class="ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h7"/><rect x="15" y="14" width="6" height="6" rx="1"/></svg></div><div><div class="t">Site labels</div><div class="d">Shows or hides the unit-process and headworks labels over the plant. Appears only in the WTP view.</div></div></div>
+<div class="tb"><div class="ic"><svg viewBox="0 0 24 24"><path d="M3 20h18M5 20v-8h5v8M14 20v-11h5v11"/></svg></div><div><div class="t">WTP site</div><div class="d">Shows or hides the treatment plant. Appears only in the Trunk, Entire City and WTP views.</div></div></div>
+<div class="tb"><div class="ic"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg></div><div><div class="t">Fullscreen 3D</div><div class="d">Expands the scene to the whole browser window. <kbd>Esc</kbd> returns. The parameter dashboard remains available.</div></div></div>
+<div class="tb"><div class="ic"><svg viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div><div><div class="t">Live EPANET hydraulics</div><div class="d">Sends the current network to the server, runs EPANET and colours pipes by result. Requires the server; the model is <b>uncalibrated</b> and indicative only.</div></div></div>
+<div class="tb"><div class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="10" width="7" height="11"/><rect x="14" y="4" width="7" height="17"/></svg></div><div><div class="t">OSM buildings</div><div class="d">Building massing and roads from OpenStreetMap, for context only. <span class="tag demo">DEMO</span></div></div></div>
+</div>
+</section>
+
+<section id="s7"><h2><span class="n">07</span>Layers, sliders &amp; panels</h2>
+<h3>Layer chips (top of the network panel)</h3>
+<p>One chip per utility with its live pipe count. Click to hide or show. Two further chips: <b>Structures</b> (manholes, chambers, sumps — off by default in zone and city views to keep them fast) and <b>Road surface</b> (the formation road level plane).</p>
+<h3>Sliders</h3>
+<div class="kv">
+<b>Exaggeration</b><span>Vertical stretch applied to invert levels. Opens at <b>1×</b> (true). Increase it to see gradients on flat ground. Structures, the WTP and the building stretch with it so the scene stays consistent.</span>
+<b>Road opacity</b><span>Opens at <b>0 %</b>. Raise it to see the road surface over the pipes.</span></div>
+<h3>Right-column panels</h3>
+<div class="kv">
+<b>WTP process control</b><span>Plant status, inflow, outflow, running units.</span>
+<b>Chemical dosing</b><span>Alum, lime and chlorine dose rates.</span>
+<b>Turbidity</b><span>Raw and treated water turbidity.</span>
+<b>KPIs &amp; trends</b><span>Live sparklines for the main indicators, with value axis, time axis and the view's scope on each chart. The window is the last 160 seconds at 2-second samples.</span>
+<b>Utility throughput</b><span>Flow per utility for the current view.</span></div>
+<div class="note warn"><b>Status of panel values</b>Every process value in the right column is <span class="tag sim">SIMULATED</span> until plant SCADA or field sensors are connected through the ingestion service (Section 17).</div>
+</section>
+
+<section id="s8"><h2><span class="n">08</span>Selecting &amp; reading data</h2>
+<p>Click any object. The tooltip shows the essentials; the information panel in the right column shows the full record.</p>
+<table><tr><th style="width:190px">Object</th><th>Fields shown</th><th style="width:130px">Status</th></tr>
+<tr><td><b>Pipe</b></td><td>Utility, diameter, length, invert level at both ends, gradient, material where supplied. Trunk pipes add head, flow, velocity and direction.</td><td><span class="tag real">REAL</span></td></tr>
+<tr><td><b>Manhole / chamber</b></td><td>ID, rim level, invert, depth, connected pipes.</td><td><span class="tag real">REAL</span></td></tr>
+<tr><td><b>Facility</b><br><span style="font-size:11px;color:var(--faint)">reservoir, substation, STP, pump</span></td><td>Type, capacity, status. Placed at the nearest real pipe vertex so it always lies inside the master plan.</td><td><span class="tag sim">SIMULATED</span></td></tr>
+<tr><td><b>WTP unit</b></td><td>Function, plan size, model node where one exists, process notes.</td><td>footprint <span class="tag real">REAL</span><br>height <span class="tag sim">SIMULATED</span></td></tr>
+<tr><td><b>Trunk tie-in node</b><br><span style="font-size:11px;color:var(--faint)">R-1, R-3, PMP-1, PMP-2, J-86 …</span></td><td>Description, rim, invert, source model.</td><td><span class="tag real">REAL</span></td></tr>
+<tr><td><b>Admin building</b></td><td>Footprint, height, levels, easting, northing, rotation, scale.</td><td><span class="tag real">REAL</span></td></tr>
+</table>
+</section>
+
+<section id="s9"><h2><span class="n">09</span>Data labelling policy</h2>
+<p>Honest labelling of measured versus simulated data is a non-negotiable requirement of this platform. Every figure on screen carries one of three tags.</p>
+<div class="grid3">
+<div class="card"><span class="tag real">REAL</span><p style="margin-top:10px">Taken directly from an engineering source without adjustment: WaterGEMS models, AutoCAD DXF, IFC/Revit BIM, QGIS shapefiles, the APCRDA style file, or connected sensors.</p></div>
+<div class="card"><span class="tag sim">SIMULATED</span><p style="margin-top:10px">A plausible, engineering-typical value used because the real one has not been supplied. Suitable for demonstration and layout review — <b>not</b> for operational decisions.</p></div>
+<div class="card"><span class="tag demo">DEMO</span><p style="margin-top:10px">Placeholder content present only so the screen shows its intended form: OSM massing, sample work orders, sample readings.</p></div>
+</div>
+<div class="grid2">
+<div class="card"><h3>Real today</h3><ul>
+<li>Pipe geometry, diameters, inverts and lengths — all 53 blocks and the trunk main</li>
+<li>Trunk-main hydraulics from the WaterGEMS R4 result tables — four demand scenarios (2028, 2043, 2043 without Undavalli &amp; Tadepalli, 2058): per-pipe flow, velocity, headloss, material and C; per-junction demand, hydraulic grade and pressure. Switch scenario with the <b>WaterGEMS</b> selector in the twin footer.</li>
+<li>Master-plan land-use polygons and their APCRDA colour coding</li>
+<li>WTP site boundary, site-plan linework, unit footprints and positions</li>
+<li>The twelve trunk nodes inside the WTP site and the 2,500 mm headworks main</li>
+<li>WTP site model and intake headworks geometry and levels (IFC); admin building geometry, levels and height</li></ul></div>
+<div class="card"><h3>Simulated today</h3><ul>
+<li>All process values, dosing, turbidity, pressures and the eight KPI tiles</li>
+<li>Positions of facilities other than the plant and intake</li>
+<li>WTP process values (dosing, turbidity, flows)</li>
+<li>Storm response, leak index, power load</li>
+<li>Live EPANET results from the server (runs but is not calibrated) — the WaterGEMS tables are the hydraulics of record</li></ul></div>
+</div>
+<div class="note stop"><b>Pending from APCRDA</b>Commissioning dates, crew names, SLA targets, EPANET Tier-1 data, duct-bank details. Fields that depend on these show a dash or a SIMULATED tag until they are supplied.</div>
+</section>
+
+<section id="s10"><h2><span class="n">10</span>Data sources</h2>
+<table><tr><th style="width:230px">Source</th><th style="width:210px">Format</th><th>Used for</th></tr>
+<tr><td>Block utility models</td><td>WaterGEMS / CAD → JSON</td><td>All pipes, manholes and inverts for 53 blocks</td></tr>
+<tr><td>RINGMAIN R4 bypass (2058_R4_bypass.dxf)</td><td>WaterGEMS DXF export</td><td>Trunk-main geometry R4 bypass, 1,106 pipes, 323 nodes, flow directions, junction levels and pressures</td></tr>
+<tr><td>Masterplan_Mosaic_01082025</td><td>QGIS shapefile · EPSG:32644</td><td>Land-use overlay: 95,943 plots, 35 zoning classes</td></tr>
+<tr><td>Landuse_Styles.qml</td><td>QGIS style file</td><td>Official APCRDA colour for each zoning class</td></tr>
+<tr><td>WTP Site Plan R0</td><td>AutoCAD DXF · mm · UTM 44N</td><td>Plant boundary, unit footprints, site-plan drape</td></tr>
+<tr><td>WTP-ADMIN-AR / ST_09</td><td>IFC4 → Draco glTF</td><td>Admin building BIM, 16 levels</td></tr>
+<tr><td>Open-Meteo</td><td>REST</td><td>Live rainfall for the Weather view</td></tr>
+<tr><td>Sensor ingestion service</td><td>REST · MQTT · Modbus-TCP · OPC-UA</td><td>Live Data tab in O&amp;M, threshold alarms</td></tr></table>
+<p>All geometry is held in <b>UTM Zone 44N, EPSG:32644</b>. Map layers are converted to WGS84 only for display.</p>
+</section>
+
+<section id="s11"><h2><span class="n">11</span>Master plan &amp; GIS map</h2>
+<p>The GIS MAP tab shows the same network on a Leaflet map with the APCRDA land-use overlay. The overlay is rendered from the official shapefile at 7,200 px, coloured by the <b>ZONING</b> attribute using the APCRDA style file.</p>
+<ul>
+<li>The legend lists all 35 classes. Hover a row for the plot count.</li>
+<li><b>R1 – Village planning zone</b> is drawn with a diagonal hatch, exactly as in the APCRDA style.</li>
+<li><b>R5 – Affordable / EWS Housing Zone</b> is marked <span style="color:var(--amber)">*</span>: it is absent from the style file, so its colour was assigned and is documented as such.</li>
+<li>Click a block outline to open that block in 3D. The WTP polygon and marker identify the plant.</li>
+<li>The admin-building marker can be dragged to test an alternative position; the surveyed position is restored on reload.</li></ul>
+<div class="note"><b>Road network</b>The APCRDA style specifies the SU2 road network as transparent. The twin draws it in black so the corridors remain visible over the basemap.</div>
+</section>
+
+<section id="s12"><h2><span class="n">12</span>190 MLD water treatment plant</h2>
+<p>The plant is taken from its AutoCAD site plan and georeferenced to EPSG:32644 against three surveyed corners, with residuals of 0.2 mm easting and 5 mm northing. Site centre <b>16.497808 N, 80.550870 E</b>; plot envelope 422 × 667 m.</p>
+<div class="grid2">
+<div class="card"><h3>What is shown</h3><ul>
+<li>Site boundary triangle from the survey coordinates</li>
+<li>Every line and label of the CAD drawing, draped at true scale</li>
+<li>The plant's full 3D site model from IFC — 19 linked buildings, 13,138 structural and process elements, 1.2 million triangles — with real heights; unit-process labels from the site plan; the admin building at its original detail on its plot</li>
+<li>The 12 trunk nodes that fall inside the site</li>
+<li>The raw-water intake: wells 1 &amp; 2 and the headworks from IFC, with the surveyed MS 2000 mm raw-water pipe</li></ul></div>
+<div class="card"><h3>Trunk-main tie-in</h3><p>In the R4 model the source reservoir <b>R-1</b> lies inside the Clear Water Reservoir footprint and pumping station <b>PMP-1</b> at the Clear Water Pump House — where a reservoir outlet and pump suction belong. The new <b>bypass main</b> runs from the headworks north-east to the raw-water <b>INTAKE</b>. The CAD drawing and the hydraulic model were produced independently and agree.</p></div>
+</div>
+<div class="note ok"><b>Heights are real</b>Since 22 September 2026 the plant is drawn from its IFC site model, so structure heights are real. Model z 0 is the design finished ground level +21.00 m. The intake model is placed by a two-well fit to the surveyed intake wells (residual 0.000 m) and its levels are reduced levels.</div>
+</section>
+
+<section id="s13"><h2><span class="n">13</span>Admin building BIM</h2>
+<p>The Revit model (IFC4, 118 meshes, 16 levels, 33.38 m) is placed at the ADMIN. BLD. footprint of the site plan — <b>E 452139.91, N 1824212.16</b>, rotated −27.17° to the site grid, base level 23.40 m — at true scale with no stretch. The three coordinates embedded in the delivered IFC files were between 5.9 and 14.3 km from the plant and were not used.</p>
+<div class="kv">
+<b>Floors panel</b><span>Isolate any of the 16 levels, from pile cut-off to terrace.</span>
+<b>Rooms</b><span>Display spaces from the IFC with their names.</span>
+<b>Auto-rotate / Reset view</b><span>Turntable presentation; return to the default camera.</span>
+<b>Trunk &amp; City views</b><span>The building carries a light beacon and a WTP ADMIN BLDG label so it can be found at city scale, where a 30 m building is smaller than one pixel.</span></div>
+<div class="note"><b>If a plain purple block appears</b>The building is placed immediately as a massing block of the correct size; the detailed model replaces it when the Draco decoder loads from gstatic.com. A persistent purple block means the decoder was blocked — the position is still correct.</div>
+</section>
+
+<section id="s14"><h2><span class="n">14</span>O&amp;M maintenance</h2>
+<div class="kv">
+<b>KPI Dashboard</b><span>Open work orders, overdue preventive maintenance, mean time to repair, SLA compliance, stock-outs.</span>
+<b>Asset Register</b><span>Every pipe, manhole, valve and pump with ID, location and installation data. Commissioning dates pending.</span>
+<b>PM Schedule</b><span>CPHEEO-based preventive maintenance calendar; mark complete or reschedule.</span>
+<b>Work Orders</b><span>Lifecycle create → assign → in progress → verify → close, with SLA timers, escalation, activity log and attachments. Complaints can be imported from CSV.</span>
+<b>Stores</b><span>Warehouse stock, reorder levels, issues against work orders.</span>
+<b>Live Data</b><span>Readings from connected devices; threshold breaches raise alarms and can auto-create work orders. The <b>History</b> panel below the table charts any device over 24 h to 1 year (raw ≤ 2 days, hourly ≤ 120 days, daily beyond) with a min–max band and threshold lines, and downloads the series as CSV.</span>
+<b>Monthly report</b><span>One-click PDF summary of the month's performance.</span></div>
+<p>Phase 1 stores O&amp;M data in the browser. Phase 2 synchronises with the server under role-based access (Section 17).</p>
+</section>
+
+<section id="s15"><h2><span class="n">15</span>Decision support</h2>
+<div class="steps">
+<div>Open Decision Support and tap the map where an incident has occurred — a burst, contamination, power fault or road closure.</div>
+<div>A real GIS buffer is drawn and the connected network is traced. Affected pipes, plots and an estimated population (from land-use densities) are listed.</div>
+<div>Recommended actions and isolation points appear on the right. The summary can be exported for the shift report.</div>
+</div>
+</section>
+
+<section id="s16"><h2><span class="n">16</span>Weather &amp; leak detection</h2>
+<p><b>Live Weather &amp; Storm Risk</b> retrieves current and forecast rainfall for Amaravati from Open-Meteo <span class="tag real">REAL</span> and shows how the storm-water network would respond <span class="tag sim">SIMULATED</span>.</p>
+<p><b>DMA Leak Detection</b> estimates non-revenue water from minimum night flow and mass balance on the selected network. It is reached from within Decision Support.</p>
+</section>
+
+<section id="s17"><h2><span class="n">17</span>Server, roles &amp; security</h2>
+<p>The single file works fully offline. The optional FastAPI server adds live EPANET, sensor ingestion, shared O&amp;M data, automatic backups and user accounts.</p>
+<table><tr><th style="width:130px">Role</th><th>Permissions</th></tr>
+<tr><td><b>Admin</b></td><td>All functions, including users, backups and security settings</td></tr>
+<tr><td><b>Engineer</b></td><td>Edit assets and PM schedules, run hydraulics, verify and close work orders</td></tr>
+<tr><td><b>Operator</b></td><td>Create and progress work orders, acknowledge alarms, log readings</td></tr>
+<tr><td><b>Viewer</b></td><td>Read-only access to every view and report</td></tr></table>
+<p>Readings are stored in <code>readings.db</code> and rolled up automatically — raw kept 90 days, hourly averages 2 years, daily for ever; nothing is deleted before it is rolled up. Passwords are hashed with PBKDF2-SHA256; sessions use HMAC-signed tokens; every change and every export is written to an audit log; backups run every six hours; browser origins are restricted by a CORS allow-list. Details are in <code>server/SECURITY.md</code> and the Login &amp; Security Access document.</p>
+</section>
+
+<section id="s18"><h2><span class="n">18</span>Keyboard shortcuts</h2>
+<table><tr><th style="width:170px">Key</th><th>Action</th></tr>
+<tr><td><kbd>?</kbd> &nbsp; <kbd>F1</kbd></td><td>Open this manual</td></tr>
+<tr><td><kbd>T</kbd></td><td>Top (plan) view</td></tr>
+<tr><td><kbd>I</kbd></td><td>Isometric view</td></tr>
+<tr><td><kbd>E</kbd></td><td>Explode layers</td></tr>
+<tr><td><kbd>F</kbd></td><td>Toggle flow animation</td></tr>
+<tr><td><kbd>M</kbd></td><td>Switch between 3D Twin and GIS Map</td></tr>
+<tr><td><kbd>1</kbd> – <kbd>5</kbd></td><td>Toggle water · sewer · storm · reuse · power layers</td></tr>
+<tr><td><kbd>Esc</kbd></td><td>Leave fullscreen; clear the manual search</td></tr>
+<tr><td><kbd>Ctrl</kbd> + <kbd>P</kbd></td><td>Print this manual</td></tr></table>
+<p style="font-size:12.5px;color:var(--dim)">Shortcuts are ignored while typing in a text field.</p>
+</section>
+
+<section id="s19"><h2><span class="n">19</span>Troubleshooting</h2>
+<table><tr><th style="width:250px">Symptom</th><th>Cause and remedy</th></tr>
+<tr><td><b>The spinner never stops</b></td><td>Entire City needs up to 20 s. If a <i>block</i> view hangs, the tab has usually exhausted GPU memory. Close other 3D tabs and reload. Chrome's "Aw, snap" page indicates the renderer was terminated; this is why fly-in and auto-zoom were removed from the city view.</td></tr>
+<tr><td><b>Purple block instead of the admin building</b></td><td>The Draco decoder did not download from gstatic.com. Placement is correct; reload when the connection allows it.</td></tr>
+<tr><td><b>Map tiles are blank</b></td><td>Basemap tiles require internet. The network, land-use overlay and legend still work offline.</td></tr>
+<tr><td><b>Live EPANET does nothing</b></td><td>The server is not running or the browser origin is not on its allow-list. Start it with <code>server/start.sh</code> and check <code>security.json</code>.</td></tr>
+<tr><td><b>A facility appears mis-placed</b></td><td>Simulated facilities snap to the nearest real pipe vertex. Check the underlying block geometry. The WTP and the admin building are surveyed and do not move.</td></tr>
+<tr><td><b>Fonts look different</b></td><td>Fonts load from Google Fonts. Offline, the browser substitutes system fonts; nothing else changes.</td></tr>
+<tr><td><b>Nothing happens when a key is pressed</b></td><td>Click in the 3D scene first so it has focus, and make sure the cursor is not in a text field.</td></tr></table>
+</section>
+
+<section id="s20"><h2><span class="n">20</span>Glossary</h2>
+<div class="kv">
+<b>BIM</b><span>Building Information Model — the Revit / IFC model of the admin building.</span>
+<b>CWR</b><span>Clear Water Reservoir — treated-water storage at the WTP.</span>
+<b>DMA</b><span>District Metered Area — a hydraulically discrete zone used for leak detection.</span>
+<b>DXF</b><span>AutoCAD drawing exchange format.</span>
+<b>EPANET</b><span>Public-domain hydraulic network solver used by the server.</span>
+<b>EPSG:32644</b><span>WGS 84 / UTM Zone 44N — the project grid.</span>
+<b>FRL</b><span>Formation Road Level — the finished ground surface.</span>
+<b>IFC</b><span>Industry Foundation Classes — the open BIM exchange format.</span>
+<b>Invert</b><span>The inside bottom level of a pipe or chamber.</span>
+<b>MLD</b><span>Megalitres per day.</span>
+<b>NRW</b><span>Non-Revenue Water — water produced but not billed, including leakage.</span>
+<b>PM</b><span>Preventive Maintenance.</span>
+<b>QML</b><span>QGIS layer style file — the source of the APCRDA colour coding.</span>
+<b>SLA</b><span>Service Level Agreement — response and resolution targets for work orders.</span>
+<b>WaterGEMS</b><span>Bentley hydraulic modelling software; source of the network and trunk models.</span>
+<b>WTP</b><span>Water Treatment Plant.</span></div>
+</section>
+
+<section id="s21"><h2><span class="n">21</span>Document control</h2>
+<table><tr><th style="width:110px">Revision</th><th style="width:150px">Date</th><th>Changes</th></tr>
+<tr><td>1.4</td><td>16 Sep 2026</td><td>Live panels scoped to the open view with stated basis; chart axes; water-quality panel identified as plant-level.</td></tr>
+<tr><td>1.6</td><td>12 Oct 2026</td><td>WaterGEMS result tables joined to the trunk main: four demand scenarios, per-pipe and per-junction values, scenario selector, 771 model junctions added. Flow animation enabled in the Entire City view; footer layout fixed.</td></tr>
+<tr><td>1.5</td><td>07 Oct 2026</td><td>Flow direction fixed end to end: intake → WTP → trunk → WDC → block distribution; sewer and storm by gravity; in-plant treatment path; block feed points.</td></tr>
+<tr><td>1.4</td><td>23 Sep 2026</td><td>WTP site and intake headworks placed from IFC models at full detail with real heights and Revit material colours; admin model retained at original quality; simulated unit volumes retired; WTP view widened to the intake; lighter meshes in the city view; site-label toggle; zone caret fixed.</td></tr>
+<tr><td>1.3</td><td>09 Sep 2026</td><td>Trunk main replaced by RINGMAIN R4 bypass (1,106 pipes, INTAKE, re-run hydraulics); WTP tie-ins updated.</td></tr>
+<tr><td>1.2</td><td>04 Sep 2026</td><td>History chart and CSV export in Live Data; retention policy documented.</td></tr>
+<tr><td>1.1</td><td>03 Sep 2026</td><td>Restructured as a numbered manual; screen-layout figure; glossary; removed in-page navigation controls.</td></tr>
+<tr><td>1.0</td><td>03 Sep 2026</td><td>First issue: views, toolbar, labelling policy, WTP and BIM, O&amp;M, shortcuts, troubleshooting.</td></tr></table>
+<div class="kv">
+<b>Product</b><span>Amaravati Underground Utility Digital Twin</span>
+<b>Client</b><span>APCRDA — Andhra Pradesh Capital Region Development Authority</span>
+<b>Developer</b><span>Kreayotoo Solutions (P) Ltd, under KSPL</span>
+<b>Coverage</b><span>53 blocks · 11 zones · 5 utilities · trunk main · 190 MLD WTP · admin building BIM</span>
+<b>Technology</b><span>Three.js r128 · Leaflet 1.9 · custom GPU flow shaders · FastAPI · SQLite</span></div>
+</section>
+
+</div>
+<div class="foot">© Kreayotoo Solutions (P) Ltd · "We create for you" · This manual is a reference document and performs no actions in the application. All figures in the twin are labelled REAL, SIMULATED or DEMO; simulated values must not be used for operational decisions.</div>
+</main></div>
+<script>
+// Read-only manual: navigation scrolls within this page only. Nothing here opens or changes an application view.
+const secs=[...document.querySelectorAll('main section')], btns=[...document.querySelectorAll('#toc button')];
+btns.forEach(b=>b.addEventListener('click',()=>{ const t=document.getElementById(b.dataset.t); if(t) t.scrollIntoView({behavior:'smooth',block:'start'}); }));
+const q=document.getElementById('q'), sr=document.getElementById('sr');
+q.addEventListener('input',()=>{
+  const t=q.value.trim().toLowerCase(); let n=0;
+  secs.forEach(s=>{ const hit=!t||s.textContent.toLowerCase().includes(t); s.classList.toggle('hide',!hit); if(hit) n++;
+    const b=btns.find(x=>x.dataset.t===s.id); if(b) b.parentElement.classList.toggle('hide',!hit); });
+  sr.textContent=t?(n+' of '+secs.length+' sections match'):'';
+});
+const io=new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting) btns.forEach(b=>b.classList.toggle('act',b.dataset.t===e.target.id)); }); },{rootMargin:'-15% 0px -75% 0px'});
+secs.forEach(s=>io.observe(s));
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ q.value=''; q.dispatchEvent(new Event('input')); } });
+</script>
+</body></html>

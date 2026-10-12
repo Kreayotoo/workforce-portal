@@ -1,0 +1,24 @@
+{
+ "mqtt": {
+  "enabled": false,
+  "host": "127.0.0.1",
+  "port": 1883,
+  "username": "",
+  "password": "",
+  "topics": [
+   {
+    "topic": "utility/+/reading",
+    "device_from": "json:device_id",
+    "value_from": "json:value",
+    "_note": "any-brand JSON: {\"device_id\":\"X\",\"value\":12.3}"
+   },
+   {
+    "topic": "sensors/#",
+    "device_from": "topic:-1",
+    "value_from": "payload",
+    "_note": "bare-number payloads: device id = last topic segment"
+   }
+  ]
+ },
+ "note": "Modbus-TCP and OPC-UA are configured per-device in devices.json (see INGEST.md)."
+}

@@ -1,0 +1,346 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Amaravati Digital Twin — Live Monitor</title>
+<style>
+:root{--bg:#060f1c;--pan:#0c1a2e;--pan2:#0e2138;--line:#1d3a57;--ink:#eaf2f9;--dim:#9bb1c6;
+  --teal:#5fe0d2;--cy:#19C6F0;--amber:#f5c542;--red:#ff5d5d;--grn:#57d98a;--vio:#a98bff;
+  --mono:ui-monospace,monospace}
+*{box-sizing:border-box}html,body{margin:0;height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,Arial,sans-serif}
+/* top bar */
+.top{display:flex;align-items:center;gap:12px;padding:8px 16px;
+  background:linear-gradient(180deg,#081b30,#07162a);border-bottom:1px solid var(--line);height:48px}
+.top .logo{height:28px}
+.top .title b{font-size:13px;font-weight:800;color:#fff;display:block;line-height:1.1}
+.top .title span{font-size:9px;color:var(--teal);letter-spacing:.12em;text-transform:uppercase}
+.top .clock{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--teal);text-align:right}
+.top .clock small{display:block;font-size:9px;color:var(--dim)}
+.ws-dot{width:8px;height:8px;border-radius:50%;background:var(--red);margin-left:8px;flex-shrink:0}
+.ws-dot.on{background:var(--grn);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+/* layout */
+.grid{display:grid;grid-template-columns:300px 1fr 300px;grid-template-rows:auto 1fr;
+  gap:0;height:calc(100vh - 48px);overflow:hidden}
+/* KPI bar */
+.kpi-bar{grid-column:1/-1;display:flex;gap:10px;padding:8px 12px;
+  background:var(--pan);border-bottom:1px solid var(--line)}
+.kpi{background:var(--pan2);border:1px solid var(--line);border-radius:8px;
+  padding:6px 12px;min-width:100px;flex:1}
+.kpi .l{font-size:8px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;font-family:var(--mono)}
+.kpi .v{font-size:20px;font-weight:800;color:#fff;line-height:1.1;margin-top:1px}
+.kpi .v small{font-size:10px;color:var(--dim);font-weight:600}
+/* panels */
+.panel{border-right:1px solid var(--line);overflow-y:auto;padding:10px}
+.panel:last-child{border-right:0;border-left:1px solid var(--line)}
+.ph{display:flex;align-items:center;gap:7px;margin:0 0 8px;padding-bottom:7px;
+  border-bottom:1px solid var(--line)}
+.ph b{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--teal);font-family:var(--mono);flex:1}
+.ph .cnt{font-size:9px;font-family:var(--mono);color:var(--dim)}
+/* sensor cards */
+.sn{background:var(--pan);border:1px solid var(--line);border-radius:8px;
+  padding:7px 9px;margin-bottom:5px;transition:.2s}
+.sn.alarm{border-color:var(--red);background:#1a0c0c}
+.sn.warn{border-color:var(--amber);background:#1a160c}
+.sn .sr{display:flex;align-items:center;justify-content:space-between}
+.sn .sid{font-family:var(--mono);font-size:9.5px;color:var(--teal);font-weight:700}
+.sn .sv{font-size:14px;font-weight:800;font-family:var(--mono)}
+.sn .sl{font-size:9px;color:var(--dim);margin-top:1px}
+.sn .sb{height:3px;background:#12233a;border-radius:3px;margin-top:5px;overflow:hidden}
+.sn .sb i{display:block;height:100%;border-radius:3px;transition:width .4s}
+/* alert cards */
+.al{background:var(--pan);border:1px solid var(--line);border-left-width:3px;
+  border-radius:8px;padding:8px 10px;margin-bottom:5px;cursor:pointer;transition:.15s}
+.al:hover{transform:translateX(2px)}
+.al .at{font-size:11px;font-weight:700;color:#fff;line-height:1.3}
+.al .am{font-size:9.5px;color:var(--dim);font-family:var(--mono);margin-top:2px;line-height:1.35}
+.al .ab{display:flex;align-items:center;gap:6px;margin-top:4px}
+.al .src{font-size:8px;font-weight:700;padding:1px 5px;border-radius:20px;font-family:var(--mono)}
+.src.live{background:rgba(87,217,138,.15);color:var(--grn)}
+.src.sim{background:rgba(245,197,66,.12);color:var(--amber)}
+.sev{font-size:8px;font-weight:800;padding:1px 5px;border-radius:20px;font-family:var(--mono)}
+.sev.critical{background:rgba(255,93,93,.2);color:var(--red)}
+.sev.high{background:rgba(245,197,66,.18);color:var(--amber)}
+.sev.medium{background:rgba(25,198,240,.15);color:var(--cy)}
+/* centre: map + storm grid */
+.centre{display:flex;flex-direction:column;overflow:hidden}
+.storm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px;
+  background:var(--pan);border-bottom:1px solid var(--line)}
+.sg{background:var(--pan2);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+.sg .zn{font-family:var(--mono);font-size:9px;color:var(--teal);font-weight:700}
+.sg .zu{font-size:15px;font-weight:800;font-family:var(--mono);margin-top:1px}
+.sg .zb{height:5px;background:#12233a;border-radius:5px;margin-top:4px;overflow:hidden}
+.sg .zb i{display:block;height:100%;border-radius:5px;transition:width .5s}
+.map-frame{flex:1;overflow:hidden}
+.map-frame iframe{width:100%;height:100%;border:0}
+/* weather strip */
+.wx-strip{display:flex;gap:6px;padding:7px 8px;background:var(--pan2);
+  border-bottom:1px solid var(--line);align-items:center;flex-wrap:wrap}
+.wx-item{display:flex;align-items:center;gap:5px;font-family:var(--mono);font-size:11px}
+.wx-item .lbl{font-size:8.5px;color:var(--dim)}
+.wx-item .vl{font-weight:700;color:#fff}
+.wx-sep{width:1px;height:14px;background:var(--line)}
+/* log */
+.log{font-size:9px;font-family:var(--mono);line-height:1.5}
+.le{padding:3px 0;border-bottom:1px solid rgba(29,58,87,.4);display:flex;gap:7px}
+.le .lt{color:var(--dim);min-width:56px;flex-shrink:0}
+.le .lk{padding:1px 5px;border-radius:20px;font-weight:700;min-width:62px;text-align:center}
+.le .ld{color:#cfe0f0;flex:1}
+/* toast */
+#toasts{position:fixed;right:12px;bottom:12px;z-index:999;display:flex;flex-direction:column;gap:6px;max-width:300px}
+.toast{display:flex;gap:8px;background:rgba(9,20,34,.97);border:1px solid var(--line);
+  border-left-width:3px;border-radius:9px;padding:9px 11px;cursor:pointer;
+  animation:sl .25s ease;font-size:10.5px}
+@keyframes sl{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
+.toast b{display:block;color:#fff;font-size:11px}
+.toast span{color:var(--dim)}
+.toast .tx{margin-left:auto;color:var(--dim);cursor:pointer}
+/* empty */
+.empty{color:var(--dim);font-size:11px;text-align:center;padding:20px;line-height:1.6}
+/* scrollbar */
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+@media(max-width:1100px){.grid{grid-template-columns:240px 1fr 240px}}
+@media(max-width:800px){.grid{grid-template-columns:1fr};.panel:last-child{display:none}}
+</style></head>
+<body>
+<div class="top">
+  <img class="logo" src="/static/logo.png" onerror="this.style.display='none'" alt="">
+  <div class="title"><b>Amaravati Digital Twin</b><span>Kreayotoo Solutions (P) Ltd · Live Monitoring</span></div>
+  <div id="wsStatus" class="ws-dot" title="WebSocket disconnected"></div>
+  <div class="clock" id="clock"></div>
+</div>
+
+<div class="grid">
+  <!-- KPI bar -->
+  <div class="kpi-bar">
+    <div class="kpi"><div class="l">Sensors</div><div class="v" id="kSensors">—</div></div>
+    <div class="kpi"><div class="l">In alarm</div><div class="v" id="kAlarm" style="color:var(--red)">—</div></div>
+    <div class="kpi"><div class="l">Live alerts</div><div class="v" id="kLive" style="color:var(--grn)">—</div></div>
+    <div class="kpi"><div class="l">Sim alerts</div><div class="v" id="kSim" style="color:var(--amber)">—</div></div>
+    <div class="kpi"><div class="l">Temperature</div><div class="v" id="kTemp">—<small>°C</small></div></div>
+    <div class="kpi"><div class="l">Rain now</div><div class="v" id="kRain">—<small>mm/h</small></div></div>
+    <div class="kpi"><div class="l">Last sensor tick</div><div class="v" id="kTick" style="font-size:12px">—</div></div>
+  </div>
+
+  <!-- Left: sensor readings -->
+  <div class="panel" id="sensorPanel">
+    <div class="ph"><b>Sensor readings</b><span class="cnt" id="snCount">0 sensors</span></div>
+    <div id="sensors"></div>
+  </div>
+
+  <!-- Centre: storm grid + map + weather strip -->
+  <div class="centre">
+    <div class="wx-strip" id="wxStrip">
+      <div class="wx-item"><span class="lbl">Condition</span><span class="vl" id="wxCond">—</span></div>
+      <div class="wx-sep"></div>
+      <div class="wx-item"><span class="lbl">Humidity</span><span class="vl" id="wxHum">—%</span></div>
+      <div class="wx-sep"></div>
+      <div class="wx-item"><span class="lbl">Wind</span><span class="vl" id="wxWind">— km/h</span></div>
+      <div class="wx-sep"></div>
+      <div class="wx-item"><span class="lbl">7-day rain</span><span class="vl" id="wxRain7">— mm</span></div>
+    </div>
+    <div class="storm-grid" id="stormGrid"></div>
+    <div class="map-frame">
+      <iframe id="mapFrame" src="about:blank" title="Live map"></iframe>
+    </div>
+  </div>
+
+  <!-- Right: alerts + log -->
+  <div class="panel" id="alertPanel">
+    <div class="ph"><b>Alert feed</b><span class="cnt" id="alCount">0 alerts</span></div>
+    <div id="alerts"></div>
+    <div class="ph" style="margin-top:12px"><b>Event log</b><span class="cnt" id="logCount"></span></div>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+<div id="toasts"></div>
+
+<script>
+const HOST = location.host;
+const WMO = {0:'☀️ Clear',1:'🌤 Mainly clear',2:'⛅ Partly cloudy',3:'☁️ Overcast',
+  45:'🌫 Fog',51:'🌦 Drizzle',61:'🌦 Light rain',63:'🌧 Rain',65:'🌧 Heavy rain',
+  80:'🌦 Showers',95:'⛈ Thunderstorm'};
+const SEVCOL = {critical:'#ff5d5d',high:'#f5c542',medium:'#19C6F0'};
+const TYPEICON = {burst:'💧',pressure:'📉',quality:'☣️',power:'⚡',flood:'🌊',fire:'🔥'};
+
+let prevAlertIds = {}, LOG = [], sensors = {}, alerts = [];
+
+// clock
+setInterval(() => {
+  const n = new Date();
+  document.getElementById('clock').innerHTML =
+    `<span>${n.toLocaleTimeString()}</span><small>${n.toLocaleDateString('en',{weekday:'short',day:'2-digit',month:'short'})}</small>`;
+}, 1000);
+
+// websocket connections
+let wsAlerts, wsSensors;
+function connectWS() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  // alerts
+  wsAlerts = new WebSocket(`${proto}://${HOST}/ws/alerts`);
+  wsAlerts.onmessage = e => {
+    const d = JSON.parse(e.data); if(d.type==='alerts') onAlerts(d.data);
+    setWS(true);
+  };
+  wsAlerts.onclose = () => { setWS(false); setTimeout(connectWS, 3000); };
+  wsAlerts.onerror = () => setWS(false);
+  // sensors
+  wsSensors = new WebSocket(`${proto}://${HOST}/ws/sensors`);
+  wsSensors.onmessage = e => {
+    const d = JSON.parse(e.data); if(d.type==='sensors') onSensors(d.data);
+  };
+  wsSensors.onclose = () => setTimeout(connectWS, 3000);
+}
+function setWS(on) {
+  const d = document.getElementById('wsStatus');
+  d.classList.toggle('on', on); d.title = on ? 'WebSocket connected' : 'WebSocket disconnected';
+}
+
+// sensors
+function onSensors(data) {
+  sensors = data;
+  const ids = Object.keys(data);
+  document.getElementById('snCount').textContent = ids.length + ' sensors';
+  document.getElementById('kSensors').textContent = ids.length;
+  const alarm = ids.filter(id => data[id].prog > 0).length;
+  document.getElementById('kAlarm').textContent = alarm;
+  document.getElementById('kAlarm').style.color = alarm > 0 ? 'var(--red)' : 'var(--grn)';
+  const sorted = ids.slice().sort((a,b) => (data[b].prog||0)-(data[a].prog||0));
+  const COLOR = prog => prog > 0.6 ? 'var(--red)' : prog > 0 ? 'var(--amber)' : 'var(--grn)';
+  document.getElementById('sensors').innerHTML = sorted.map(id => {
+    const s = data[id]; const c = COLOR(s.prog||0);
+    const pct = s.kind==='pressure' ? Math.min(100,s.v/s.base*100) : Math.min(100,(s.v||0)/(s.base*1.5)*100);
+    const dp = s.kind==='chlorine'||s.kind==='pressure' ? 2 : 0;
+    return `<div class="sn ${s.prog>0.6?'alarm':s.prog>0?'warn':''}">
+      <div class="sr"><span class="sid">${id}</span>
+        <span class="sv" style="color:${c}">${(s.v||0).toFixed(dp)}<span style="font-size:9px;color:var(--dim);font-weight:400"> ${s.unit}</span></span></div>
+      <div class="sl">Zone ${s.zone} · ${s.block} · base ${s.base.toFixed(dp)} ${s.unit}</div>
+      <div class="sb"><i style="width:${pct}%;background:${c}"></i></div>
+    </div>`;
+  }).join('');
+  const now = new Date().toLocaleTimeString();
+  document.getElementById('kTick').textContent = now;
+}
+
+// alerts
+function onAlerts(data) {
+  const liveN = data.filter(a=>a.live).length;
+  const simN  = data.filter(a=>!a.live).length;
+  document.getElementById('kLive').textContent = liveN;
+  document.getElementById('kSim').textContent  = simN;
+  document.getElementById('alCount').textContent = data.length + ' alerts';
+  // detect new / escalated
+  const nowIds = {};
+  data.forEach(a => {
+    nowIds[a.id] = a;
+    if (!prevAlertIds[a.id]) {
+      logEvent('received', a.msg, a.id);
+      toast(a, false);
+    } else if(prevAlertIds[a.id].severity !== a.severity) {
+      logEvent('escalated', `${prevAlertIds[a.id].severity} → ${a.severity}: ${a.msg}`, a.id);
+      toast(a, true);
+    }
+  });
+  Object.keys(prevAlertIds).forEach(id => { if(!nowIds[id]) logEvent('resolved', prevAlertIds[id].msg, id); });
+  prevAlertIds = nowIds;
+  alerts = data;
+  renderAlerts(data);
+}
+function renderAlerts(data) {
+  document.getElementById('alerts').innerHTML = data.length ? data.map(a =>
+    `<div class="al" style="border-left-color:${SEVCOL[a.severity]||'var(--cy)'}">
+      <div class="at">${TYPEICON[a.type]||'⚠️'} ${a.msg}</div>
+      <div class="am">${a.value} ${a.unit} · ${ago(a.ts)}</div>
+      <div class="ab">
+        <span class="sev ${a.severity}">${a.severity.toUpperCase()}</span>
+        <span class="src ${a.live?'live':'sim'}">${a.live?'● LIVE':'◐ SIM'} · ${a.source.split('—')[0].trim()}</span>
+      </div>
+    </div>`).join('')
+    : '<div class="empty">No active alerts.<br>All sensors within normal limits.</div>';
+}
+
+// storm grid (fetched every 60s)
+async function fetchStorm() {
+  try {
+    const d = await (await fetch('/api/storm')).json();
+    const zones = Object.keys(d);
+    document.getElementById('stormGrid').innerHTML = zones.map(z => {
+      const s = d[z]; const u = s.util_pct||0;
+      const c = u>100?'var(--red)':u>70?'var(--amber)':'var(--grn)';
+      return `<div class="sg">
+        <div class="zn">Zone ${z}</div>
+        <div class="zu" style="color:${c}">${u.toFixed(0)}<span style="font-size:9px;font-weight:400">%</span></div>
+        <div style="font-size:8.5px;color:var(--dim);font-family:var(--mono)">${s.max_dia} mm · ${s.capacity_m3s} m³/s</div>
+        <div class="zb"><i style="width:${Math.min(u,100)}%;background:${c}"></i></div>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+// weather strip (fetched once, refreshed every 10 min)
+async function fetchWeather() {
+  try {
+    const d = await (await fetch('/api/weather')).json();
+    const cur = d.current, daily = d.daily;
+    document.getElementById('kTemp').innerHTML = `${Math.round(cur.temperature_2m)}<small>°C</small>`;
+    document.getElementById('kRain').innerHTML = `${cur.precipitation.toFixed(1)}<small>mm/h</small>`;
+    document.getElementById('wxCond').textContent = (WMO[cur.weather_code]||'').replace(/^\S+\s/,'') || '—';
+    document.getElementById('wxHum').textContent  = cur.relative_humidity_2m + '%';
+    document.getElementById('wxWind').textContent = Math.round(cur.wind_speed_10m) + ' km/h';
+    const today = new Date().toISOString().slice(0,10);
+    const i0 = daily.time.findIndex(t=>t>=today)||0;
+    const rain7 = daily.precipitation_sum.slice(i0,i0+7).reduce((a,b)=>a+b,0);
+    document.getElementById('wxRain7').textContent = rain7.toFixed(0) + ' mm';
+    // load windy into the iframe
+    const fr = document.getElementById('mapFrame');
+    if(fr.src==='about:blank') {
+      const lat=16.5019, lon=80.4969;
+      fr.src=`https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&detailLat=${lat}&detailLon=${lon}&zoom=11&level=surface&overlay=rain&menu=&message=true&marker=true&type=map&location=coordinates&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1`;
+    }
+  } catch(e) {}
+}
+
+// log
+const EV_COL = {received:'#f5c542',escalated:'#ff5d5d',resolved:'#57d98a',action:'#5fe0d2'};
+function logEvent(ev, detail, id) {
+  LOG.unshift({ts:new Date(), ev, detail, id:id||''});
+  if(LOG.length>200) LOG.pop();
+  renderLog();
+}
+function renderLog() {
+  document.getElementById('log').innerHTML = LOG.slice(0,60).map(l => {
+    const c = EV_COL[l.ev]||'#9bb1c6';
+    return `<div class="le">
+      <span class="lt">${l.ts.toLocaleTimeString()}</span>
+      <span class="lk" style="background:${c}22;color:${c}">${l.ev}</span>
+      <span class="ld">${(l.id?'<b>'+l.id+'</b> ':'')+l.detail.slice(0,70)}</span>
+    </div>`;
+  }).join('');
+  document.getElementById('logCount').textContent = LOG.length + ' events';
+}
+
+// toasts
+function toast(a, escalated) {
+  const c = document.getElementById('toasts');
+  const d = document.createElement('div'); d.className='toast';
+  d.style.borderLeftColor = SEVCOL[a.severity]||'var(--cy)';
+  d.innerHTML = `<div style="font-size:15px">${TYPEICON[a.type]||'⚠️'}</div>
+    <div><b>${escalated?'Escalated: ':'New '+a.severity.toUpperCase()+': '}${a.msg.slice(0,55)}</b>
+    <span>${a.value} ${a.unit}</span></div>
+    <div class="tx">×</div>`;
+  d.querySelector('.tx').onclick = e => { e.stopPropagation(); d.remove(); };
+  c.appendChild(d);
+  setTimeout(()=>{ if(d.parentNode) d.remove(); }, 10000);
+}
+
+function ago(ts) {
+  const m = Math.round((Date.now()-new Date(ts).getTime())/60000);
+  return m<1?'just now':m<60?m+' min ago':Math.round(m/60)+' hr ago';
+}
+
+// init
+connectWS();
+fetchWeather(); setInterval(fetchWeather, 10*60*1000);
+fetchStorm();   setInterval(fetchStorm, 60*1000);
+logEvent('system','Monitoring dashboard started','SYS');
+</script>
+</body></html>

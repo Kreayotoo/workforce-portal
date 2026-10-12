@@ -1,0 +1,4 @@
+server/secret.key
+server/temp.*
+server/audit.log
+__pycache__/

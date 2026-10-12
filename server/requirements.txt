@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+aiofiles
+httpx
+pydantic
+# ── optional device-protocol adapters (install what your hardware needs) ──
+paho-mqtt        # MQTT brokers / IoT gateways (any brand)
+pymodbus         # Modbus-TCP meters, RTUs, drives (any make)
+# asyncua        # OPC-UA (WTP PLCs — Siemens/AB/Schneider/etc); heavier install

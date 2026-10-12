@@ -1,0 +1,1054 @@
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Decision Support — Amaravati</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+:root{--bg:#060f1c;--pan:#0c1a2e;--pan2:#0e2138;--line:#1d3a57;--ink:#eaf2f9;--dim:#9bb1c6;--teal:#5fe0d2;--cy:#19C6F0;--amber:#f5c542;--red:#ff5d5d;--grn:#57d98a;--vio:#a98bff;--mono:ui-monospace,monospace}
+*{box-sizing:border-box}html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-family:'Inter',system-ui,Arial,sans-serif;overflow:hidden}
+.top{display:flex;align-items:center;gap:12px;padding:8px 14px;background:linear-gradient(180deg,#081b30,#07162a);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.top img{height:30px}
+.tt b{font-size:13.5px;font-weight:800;color:#fff;display:block;line-height:1.1}
+.tt span{font-size:9px;color:var(--teal);letter-spacing:.12em;text-transform:uppercase}
+.scn{margin-left:auto;display:flex;gap:5px;flex-wrap:wrap}
+.chip{background:var(--pan2);border:1px solid var(--line);color:var(--dim);border-radius:20px;padding:5px 11px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit}
+.chip:hover{border-color:var(--teal)}.chip.on{border-color:var(--teal);background:#0e2c44;color:var(--teal)}
+.main{display:grid;grid-template-columns:1fr 430px;height:calc(100vh - 47px);min-height:0}
+.mapwrap{display:flex;flex-direction:column;min-width:0;min-height:0}
+.toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:7px 11px;background:var(--pan);border-bottom:1px solid var(--line);flex-shrink:0}
+.mapcols{flex:1;display:flex;min-height:0;min-width:0}
+#map{flex:1;min-width:0;height:100%;background:#0a1626}
+.mc{background:var(--pan2);border:1px solid var(--line);color:var(--dim);border-radius:7px;padding:5px 10px;font-size:10.5px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+.mc:hover{border-color:var(--teal)}.mc.on{border-color:var(--teal);color:var(--teal);background:#0e2c44}
+.mc select{background:transparent;border:0;color:var(--teal);font-family:inherit;font-size:10.5px;outline:none;cursor:pointer}
+.mc select option{background:#0c1a2e}
+.tsep{width:1px;height:17px;background:var(--line);margin:0 3px}
+.hint{margin-left:auto;font-size:10px;color:var(--dim);font-family:var(--mono);white-space:nowrap}
+.side{border-left:1px solid var(--line);display:flex;flex-direction:column;background:var(--bg);overflow:hidden}
+.hd{padding:11px 13px;border-bottom:1px solid var(--line);background:var(--pan)}
+.hd .loc{display:flex;align-items:center;gap:10px}
+.hd .loc .ic{width:34px;height:34px;border-radius:9px;background:var(--pan2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:16px}
+.hd .loc b{font-size:13px;color:#fff;display:block}
+.hd .loc span{font-size:10px;color:var(--dim);font-family:var(--mono)}
+.hd .gg{margin-left:auto;text-align:center}
+.hd .gg svg{width:56px;height:56px;display:block}
+.rad{display:flex;align-items:center;gap:8px;margin-top:9px}
+.rad input{flex:1;accent-color:var(--teal)}
+.rad label{font-size:10px;color:var(--dim);font-family:var(--mono)}
+.rad b{font-family:var(--mono);font-size:11px;color:var(--cy);min-width:50px;text-align:right}
+.tabs{display:flex;border-bottom:1px solid var(--line);background:var(--pan)}
+.tab{flex:1;padding:9px 4px;text-align:center;font-size:11px;font-weight:700;color:var(--dim);cursor:pointer;border-bottom:2px solid transparent;font-family:inherit}
+.tab:hover{color:var(--ink)}.tab.on{color:var(--teal);border-bottom-color:var(--teal)}
+.body{flex:1;overflow-y:auto;padding:13px}
+.sh{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+.sh b{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--teal);font-family:var(--mono)}
+.sh .ln{flex:1;height:1px;background:var(--line)}
+.sh .tg{font-size:8.5px;font-family:var(--mono);padding:2px 6px;border-radius:20px}
+.tg.real{background:rgba(87,217,138,.14);color:var(--grn);border:1px solid rgba(87,217,138,.4)}
+.tg.sim{background:rgba(245,197,66,.12);color:var(--amber);border:1px solid rgba(245,197,66,.4)}
+.sec{margin-bottom:17px}
+.kg{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.kg.k3{grid-template-columns:1fr 1fr 1fr}
+.k{background:var(--pan);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+.k .l{font-size:8.5px;color:var(--dim);letter-spacing:.05em;text-transform:uppercase;font-family:var(--mono)}
+.k .v{font-size:19px;font-weight:800;color:#fff;margin-top:2px;line-height:1.05}
+.k .v small{font-size:10px;color:var(--dim);font-weight:600}
+.k .s{font-size:9.5px;color:var(--dim);margin-top:2px}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th,td{text-align:right;padding:5px 7px;border-bottom:1px solid rgba(29,58,87,.45)}
+th{font-family:var(--mono);font-size:8.5px;color:var(--teal);text-transform:uppercase;letter-spacing:.04em}
+th:first-child,td:first-child{text-align:left}
+td b{font-family:var(--mono);font-size:10.5px}
+.zrow td:first-child{display:flex;align-items:center;gap:6px}
+.sw{width:11px;height:11px;border-radius:3px;flex-shrink:0}
+.dc{background:var(--pan);border:1px solid var(--line);border-left-width:3px;border-radius:10px;padding:10px 12px;margin-bottom:7px}
+.dc .h{display:flex;align-items:center;gap:7px;margin-bottom:4px}
+.dc .h b{font-size:12px;color:#fff;flex:1}
+.dc .cf{font-family:var(--mono);font-size:9px;padding:2px 6px;border-radius:20px;background:rgba(95,224,210,.12);color:var(--teal)}
+.dc .why{font-size:10.8px;color:var(--dim);line-height:1.45}
+.dc .act{margin-top:6px;font-size:11px;color:var(--teal);font-weight:600}
+.dc .win{font-size:9px;font-family:var(--mono);color:var(--amber);margin-top:3px}
+.ck{display:flex;align-items:flex-start;gap:8px;background:var(--pan);border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:6px;cursor:pointer}
+.ck input{margin-top:2px;accent-color:var(--grn)}
+.ck .t{font-size:11.5px;color:var(--ink);font-weight:600}
+.ck .m{font-size:9.5px;color:var(--dim);font-family:var(--mono);margin-top:2px}
+.ck.done .t{text-decoration:line-through;color:var(--dim)}
+.prog{height:6px;background:#12233a;border-radius:6px;overflow:hidden;margin-bottom:8px}
+.prog i{display:block;height:100%;background:var(--grn);transition:width .3s}
+.fac{display:flex;flex-direction:column;gap:5px;margin-top:7px}
+.fac div{display:flex;align-items:center;gap:7px;background:var(--pan2);border:1px solid var(--line);border-radius:8px;padding:6px 9px;font-size:10.5px}
+.fac b{color:var(--amber);font-family:var(--mono)}
+.fac span{margin-left:auto;color:var(--dim);font-family:var(--mono);font-size:9.5px}
+.ms{display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-left:2px solid var(--line);margin-left:6px;padding-left:12px;position:relative}
+.ms::before{content:'';position:absolute;left:-5px;top:12px;width:8px;height:8px;border-radius:50%;background:var(--teal)}
+.ms.r::before{background:var(--red)}.ms.a::before{background:var(--amber)}.ms.g::before{background:var(--grn)}
+.ms .tm{font-family:var(--mono);font-size:10px;color:var(--cy);min-width:54px}
+.ms .tx b{font-size:11.5px;color:#fff;display:block}
+.ms .tx span{font-size:10px;color:var(--dim)}
+.btn{background:var(--pan2);border:1px solid var(--line);color:var(--teal);border-radius:8px;padding:7px 12px;font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;width:100%}
+.btn:hover{border-color:var(--teal)}
+.empty{color:var(--dim);font-size:12px;background:var(--pan);border:1px dashed var(--line);border-radius:10px;padding:18px;text-align:center;line-height:1.6}
+.modal{position:fixed;inset:0;background:rgba(3,8,16,.85);z-index:2000;display:none;align-items:center;justify-content:center;padding:20px}
+.modal.on{display:flex}
+.modal .box{background:var(--pan);border:1px solid var(--teal);border-radius:14px;padding:16px;width:min(680px,100%);max-height:86vh;display:flex;flex-direction:column}
+.modal textarea{flex:1;min-height:340px;background:#06121f;border:1px solid var(--line);border-radius:8px;color:var(--ink);font-family:var(--mono);font-size:10.5px;padding:11px;resize:none}
+.modal .r{display:flex;gap:8px;margin-top:10px}
+details{background:var(--pan);border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-top:9px}
+summary{cursor:pointer;font-size:10.5px;color:var(--teal);font-family:var(--mono)}
+details .c{font-size:10.5px;color:var(--dim);line-height:1.55;margin-top:7px}
+.leaflet-container{background:#0a1626}
+.bell{display:inline-flex;align-items:center;gap:6px;background:var(--pan2);border:1px solid var(--line);color:var(--amber);border-radius:8px;padding:6px 11px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap}
+.bell:hover{border-color:var(--amber)}
+.bell .bd{background:var(--red);color:#fff;border-radius:20px;font-size:9px;padding:1px 6px;font-family:var(--mono);line-height:1.5}
+.alerts{width:290px;flex-shrink:0;border-right:1px solid var(--line);background:var(--pan);overflow-y:auto;padding:9px;display:none}
+.alerts.on{display:block}
+.alerts .ah{display:flex;align-items:center;gap:7px;padding:2px 4px 9px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.alerts .ah b{font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--teal);font-family:var(--mono);flex:1}
+.alerts .ah .x{color:var(--dim);cursor:pointer;font-size:16px;line-height:1}
+.al{display:flex;gap:8px;background:var(--pan);border:1px solid var(--line);border-left-width:3px;border-radius:9px;padding:9px 10px;margin-bottom:6px;cursor:pointer;transition:.12s}
+.al:hover{border-color:var(--teal);transform:translateX(2px)}
+.al.act{border-color:var(--teal);background:#0e2c44}
+.al .ai{font-size:15px;line-height:1}
+.al .ac{flex:1;min-width:0}
+.al .at{font-size:11.5px;font-weight:700;color:#fff;line-height:1.25}
+.al .am{font-size:9.5px;color:var(--dim);font-family:var(--mono);margin-top:2px;line-height:1.4}
+.al .src{display:inline-block;font-size:8px;font-family:var(--mono);padding:1px 5px;border-radius:20px;margin-top:4px}
+.src.live{background:rgba(87,217,138,.16);color:var(--grn)}
+.src.sim{background:rgba(245,197,66,.14);color:var(--amber)}
+.abar{background:linear-gradient(90deg,rgba(255,93,93,.16),transparent);border:1px solid var(--red);border-radius:9px;padding:7px 10px;margin-bottom:11px;font-size:10.5px;color:var(--ink);display:flex;align-items:center;gap:7px}
+.abar b{color:var(--red);font-family:var(--mono);font-size:9.5px}
+.abar .x{margin-left:auto;color:var(--dim);cursor:pointer}
+.np{background:var(--red);color:#fff;font-size:8px;font-family:var(--mono);padding:1px 5px;border-radius:20px;vertical-align:middle}
+.ackb{background:var(--pan2);border:1px solid var(--line);color:var(--dim);border-radius:6px;padding:3px 7px;font-size:9px;font-weight:700;cursor:pointer;font-family:var(--mono);align-self:flex-start}
+.ackb:hover{border-color:var(--grn);color:var(--grn)}
+.afl{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--dim);padding:3px 4px 9px;cursor:pointer}
+.afl input{accent-color:var(--teal)}
+.afl b{color:var(--red)}
+#toasts{position:fixed;right:446px;bottom:16px;z-index:3000;display:flex;flex-direction:column;gap:8px;max-width:320px}
+.toast{display:flex;gap:9px;align-items:flex-start;background:rgba(9,20,34,.97);border:1px solid var(--line);border-left-width:3px;border-radius:10px;padding:10px 12px;cursor:pointer;animation:sl .25s ease}
+.toast:hover{border-color:var(--teal)}
+.toast .ti{font-size:16px}
+.toast b{font-size:11px;color:#fff;display:block}
+.toast span{font-size:10.5px;color:var(--dim);line-height:1.35}
+.toast .tx{margin-left:auto;color:var(--dim);font-size:15px;line-height:1}
+@keyframes sl{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
+.lg{display:grid;grid-template-columns:62px 74px 1fr;gap:7px;padding:6px 0;border-bottom:1px solid rgba(29,58,87,.45);font-size:10.5px;align-items:baseline}
+.lg .t{font-family:var(--mono);font-size:9.5px;color:var(--dim)}
+.lg .e{font-family:var(--mono);font-size:9px;padding:1px 5px;border-radius:20px;text-align:center}
+.lg .d{color:#cfe0f0;line-height:1.4}
+.sn{display:grid;grid-template-columns:1fr auto;gap:4px 9px;background:var(--pan);border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-bottom:6px}
+.sn .si b{font-size:11px;color:#fff;font-family:var(--mono)}
+.sn .si span{display:block;font-size:9.5px;color:var(--dim)}
+.sn .sv{font-size:15px;font-weight:800;font-family:var(--mono);text-align:right}
+.sn .sv small{font-size:9px;color:var(--dim);font-weight:600}
+.sn .sb{grid-column:1/-1;height:4px;background:#12233a;border-radius:4px;overflow:hidden}
+.sn .sb i{display:block;height:100%;border-radius:4px;transition:width .4s}
+@media(max-width:900px){
+ .main{grid-template-columns:1fr;grid-template-rows:46vh 1fr}
+ .side{border-left:0;border-top:1px solid var(--line)}
+ .alerts{position:absolute;left:0;top:0;bottom:0;width:min(300px,86%);z-index:800;border-right:1px solid var(--teal);box-shadow:6px 0 22px rgba(0,0,0,.5)}
+ .mapcols{position:relative}
+ #toasts{right:12px;left:12px;bottom:12px;max-width:none}
+ .hint{display:none}
+}
+</style></head>
+<body>
+<div class="top">
+  <img src="__LOGO__" alt="Kreayotoo">
+  <div class="tt"><b>Decision Support &amp; Impact Simulation</b><span>Amaravati · alert-driven · GIS buffer + rule engine</span></div>
+  <button class="bell" id="bell">🔔 Alerts <span class="bd" id="bdg">0</span></button>
+  <div class="scn" id="scn"></div>
+</div>
+<div class="main">
+  <div class="mapwrap">
+    <div class="toolbar">
+      <button class="mc on" id="mLU">Landuse</button>
+      <button class="mc on" id="mNet">Network</button>
+      <button class="mc on" id="mPlots">Affected plots</button>
+      <span class="tsep"></span>
+      <span class="mc"><select id="jump"></select></span>
+      <button class="mc" id="mRand">⚡ Random incident</button>
+      <span class="hint" id="hint">Tap the map, or open an alert</span>
+    </div>
+    <div class="mapcols">
+      <div class="alerts on" id="alerts"></div>
+      <div id="map"></div>
+    </div>
+  </div>
+  <div class="side">
+    <div class="hd" id="hd"></div>
+    <div class="tabs" id="tabs"></div>
+    <div class="body" id="body"></div>
+  </div>
+</div>
+<div id="toasts"></div>
+<div class="modal" id="modal"><div class="box">
+  <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:9px">Incident report</div>
+  <textarea id="rep" readonly></textarea>
+  <div class="r"><button class="btn" id="cpy">Copy to clipboard</button><button class="btn" id="cls">Close</button></div>
+</div></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/esri-leaflet@3.0.10/dist/esri-leaflet.js"></script>
+<script>
+const PLOTS=__PLOTS__, NET=__NET__, BLOCKS=__BLOCKS__, ZONESTORM=__ZONESTORM__, LANDUSE="__LANDUSE__", LANDUSE_BOUNDS=__LANDUSE_BOUNDS__;
+
+/* ══════════════════════════════════════════════════════════════════════
+   LIVE ALERT FEED
+   Set ALERT_FEED_URL to your SCADA / MQTT bridge endpoint to go fully live.
+   It must return JSON: [ { id, type, severity, lat, lon, ts, source, msg,
+                            value, unit, radius } , … ]
+     type     : burst | pressure | quality | power | flood | fire
+     severity : critical | high | medium
+   While the URL is empty the twin builds its own feed:
+     • rainfall/storm alerts  → REAL, live from Open-Meteo + your drain capacity
+     • burst/pressure/quality → SIMULATED placeholders (labelled ◐)
+   ══════════════════════════════════════════════════════════════════════ */
+const ALERT_FEED_URL = "";
+const POLL_SEC = 20;                      // sensors tick + feed re-checked this often
+let ALERTS=[], respondingTo=null, prevIds={}, ackd={}, LOG=[], autoFollow=true, lastPoll=null;
+const TYPE2SCEN={burst:'burst',quality:'contam',power:'power',flood:'flood',fire:'fire',pressure:'burst'};
+const TYPEICON={burst:'💧',pressure:'📉',quality:'☣️',power:'⚡',flood:'🌊',fire:'🔥'};
+const SEVCOL={critical:'#ff5d5d',high:'#f5c542',medium:'#19C6F0'};
+function logIt(ev,detail,id){ LOG.unshift({ts:new Date(),ev:ev,detail:detail,id:id||''});
+  if(LOG.length>300) LOG.pop(); }
+function toast(a){
+  const c=document.getElementById('toasts');
+  const d=document.createElement('div'); d.className='toast';
+  d.style.borderLeftColor=SEVCOL[a.severity];
+  d.innerHTML='<div class="ti">'+(TYPEICON[a.type]||'⚠️')+'</div><div><b>New '+a.severity.toUpperCase()+' alert</b>'+
+    '<span>'+a.msg+'</span></div><div class="tx">×</div>';
+  d.onclick=function(){ respond(a); d.remove(); };
+  d.querySelector('.tx').onclick=function(e){ e.stopPropagation(); d.remove(); };
+  c.appendChild(d);
+  setTimeout(function(){ if(d.parentNode) d.remove(); }, 12000);
+}
+const LAT0=PLOTS.origin[0], LON0=PLOTS.origin[1], FWD=PLOTS.fwd, INV=PLOTS.inv;
+const ZN=PLOTS.zones, ZC=PLOTS.colors, UT=NET.utils;
+const UCOL={water:'#19C6F0',sewer:'#c98a4b',strom:'#8f7bff',reuse:'#3ecf8e',power:'#ffcf4d'};
+const ULAB={water:'Water',sewer:'Sewer',strom:'Storm',reuse:'Reuse',power:'Power'};
+const LPCD=135, HHSZ=4.2;
+const DENS={'R1-Village planning zone':120,'R3-Medium to high density zone':250,'R4-High density zone':400,
+ 'R5-Affordable / EWS Housing Zone':350,'SR2 Low Density Housing':60,'SR4 - High Density Private':300,
+ 'C1 -Mixed use zone':150,'C2- General commercial zone':80,'C3-Neighbourhood centre zone':100,
+ 'C4-Town centre zone':90,'C5-Regional centre zone':70,'C6-Central business district zone':120,
+ 'SC1a-Mixed Use':160,'SC1b - Mixed Use':160,'I1-Business park zone':40,'I2-Logistics zone':25,
+ 'I3-Non polluting industry zone':30,'S2-Education zone':150,'SS2a- Education Zone':150,
+ 'SS2c Health Zone':100,'SS1 - Government Zone':90,'SS2b Cultural Zone':60,'S3-Special zone':60,
+ 'SS3 - Special Zone':60,'P1-Passive zone':2,'P2-Active zone':3,'P3-Protected zone':1,
+ 'P3-Protected zone Hills':0,'SP1- Passive Zone':2,'SP2- Active Zone':3,'SP3-Protected Zone':1,
+ 'U1-Reserve zone':0,'U2- Road reserve zone':0,'SU1-Reserve Zone':0,'SU2 - Road Network':0};
+function dens(z){ return DENS[z]!==undefined?DENS[z]:50; }
+function facType(z){ const s=z.toLowerCase();
+  if(s.indexOf('education')>=0) return 'Schools / colleges';
+  if(s.indexOf('health')>=0) return 'Hospitals / clinics';
+  if(s.indexOf('government')>=0) return 'Government offices';
+  if(s.indexOf('cultural')>=0) return 'Cultural facilities';
+  return null; }
+function isRoad(z){ return z.toLowerCase().indexOf('road')>=0; }
+
+const SCEN=[{k:'burst',n:'Pipe Burst',i:'💧',u:'water',r:250},
+ {k:'contam',n:'Contamination',i:'☣️',u:'water',r:400},
+ {k:'power',n:'Power Failure',i:'⚡',u:'power',r:600},
+ {k:'flood',n:'Heavy Rain',i:'🌊',u:'strom',r:350},
+ {k:'fire',n:'Fire',i:'🔥',u:'water',r:200}];
+let scen=SCEN[0], radius=scen.r, inc=null, tab='impact', A=null, done={};
+function fmt(x,d){ return Number(x).toLocaleString(undefined,{maximumFractionDigits:(d===undefined?0:d)}); }
+function m2ll(mx,my){ return [LAT0+FWD[2]*mx+FWD[3]*my, LON0+FWD[0]*mx+FWD[1]*my]; }
+function ll2m(lat,lon){ const dl=lon-LON0, da=lat-LAT0; return [INV[0]*dl+INV[1]*da, INV[2]*dl+INV[3]*da]; }
+
+const map=L.map('map',{zoomControl:false,preferCanvas:true}).setView([16.5019,80.4969],14);
+L.control.zoom({position:'topright'}).addTo(map);          // keeps the top-left clear
+function resizeMap(){ setTimeout(function(){ map.invalidateSize(); }, 210); }
+L.esri.basemapLayer('Imagery').addTo(map);
+map.createPane('lu'); map.getPane('lu').style.zIndex=250; map.getPane('lu').style.pointerEvents='none';
+let luL=null;
+if(LANDUSE){ luL=L.imageOverlay(LANDUSE,LANDUSE_BOUNDS,{pane:'lu',opacity:.5,interactive:false}).addTo(map); }
+const netLayer=L.layerGroup().addTo(map), plotLayer=L.layerGroup().addTo(map),
+      bufLayer=L.layerGroup().addTo(map), hitLayer=L.layerGroup().addTo(map);
+const runLayer=L.layerGroup().addTo(map);
+let showNet=true, showPlots=true;
+map.on('click',function(e){ respondingTo=null; clearRun(); renderAlerts(); setIncident(e.latlng.lat,e.latlng.lng); });
+document.getElementById('mLU').onclick=function(){ if(!luL)return; const on=!this.classList.contains('on');
+  this.classList.toggle('on',on); if(on) luL.addTo(map); else map.removeLayer(luL); };
+document.getElementById('mNet').onclick=function(){ showNet=!showNet; this.classList.toggle('on',showNet);
+  if(showNet) netLayer.addTo(map); else map.removeLayer(netLayer); };
+document.getElementById('mPlots').onclick=function(){ showPlots=!showPlots; this.classList.toggle('on',showPlots);
+  if(showPlots) plotLayer.addTo(map); else map.removeLayer(plotLayer); };
+document.getElementById('jump').innerHTML='<option value="">Jump to block…</option>'+
+  BLOCKS.map(function(b){return '<option value="'+b.lat+','+b.lon+'">Zone '+b.zone+' · '+b.block+'</option>';}).join('');
+document.getElementById('jump').onchange=function(e){ if(!e.target.value)return;
+  respondingTo=null; clearRun(); renderAlerts(); const p=e.target.value.split(',').map(Number); setIncident(p[0],p[1]); };
+document.getElementById('mRand').onclick=function(){ respondingTo=null; clearRun(); renderAlerts(); const b=BLOCKS[Math.floor(Math.random()*BLOCKS.length)];
+  setIncident(b.lat+(Math.random()-.5)*.004, b.lon+(Math.random()-.5)*.004); };
+function nearestBlock(lat,lon){ let best=BLOCKS[0], bd=1e9;
+  BLOCKS.forEach(function(b){ const d=Math.hypot((b.lat-lat)*110.6,(b.lon-lon)*106.3); if(d<bd){bd=d;best=b;} });
+  return {b:best,km:bd}; }
+
+function analyse(mx,my,rad){
+  const R2=rad*rad, r1=rad/3, r2=rad*2/3;
+  const byZone={}; let plots=0,areaTot=0,pop=0,roadArea=0;
+  const rings=[{n:0,pop:0},{n:0,pop:0},{n:0,pop:0}];
+  const fac={}, facList=[], dots=[];
+  const D=PLOTS.dx,Y=PLOTS.dy,Z=PLOTS.z,AR=PLOTS.a;
+  for(let i=0;i<D.length;i++){
+    const dx=D[i]-mx, dy=Y[i]-my, d2=dx*dx+dy*dy;
+    if(d2>R2) continue;
+    const d=Math.sqrt(d2), z=ZN[Z[i]], a=AR[i], p=a/10000*dens(z);
+    if(!byZone[z]) byZone[z]={n:0,a:0,c:ZC[Z[i]],pop:0};
+    byZone[z].n++; byZone[z].a+=a; byZone[z].pop+=p;
+    plots++; areaTot+=a; pop+=p;
+    if(isRoad(z)) roadArea+=a;
+    const ri=d<r1?0:(d<r2?1:2); rings[ri].n++; rings[ri].pop+=p;
+    const ft=facType(z);
+    if(ft){ fac[ft]=(fac[ft]||0)+1; if(facList.length<400) facList.push({t:ft,d:d}); }
+    if(dots.length<1800) dots.push([D[i],Y[i],ZC[Z[i]]]);
+  }
+  facList.sort(function(a,b){return a.d-b.d;});
+  const uStat={}; UT.forEach(function(u){ uStat[u]={len:0,n:0,maxD:0,dias:{}}; });
+  const hit=[];
+  for(let i=0;i<NET.pipes.length;i++){
+    const p=NET.pipes[i], cx=(p[0]+p[2])/2, cy=(p[1]+p[3])/2, dx=cx-mx, dy=cy-my;
+    if(dx*dx+dy*dy>R2) continue;
+    const u=UT[p[4]], L=Math.hypot(p[2]-p[0],p[3]-p[1]), S=uStat[u];
+    S.len+=L; S.n++; if(p[5]>S.maxD) S.maxD=p[5];
+    const cls=p[5]>=900?'≥900':(p[5]>=600?'600–899':(p[5]>=300?'300–599':'<300'));
+    S.dias[cls]=(S.dias[cls]||0)+L;
+    if(u===scen.u && hit.length<2500) hit.push(p);
+  }
+  let mhN=0, depthMax=0; const mhU={};
+  for(let i=0;i<NET.mh.length;i++){
+    const m=NET.mh[i], dx=m[0]-mx, dy=m[1]-my;
+    if(dx*dx+dy*dy>R2) continue;
+    mhN++; const u=UT[m[2]]; mhU[u]=(mhU[u]||0)+1; if(m[3]/10>depthMax) depthMax=m[3]/10;
+  }
+  const ui=UT.indexOf(scen.u), cand=[];
+  for(let i=0;i<NET.mh.length;i++){ const m=NET.mh[i]; if(m[2]!==ui) continue;
+    const d=Math.hypot(m[0]-mx,m[1]-my); if(d<rad*1.6) cand.push({d:d,mx:m[0],my:m[1]}); }
+  cand.sort(function(a,b){return a.d-b.d;});
+  const hh=Math.round(pop/HHSZ), demand=pop*LPCD/1e6;
+  return {byZone:byZone,plots:plots,areaTot:areaTot,pop:pop,hh:hh,demand:demand,
+          roadKm:roadArea/12/1000,rings:rings,fac:fac,facList:facList,uStat:uStat,
+          mhN:mhN,mhU:mhU,depthMax:depthMax,hit:hit,iso:cand.slice(0,4),dots:dots};
+}
+function burstQ(maxD){ const Dm=maxD/1000, Ab=Math.PI*Dm*Dm/4*0.20; return 0.62*Ab*Math.sqrt(2*9.81*30); }
+function decide(A){
+  const D=[], u=scen.u, us=A.uStat[u]||{len:0,n:0,maxD:0}, pop=Math.round(A.pop), maxD=us.maxD;
+  const hosp=A.fac['Hospitals / clinics']||0, sch=A.fac['Schools / colleges']||0, big=maxD>=600;
+  if(scen.k==='burst'){
+    const Q=burstQ(maxD), hr=Q*3.6;
+    D.push({s:'red',w:'within 15 min',t:'Isolate the main',c:big?'High':'Medium',
+      why:'Largest water main here is <b>'+maxD+' mm</b>. A 20% bore rupture at 30 m head discharges ≈ <b>'+fmt(Q)+' L/s</b> (<b>'+fmt(hr)+' m³/hr</b> ≈ '+fmt(hr*24/1000,1)+' ML/day).',
+      act:'Close chambers V1–V'+A.iso.length+' → isolates '+fmt(us.len/1000,2)+' km of main'});
+    if(hosp) D.push({s:'red',w:'before isolating',t:'Protect health facility',c:'High',
+      why:'<b>'+hosp+'</b> health-zone plot(s) inside the buffer. Loss of supply is not acceptable.',
+      act:'Establish an alternative feed / tanker standby first'});
+    D.push({s:'amber',w:'within 30 min',t:'Notify affected consumers',c:'High',
+      why:'<b>'+fmt(pop)+'</b> people · <b>'+fmt(A.hh)+'</b> households · <b>'+fmt(A.demand,2)+' MLD</b> demand lose supply once isolated.',
+      act:'Supply-interruption SMS · deploy tankers to priority plots'});
+    D.push({s:'amber',w:'within 1 hr',t:'Traffic & excavation',c:'Medium',
+      why:'<b>'+fmt(A.roadKm,2)+' km</b> of road reserve lies in the buffer — the repair pit will affect it. Deepest chamber nearby ≈ <b>'+fmt(A.depthMax,1)+' m</b>.',
+      act:'Traffic diversion · mobilise excavation crew'});
+    D.push({s:'grn',w:(big?'8–12':'5–7')+' hrs',t:'Restoration target',c:'Medium',
+      why:'Isolation 25 min · excavation + repair '+(big?'6–10':'3–5')+' hrs · recharge & flush 1 hr.',
+      act:'Target restoration in '+(big?'8–12':'5–7')+' hours'});
+  }
+  if(scen.k==='contam'){
+    const vol=us.len*Math.PI*Math.pow(maxD/1000,2)/4;
+    D.push({s:'red',w:'immediately',t:'Isolate — stop the spread',c:'High',
+      why:'Contaminant is in <b>'+fmt(us.len/1000,2)+' km</b> of main serving <b>'+fmt(pop)+'</b> people. At a typical 0.9 m/s it advances ≈ <b>3.2 km/hr</b> — reaching the buffer edge in ≈ <b>'+fmt(radius/3200*60)+' min</b>.',
+      act:'Close V1–V'+A.iso.length+' · stop the feeding pump'});
+    D.push({s:'red',w:'within 30 min',t:'Public-health advisory',c:'High',
+      why:'<b>'+fmt(A.plots)+'</b> plots · <b>'+fmt(A.hh)+'</b> households'+(sch?' · <b>'+sch+'</b> education plot(s)':'')+(hosp?' · <b>'+hosp+'</b> health plot(s)':'')+'.',
+      act:'"Do not consume" notice · tanker supply · sample and test'});
+    D.push({s:'grn',w:'4–8 hrs',t:'Flush and re-chlorinate',c:'Medium',
+      why:'Isolated section holds ≈ <b>'+fmt(vol)+' m³</b>; flush at 3× volume ≈ <b>'+fmt(vol*3)+' m³</b>.',
+      act:'Flush from the far end · re-chlorinate to 0.5 mg/L · clear after 2 clean samples'});
+  }
+  if(scen.k==='power'){
+    D.push({s:'amber',w:'within 30 min',t:'Switch to DG backup',c:'Medium',
+      why:'Pumping lost for <b>'+fmt(pop)+'</b> people (<b>'+fmt(A.demand,2)+' MLD</b>). With typical 8-hour storage, gravity supply lasts ≈ <b>8 hrs</b> at normal demand — less at peak.',
+      act:'Start DG sets · confirm fuel for 12 hrs · check power chambers P1–P'+Math.min(A.iso.length,4)+' for cable faults'});
+    D.push({s:'red',w:'within 1 hr',t:'Restoration priority',c:'High',
+      why:'Critical facilities in the zone: '+(Object.keys(A.fac).map(function(k){return '<b>'+A.fac[k]+'</b> '+k.toLowerCase();}).join(', ')||'none')+
+          '. <span style="color:var(--amber)">Pump station locations are not yet in the Civil 3D data — add the electrical asset register to enable automatic pump identification.</span>',
+      act:'Restore pumps feeding health and high-density zones first'});
+    D.push({s:'amber',w:'2–4 hrs',t:'Demand management',c:'Medium',
+      why:'Cutting non-essential demand by 25% extends storage from 8 hrs to ≈ <b>10.7 hrs</b>.',
+      act:'Conservation advisory · throttle bulk consumers'});
+  }
+  if(scen.k==='flood'){
+    const st=A.uStat['strom'];
+    D.push({s:'amber',w:'before the storm',t:'Storm-drain readiness',c:'Medium',
+      why:'<b>'+fmt(st.len/1000,2)+' km</b> of storm drain (max <b>'+st.maxD+' mm</b>) and <b>'+(A.mhU['strom']||0)+'</b> chambers serve this zone. Live rainfall drives the load — see the <b>Weather</b> dashboard for today\'s risk level.',
+      act:'Pre-clear gullies on the largest drains · position pumps'});
+    D.push({s:'red',w:'during the event',t:'Exposure in the buffer',c:'Medium',
+      why:'<b>'+fmt(A.plots)+'</b> plots (<b>'+fmt(A.areaTot/10000,1)+' ha</b>), ≈ <b>'+fmt(pop)+'</b> people'+(sch?', <b>'+sch+'</b> school(s)':'')+'. Deepest chamber ≈ <b>'+fmt(A.depthMax,1)+' m</b>.',
+      act:'Alert these localities · ready evacuation for low-lying plots'});
+    D.push({s:'grn',w:'—',t:'Data gap: flood depth',c:'—',
+      why:'A true depth simulation needs a <b>DEM (terrain model)</b> + SWMM routing. Not available, so depth is <b>not</b> estimated here.',
+      act:'Supply a DEM to unlock depth + evacuation routing'});
+  }
+  if(scen.k==='fire'){
+    const n=A.iso[0];
+    D.push({s:'red',w:'immediately',t:'Nearest hydrant point',c:'Medium',
+      why:n?('Closest water chamber is <b>'+fmt(n.d)+' m</b> away; largest main here is <b>'+maxD+' mm</b>. Fire flow needs ≈ 30–60 L/s at 2 bar residual — a '+maxD+' mm main '+(maxD>=300?'can':'may struggle to')+' deliver this.'):'No water chamber within range.',
+      act:n?'Dispatch to point V1 · boost zone pressure':'Tanker supply required'});
+    D.push({s:'amber',w:'within 10 min',t:'Protect the surroundings',c:'Medium',
+      why:'<b>'+fmt(A.plots)+'</b> plots within '+radius+' m'+(sch?' · <b>'+sch+'</b> school(s)':'')+(hosp?' · <b>'+hosp+'</b> health facility':'')+'.',
+      act:'Evacuate adjacent plots · close the road reserve'});
+  }
+  return D;
+}
+function timeline(A){
+  const us=A.uStat[scen.u]||{maxD:300,len:0}, pop=Math.round(A.pop), big=us.maxD>=600;
+  if(scen.k==='burst'){ const Q=burstQ(us.maxD), rep=big?9:4;
+    return {unit:'hours',span:rep+2,
+      series:[{n:'Supply in zone (%)',c:'#19C6F0',f:function(t){ return t<0.42?Math.max(0,100-t*60*1.6):(t<(0.42+rep)?0:Math.min(100,(t-0.42-rep)*100)); }},
+              {n:'Water lost (m³)',c:'#ff5d5d',f:function(t){ return Math.min(t,0.42)*3600*Q/1000; }}],
+      ms:[{t:'0 min',c:'r',b:'Burst begins',s:'≈ '+fmt(Q)+' L/s escaping'},
+          {t:'5 min',c:'a',b:'Pressure drop detected',s:'SCADA would flag this — today it is a field report'},
+          {t:'25 min',c:'a',b:'Valves closed',s:fmt(pop)+' people lose supply · leak stops'},
+          {t:fmt(0.42+rep,1)+' hr',c:'g',b:'Repair complete',s:'Excavation + repair ('+(big?'6–10':'3–5')+' hrs)'},
+          {t:fmt(0.42+rep+1,1)+' hr',c:'g',b:'Supply restored',s:'Recharge and flush complete'}]};
+  }
+  if(scen.k==='contam'){ const reach=radius/3200*60;
+    return {unit:'hours',span:8,
+      series:[{n:'Contaminant front (km)',c:'#ff5d5d',f:function(t){ return Math.min(3.2*t, Math.max(0.5,us.len/1000)); }},
+              {n:'Population exposed',c:'#f5c542',f:function(t){ return Math.min(pop, pop*(3.2*t)/Math.max(0.1,radius/1000)/3); }}],
+      ms:[{t:'0 min',c:'r',b:'Contaminant enters the main',s:'Advancing ≈ 3.2 km/hr at 0.9 m/s'},
+          {t:fmt(reach)+' min',c:'r',b:'Reaches buffer edge',s:fmt(pop)+' people potentially exposed'},
+          {t:'30 min',c:'a',b:'Isolation + advisory',s:'Valves closed · "do not consume" issued'},
+          {t:'4 hr',c:'g',b:'Flushing complete',s:'3× section volume flushed'},
+          {t:'8 hr',c:'g',b:'Cleared',s:'Two consecutive clean samples'}]};
+  }
+  if(scen.k==='power'){
+    return {unit:'hours',span:12,
+      series:[{n:'Tank level, no backup (%)',c:'#ff5d5d',f:function(t){ return Math.max(0,100-t/8*100); }},
+              {n:'Tank level, DG at 30 min (%)',c:'#57d98a',f:function(t){ return t<0.5?Math.max(0,100-t/8*100):Math.max(45,100-t/8*35); }}],
+      ms:[{t:'0 min',c:'r',b:'Power fails — pumps stop',s:fmt(pop)+' people on stored water'},
+          {t:'30 min',c:'a',b:'DG backup online',s:'Drawdown slows sharply'},
+          {t:'8 hr',c:'r',b:'Storage exhausted (no DG)',s:'Supply loss if backup did not start'},
+          {t:'12 hr',c:'g',b:'Grid restored',s:'Refill begins'}]};
+  }
+  if(scen.k==='flood'){ const st=A.uStat['strom'];
+    return {unit:'hours',span:12,
+      series:[{n:'Storm-drain utilisation (%)',c:'#8f7bff',f:function(t){ return Math.min(140, 115*Math.exp(-Math.pow((t-4)/2.2,2))); }}],
+      ms:[{t:'0 hr',c:'a',b:'Rain begins',s:'Drains at base flow'},
+          {t:'4 hr',c:'r',b:'Peak intensity',s:fmt(st.len/1000,1)+' km of drain at maximum load'},
+          {t:'6 hr',c:'a',b:'Surcharge window closes',s:(A.mhU['strom']||0)+' chambers monitored'},
+          {t:'12 hr',c:'g',b:'Drains recover',s:'Return to base flow'}]};
+  }
+  const n=A.iso[0];
+  return {unit:'minutes',span:60,
+    series:[{n:'Fire-flow demand (L/s)',c:'#ff5d5d',f:function(t){ return t<5?0:(t<45?55:10); }}],
+    ms:[{t:'0 min',c:'r',b:'Fire reported',s:'Nearest hydrant identified'},
+        {t:'5 min',c:'a',b:'Brigade dispatched',s:n?('Hydrant '+fmt(n.d)+' m from the incident'):'Tanker required'},
+        {t:'12 min',c:'a',b:'Water on fire',s:'Demand ≈ 55 L/s at 2 bar residual'},
+        {t:'45 min',c:'g',b:'Under control',s:'Demand falls back'}]};
+}
+function riskScore(A){
+  const crit=(A.fac['Hospitals / clinics']||0)*3+(A.fac['Schools / colleges']||0)*1.5+(A.fac['Government offices']||0);
+  let km=0; UT.forEach(function(u){ km+=A.uStat[u].len; }); km/=1000;
+  let s=Math.min(100, A.pop/220 + crit*4 + km*1.4);
+  if(scen.k==='contam'||scen.k==='fire') s=Math.min(100,s*1.25);
+  return Math.round(s);
+}
+function rC(s){ return s>70?'var(--red)':(s>40?'var(--amber)':'var(--grn)'); }
+function rN(s){ return s>70?'CRITICAL':(s>40?'HIGH':(s>20?'MEDIUM':'LOW')); }
+const SC={red:'var(--red)',amber:'var(--amber)',grn:'var(--grn)'};
+
+function setIncident(lat,lon){
+  inc=[lat,lon]; done={};
+  const m=ll2m(lat,lon), mx=m[0], my=m[1];
+  A=analyse(mx,my,radius);
+  netLayer.clearLayers(); plotLayer.clearLayers(); bufLayer.clearLayers(); hitLayer.clearLayers();
+  const cv=L.canvas({padding:.5});
+  const R=radius*2.2, R2=R*R; let n=0;
+  for(let i=0;i<NET.pipes.length&&n<4000;i++){ const p=NET.pipes[i];
+    const dx=p[0]-mx, dy=p[1]-my; if(dx*dx+dy*dy>R2) continue;
+    L.polyline([m2ll(p[0],p[1]),m2ll(p[2],p[3])],{color:UCOL[UT[p[4]]],weight:1.4,opacity:.7,renderer:cv}).addTo(netLayer); n++; }
+  A.dots.forEach(function(d){ L.circleMarker(m2ll(d[0],d[1]),{radius:2.6,color:'rgb('+d[2][0]+','+d[2][1]+','+d[2][2]+')',
+    weight:0,fillOpacity:.85,renderer:cv}).addTo(plotLayer); });
+  [radius,radius*2/3,radius/3].forEach(function(r,i){
+    L.circle([lat,lon],{radius:r,color:'#ff5d5d',weight:1.3,opacity:.75-i*.12,fill:i===0,
+      fillColor:'#ff5d5d',fillOpacity:.05,dashArray:i?'5 5':null}).addTo(bufLayer); });
+  A.hit.forEach(function(p){ L.polyline([m2ll(p[0],p[1]),m2ll(p[2],p[3])],{color:'#ff5d5d',weight:2.6,opacity:.95,renderer:cv}).addTo(hitLayer); });
+  const mkrLabel={'burst':'V','contam':'V','power':'P','flood':'S','fire':'H'};
+  const mkrTip={'burst':'Isolation valve','contam':'Isolation valve','power':'Power chamber',
+                'flood':'Storm chamber','fire':'Hydrant point'};
+  const mkrBg={'burst':'#5fe0d2','contam':'#ff5d5d','power':'#ffcf4d','flood':'#8f7bff','fire':'#ff5d5d'};
+  A.iso.forEach(function(v,i){ L.marker(m2ll(v.mx,v.my),{icon:L.divIcon({className:'',iconSize:[22,22],iconAnchor:[11,11],
+    html:'<div style="width:22px;height:22px;border-radius:50%;background:'+(mkrBg[scen.k]||'#5fe0d2')+';color:#06121f;font:700 11px ui-monospace;display:flex;align-items:center;justify-content:center;border:2px solid #06121f">'+(mkrLabel[scen.k]||'V')+(i+1)+'</div>'})})
+    .addTo(hitLayer).bindPopup('<b>'+(mkrTip[scen.k]||'Isolation point')+' '+(mkrLabel[scen.k]||'V')+(i+1)+'</b><br>'+fmt(v.d)+' m from the incident'); });
+  L.marker([lat,lon],{icon:L.divIcon({className:'',iconSize:[30,30],iconAnchor:[15,15],
+    html:'<div style="width:30px;height:30px;border-radius:50%;background:#ff5d5d;border:3px solid #fff;box-shadow:0 0 0 4px rgba(255,93,93,.35);display:flex;align-items:center;justify-content:center;font-size:14px">'+scen.i+'</div>'})}).addTo(bufLayer);
+  if(!showNet) map.removeLayer(netLayer);
+  if(!showPlots) map.removeLayer(plotLayer);
+  map.setView([lat,lon], Math.max(map.getZoom(),15));
+  document.getElementById('hint').textContent='Tap again to move the incident';
+  renderAll(lat,lon);
+}
+function renderAll(lat,lon){
+  const risk=riskScore(A), nb=nearestBlock(lat,lon), ang=Math.min(risk,100)/100*216;
+  const banner = respondingTo ?
+    '<div class="abar">'+(TYPEICON[respondingTo.type]||'⚠️')+
+    ' <span>Responding to <b>'+respondingTo.id+'</b> · '+respondingTo.msg+
+    ' <span style="color:'+(respondingTo.live?'var(--grn)':'var(--amber)')+'">'+(respondingTo.live?'● LIVE':'◐ SIM')+'</span></span>'+
+    '<span class="x" id="clrA">×</span></div>' : '';
+  const runInfo=(respondingTo && window.__run) ?
+    '<div class="abar" style="border-color:#ff9f43;background:linear-gradient(90deg,rgba(255,159,67,.13),transparent)">📍'+
+    ' <span>Localisation: suspected section ≈ <b>'+fmt(window.__run.km,2)+' km</b> of '+
+    'main (dashed orange) — a single sensor cannot place the fault more precisely. '+
+    (window.__run.others? 'Overlap of <b>'+(window.__run.others+1)+' sensor runs</b> narrows it to <b>'+fmt(window.__run.okm,2)+' km</b> (yellow). ':'')+
+    'Exact point needs multi-sensor / transient analysis (roadmap Phase 2\u20134).</span></div>' : '';
+  document.getElementById('hd').innerHTML= banner+runInfo+
+    '<div class="loc"><div class="ic">'+scen.i+'</div>'+
+    '<div><b>'+scen.n+' — Zone '+nb.b.zone+' · '+nb.b.block+'</b>'+
+    '<span>'+lat.toFixed(5)+', '+lon.toFixed(5)+' · '+fmt(nb.km*1000)+' m from block centre</span></div>'+
+    '<div class="gg"><svg viewBox="0 0 80 80">'+
+    '<circle cx="40" cy="40" r="31" fill="none" stroke="#12233a" stroke-width="9"/>'+
+    '<circle cx="40" cy="40" r="31" fill="none" stroke="'+rC(risk)+'" stroke-width="9" stroke-linecap="round" stroke-dasharray="'+ang+' 360" transform="rotate(135 40 40)"/>'+
+    '<text x="40" y="46" text-anchor="middle" fill="#fff" font-size="18" font-weight="800" font-family="ui-monospace">'+risk+'</text></svg>'+
+    '<div style="font-size:9px;color:'+rC(risk)+';font-family:var(--mono);margin-top:-4px">'+rN(risk)+'</div></div></div>'+
+    '<div class="rad"><label>Buffer</label><input type="range" id="rad" min="50" max="1000" step="25" value="'+radius+'"><b>'+radius+' m</b></div>';
+  document.getElementById('rad').oninput=function(e){ radius=+e.target.value; setIncident(inc[0],inc[1]); };
+  const ca=document.getElementById('clrA');
+  if(ca) ca.onclick=function(){ respondingTo=null; clearRun(); renderAlerts(); renderAll(lat,lon); };
+  const T=[['impact','Impact'],['network','Network'],['actions','Actions'],['time','Timeline'],['sens','Sensors'],['log','Log']];
+  document.getElementById('tabs').innerHTML=T.map(function(t){ return '<div class="tab '+(tab===t[0]?'on':'')+'" data-t="'+t[0]+'">'+t[1]+'</div>'; }).join('');
+  document.querySelectorAll('.tab').forEach(function(t){ t.onclick=function(){ tab=t.dataset.t; renderAll(lat,lon); }; });
+  document.getElementById('body').innerHTML =
+    tab==='impact'?tabImpact():(tab==='network'?tabNetwork():(tab==='actions'?tabActions():
+    (tab==='time'?tabTime():(tab==='sens'?tabSens():tabLog()))));
+  if(tab==='actions') wireChecks();
+  if(tab==='time') drawChart();
+  const rb=document.getElementById('repBtn');
+  if(rb) rb.onclick=function(){ logIt('report','Incident report generated',respondingTo?respondingTo.id:''); showReport(lat,lon,risk,nb); };
+  const lb=document.getElementById('logBtn');
+  if(lb) lb.onclick=function(){
+    const t=LOG.map(function(l){ return l.ts.toISOString()+'  '+l.ev.toUpperCase().padEnd(14)+(l.id||'-').padEnd(10)+l.detail; }).reverse().join('\n');
+    document.getElementById('rep').value='AMARAVATI DIGITAL TWIN — DECISION SUPPORT AUDIT LOG\n'+
+      'Exported '+new Date().toLocaleString()+'\n'+'='.repeat(60)+'\n\n'+t;
+    document.getElementById('modal').classList.add('on'); };
+}
+function tabImpact(){
+  const zr=Object.keys(A.byZone).map(function(z){return [z,A.byZone[z]];}).sort(function(a,b){return b[1].a-a[1].a;})
+    .map(function(e){ const z=e[0],v=e[1];
+      return '<tr class="zrow"><td><span class="sw" style="background:rgb('+v.c[0]+','+v.c[1]+','+v.c[2]+')"></span>'+z+'</td>'+
+             '<td><b>'+fmt(v.n)+'</b></td><td><b>'+fmt(v.a/10000,1)+'</b></td><td><b>'+fmt(v.pop)+'</b></td></tr>'; }).join('');
+  const fl=Object.keys(A.fac).map(function(k){
+      const near=A.facList.filter(function(f){return f.t===k;})[0];
+      return '<div><b>'+A.fac[k]+'</b> '+k+'<span>nearest '+(near?fmt(near.d)+' m':'—')+'</span></div>'; }).join('')
+    || '<div style="color:var(--dim)">No critical facilities in the buffer</div>';
+  const rings=A.rings.map(function(r,i){
+    const lo=i===0?0:(i===1?radius/3:radius*2/3), hi=i===0?radius/3:(i===1?radius*2/3:radius);
+    return '<tr><td>'+fmt(lo)+'–'+fmt(hi)+' m</td><td><b>'+fmt(r.n)+'</b></td><td><b>'+fmt(r.pop)+'</b></td></tr>'; }).join('');
+  return '<div class="sec"><div class="sh"><b>Who is affected</b><span class="ln"></span><span class="tg real">● REAL GIS</span></div>'+
+   '<div class="kg k3">'+
+   '<div class="k"><div class="l">Population</div><div class="v">'+fmt(A.pop)+'</div><div class="s">est. from zoning</div></div>'+
+   '<div class="k"><div class="l">Households</div><div class="v">'+fmt(A.hh)+'</div><div class="s">@ '+HHSZ+'/hh</div></div>'+
+   '<div class="k"><div class="l">Plots</div><div class="v">'+fmt(A.plots)+'</div><div class="s">'+fmt(A.areaTot/10000,1)+' ha</div></div></div>'+
+   '<div class="kg" style="margin-top:7px">'+
+   '<div class="k"><div class="l">Water demand at risk</div><div class="v">'+fmt(A.demand,2)+'<small> MLD</small></div><div class="s">@ '+LPCD+' LPCD</div></div>'+
+   '<div class="k"><div class="l">Road reserve in zone</div><div class="v">'+fmt(A.roadKm,2)+'<small> km</small></div><div class="s">from road zoning</div></div></div>'+
+   '<div class="fac">'+fl+'</div></div>'+
+   '<div class="sec"><div class="sh"><b>By distance ring</b><span class="ln"></span></div>'+
+   '<table><thead><tr><th>Ring</th><th>Plots</th><th>Population</th></tr></thead><tbody>'+rings+'</tbody></table></div>'+
+   '<div class="sec"><div class="sh"><b>By landuse zone</b><span class="ln"></span><span class="tg real">● REAL</span></div>'+
+   '<table><thead><tr><th>Zone</th><th>Plots</th><th>ha</th><th>Pop</th></tr></thead><tbody>'+
+   (zr||'<tr><td colspan="4" style="color:var(--dim)">No plots in range</td></tr>')+'</tbody></table></div>'+
+   '<button class="btn" id="repBtn">📋 Generate incident report</button>'+assumptions();
+}
+function tabNetwork(){
+  const rows=UT.filter(function(u){return A.uStat[u].n;}).map(function(u){ const s=A.uStat[u];
+    return '<tr class="zrow"><td><span class="sw" style="background:'+UCOL[u]+'"></span>'+ULAB[u]+'</td>'+
+      '<td><b>'+fmt(s.n)+'</b></td><td><b>'+fmt(s.len/1000,2)+'</b></td><td><b>'+(s.maxD||'—')+'</b></td><td><b>'+fmt(A.mhU[u]||0)+'</b></td></tr>'; }).join('');
+  const s=A.uStat[scen.u]||{dias:{}};
+  const dia=Object.keys(s.dias).map(function(k){return [k,s.dias[k]];}).sort(function(a,b){return b[1]-a[1];})
+    .map(function(e){ return '<tr><td>'+e[0]+' mm</td><td><b>'+fmt(e[1]/1000,2)+' km</b></td></tr>'; }).join('');
+  // isolation label + meaning varies by scenario
+  const isoLabel={'burst':'Isolation valves','contam':'Isolation valves','power':'Power chambers',
+                  'flood':'Storm chambers at risk','fire':'Hydrant points'};
+  const isoNote={'burst':'Close these to isolate the main. A true minimum-valve set needs the valve register.',
+    'contam':'Close these to stop contamination spreading. Valve register would give exact isolation points.',
+    'power':'These are the nearest <b>power network chambers</b> in the buffer — conduit access points. '+
+            'The actual <b>pump stations, substations and DG sets</b> that serve this zone are <b>not yet in the Civil 3D data</b> — '+
+            'they will appear here once the electrical asset register is added.',
+    'flood':'These are the storm chambers most likely to surcharge. Monitor these first during the event.',
+    'fire':'The nearest water chamber that can serve as a hydrant point. Distance and main diameter shown.'};
+  const isoRows=A.iso.map(function(v,i){
+    const lbl=scen.k==='power'?'Power chamber':(scen.k==='flood'?'Storm chamber':ULAB[scen.u]+' chamber');
+    const badge=scen.k==='burst'||scen.k==='contam'?'V'+(i+1):''+(i+1);
+    return '<tr><td><b>'+badge+'</b></td><td><b>'+fmt(v.d)+' m</b></td><td>'+lbl+'</td></tr>';
+  }).join('')||'<tr><td colspan="3" style="color:var(--dim)">No chamber within range</td></tr>';
+  return '<div class="sec"><div class="sh"><b>Utilities inside the buffer</b><span class="ln"></span><span class="tg real">● REAL</span></div>'+
+   '<table><thead><tr><th>Utility</th><th>Pipes</th><th>km</th><th>Max mm</th><th>Chambers</th></tr></thead><tbody>'+
+   (rows||'<tr><td colspan="5" style="color:var(--dim)">No network in range</td></tr>')+'</tbody></table>'+
+   '<div class="kg" style="margin-top:9px">'+
+   '<div class="k"><div class="l">Chambers total</div><div class="v">'+fmt(A.mhN)+'</div><div class="s">all utilities</div></div>'+
+   '<div class="k"><div class="l">Deepest chamber</div><div class="v">'+fmt(A.depthMax,1)+'<small> m</small></div><div class="s">excavation depth</div></div></div></div>'+
+   '<div class="sec"><div class="sh"><b>'+ULAB[scen.u]+' mains by diameter</b><span class="ln"></span></div>'+
+   '<table><tbody>'+(dia||'<tr><td style="color:var(--dim)">—</td></tr>')+'</tbody></table></div>'+
+   '<div class="sec"><div class="sh"><b>Isolation points</b><span class="ln"></span><span class="tg sim">◐ NEAREST CHAMBER</span></div>'+
+   '<div class="sh"><b>'+(isoLabel[scen.k]||'Isolation points')+'</b><span class="ln"></span><span class="tg '+(scen.k==='power'?'sim':'real')+'">'+
+   (scen.k==='power'?'◐ PARTIAL DATA':'● REAL')+'</span></div>'+
+   '<table><thead><tr><th>ID</th><th>Distance</th><th>Type</th></tr></thead><tbody>'+isoRows+'</tbody></table>'+
+   '<div style="font-size:10.5px;color:var(--dim);margin-top:7px;line-height:1.5">'+isoNote[scen.k]+'</div></div>';
+}
+function tabActions(){
+  const D=decide(A), n=D.length;
+  let dn=0; Object.keys(done).forEach(function(k){ if(done[k]) dn++; });
+  return '<div class="sec"><div class="sh"><b>Recommended actions</b><span class="ln"></span><span class="tg sim">◐ RULE ENGINE</span></div>'+
+   '<div class="prog"><i style="width:'+(n?dn/n*100:0)+'%"></i></div>'+
+   '<div style="font-size:10px;color:var(--dim);font-family:var(--mono);margin-bottom:9px">'+dn+' of '+n+' actions completed</div>'+
+   D.map(function(d,i){ return '<div class="ck '+(done[i]?'done':'')+'" data-i="'+i+'">'+
+     '<input type="checkbox" '+(done[i]?'checked':'')+'>'+
+     '<div style="flex:1"><div class="t">'+d.t+'</div><div class="m">⏱ '+d.w+' · confidence '+d.c+'</div></div></div>'; }).join('')+
+   '</div><div class="sec"><div class="sh"><b>Reasoning</b><span class="ln"></span></div>'+
+   D.map(function(d){ return '<div class="dc" style="border-left-color:'+SC[d.s]+'">'+
+     '<div class="h"><b>'+d.t+'</b><span class="cf">'+d.c+'</span></div>'+
+     '<div class="why">'+d.why+'</div><div class="act">▸ '+d.act+'</div><div class="win">⏱ '+d.w+'</div></div>'; }).join('')+'</div>';
+}
+function tabTime(){
+  const T=timeline(A);
+  return '<div class="sec"><div class="sh"><b>Predicted timeline</b><span class="ln"></span><span class="tg sim">◐ MODELLED</span></div>'+
+   '<div class="k" style="padding:11px"><svg id="chart" viewBox="0 0 400 190" preserveAspectRatio="none" style="width:100%;height:190px"></svg>'+
+   '<div id="leg" style="display:flex;gap:12px;flex-wrap:wrap;margin-top:6px;font-size:9.5px;font-family:var(--mono)"></div></div></div>'+
+   '<div class="sec"><div class="sh"><b>Milestones</b><span class="ln"></span></div>'+
+   T.ms.map(function(m){ return '<div class="ms '+m.c+'"><div class="tm">'+m.t+'</div><div class="tx"><b>'+m.b+'</b><span>'+m.s+'</span></div></div>'; }).join('')+'</div>'+
+   assumptions();
+}
+function tabSens(){
+  const KL={pressure:'Pressure',flow:'DMA flow',chlorine:'Chlorine',pump:'Pump'};
+  const alarms=SENSORS.filter(function(s){ return s.prog>0; });
+  const rows=SENSORS.slice().sort(function(a,b){ return (b.prog||0)-(a.prog||0); }).map(function(sn){
+    const bad=sn.prog>0, v=(sn.last!==undefined?sn.last:0);
+    const pct=sn.kind==='pump'||sn.kind==='flow'?Math.min(100,v/(sn.base*1.6)*100):Math.min(100,v/(sn.base*1.25)*100);
+    const c=bad?(sn.prog>0.6?'var(--red)':'var(--amber)'):'var(--grn)';
+    return '<div class="sn"><div class="si"><b>'+sn.id+'</b><span>'+KL[sn.kind]+' · Zone '+sn.b.zone+' · '+sn.b.block+'</span></div>'+
+      '<div class="sv" style="color:'+c+'">'+v.toFixed(sn.kind==='chlorine'?2:(sn.kind==='pressure'?2:0))+'<small> '+sn.unit+'</small></div>'+
+      '<div class="sb"><i style="width:'+pct+'%;background:'+c+'"></i></div></div>';
+  }).join('');
+  return '<div class="sec"><div class="sh"><b>Live sensor readings</b><span class="ln"></span>'+
+    '<span class="tg sim">◐ DEMO SENSORS</span></div>'+
+    '<div class="kg k3" style="margin-bottom:10px">'+
+    '<div class="k"><div class="l">Sensors</div><div class="v">'+SENSORS.length+'</div><div class="s">virtual SCADA</div></div>'+
+    '<div class="k"><div class="l">In alarm</div><div class="v" style="color:'+(alarms.length?'var(--red)':'var(--grn)')+'">'+alarms.length+'</div><div class="s">threshold breach</div></div>'+
+    '<div class="k"><div class="l">Last tick</div><div class="v" style="font-size:14px">'+(lastTick?lastTick.toLocaleTimeString():'—')+'</div><div class="s">every '+POLL_SEC+'s</div></div></div>'+
+    '<div style="font-size:10px;color:var(--dim);margin-bottom:9px;line-height:1.5">These are <b>simulated</b> pressure transmitters, DMA flow meters, chlorine analysers and pump monitors on your 21 blocks. Readings follow a real diurnal pattern with noise; faults appear, ramp up and clear on their own. <b>Every alert in the feed is a threshold breach on one of these readings</b> — which is exactly how SCADA alerting works. Point <b>ALERT_FEED_URL</b> at your real system and this panel becomes live telemetry.</div>'+
+    rows+'</div>';
+}
+function tabLog(){
+  const EC={received:'#f5c542',escalated:'#ff5d5d',acknowledged:'#9bb1c6',analysed:'#5fe0d2',
+            're-analysed':'#5fe0d2','auto-analysed':'#a98bff',resolved:'#57d98a',action:'#57d98a',
+            report:'#19C6F0',setting:'#6d829a'};
+  const rows=LOG.map(function(l){
+    const c=EC[l.ev]||'#9bb1c6';
+    return '<div class="lg"><span class="t">'+l.ts.toLocaleTimeString()+'</span>'+
+      '<span class="e" style="background:'+c+'22;color:'+c+'">'+l.ev+'</span>'+
+      '<span class="d">'+(l.id?'<b style="font-family:var(--mono);color:var(--dim)">'+l.id+'</b> ':'')+l.detail+'</span></div>';
+  }).join('');
+  return '<div class="sec"><div class="sh"><b>Audit log</b><span class="ln"></span>'+
+    '<span class="tg real">'+LOG.length+' events</span></div>'+
+    '<div style="font-size:10px;color:var(--dim);margin-bottom:9px;line-height:1.5">Every alert received, escalated, acknowledged, analysed, actioned and resolved — in this session.</div>'+
+    (rows||'<div style="color:var(--dim);font-size:11px">No events yet.</div>')+
+    '</div><button class="btn" id="logBtn">⬇ Export log</button>';
+}
+function assumptions(){
+  return '<details><summary>▸ How these numbers are calculated</summary><div class="c">'+
+  '<b>Population</b> = Σ (plot area × density of its zoning class). Densities are planning assumptions (R3 = 250/ha, R4 = 400/ha, C2 = 80/ha, parks ≈ 2/ha, roads 0). <b>Not census data.</b><br>'+
+  '<b>Households</b> = population ÷ '+HHSZ+'. <b>Demand</b> = population × '+LPCD+' LPCD.<br>'+
+  '<b>Road length</b> = area of road-reserve zoning ÷ 12 m assumed width.<br>'+
+  '<b>Burst discharge</b> = Cd·A·√(2gH) — Cd 0.62, 20% of bore open, 30 m head.<br>'+
+  '<b>Contaminant speed</b> = 0.9 m/s main velocity ≈ 3.2 km/hr.<br>'+
+  '<b>Risk</b> = pop/220 + 4×(weighted critical facilities) + 1.4×(km of network), capped at 100.<br>'+
+  'Plots, zoning, areas, pipes, diameters and chambers are <b>real</b> — from your masterplan shapefile and Civil 3D. Everything above is the <b>modelled</b> layer on top.</div></details>';
+}
+function wireChecks(){
+  document.querySelectorAll('.ck').forEach(function(c){
+    c.onclick=function(){ const i=c.dataset.i; done[i]=!done[i];
+      const D=decide(A);
+      logIt('action', (done[i]?'Completed: ':'Re-opened: ')+D[i].t, respondingTo?respondingTo.id:'');
+      renderAll(inc[0],inc[1]); }; });
+}
+function drawChart(){
+  const T=timeline(A), W=400,H=190,pad=26, steps=48;
+  function xs(k){ return pad+k/steps*(W-2*pad); }
+  let out='', leg='';
+  T.series.forEach(function(s){
+    const vals=[]; for(let k=0;k<=steps;k++) vals.push(s.f(k/steps*T.span));
+    const mx=Math.max.apply(null,vals.concat([1]))*1.1;
+    const p=vals.map(function(v,k){ return (k?'L':'M')+xs(k).toFixed(1)+' '+(H-pad-(v/mx)*(H-2*pad)).toFixed(1); }).join(' ');
+    out+='<path d="'+p+'" fill="none" stroke="'+s.c+'" stroke-width="2"/>';
+    leg+='<span style="color:'+s.c+'">■ '+s.n+' (peak '+fmt(Math.max.apply(null,vals),1)+')</span>';
+  });
+  let ticks=''; for(let k=0;k<=4;k++){ const t=k/4*T.span;
+    ticks+='<text x="'+xs(k/4*steps)+'" y="'+(H-7)+'" fill="#7f97ad" font-size="9" text-anchor="middle" font-family="ui-monospace">'+fmt(t,1)+(T.unit==='hours'?'h':'m')+'</text>'; }
+  document.getElementById('chart').innerHTML='<line x1="'+pad+'" y1="'+(H-pad)+'" x2="'+(W-pad)+'" y2="'+(H-pad)+'" stroke="#1d3a57"/>'+out+ticks;
+  document.getElementById('leg').innerHTML=leg;
+}
+function pad2(s,n){ s=String(s); while(s.length<n) s+=' '; return s.slice(0,n); }
+function padL(s,n){ s=String(s); while(s.length<n) s=' '+s; return s; }
+function showReport(lat,lon,risk,nb){
+  const D=decide(A), T=timeline(A);
+  const R='AMARAVATI DIGITAL TWIN — INCIDENT IMPACT REPORT\n'+
+  'Generated '+new Date().toLocaleString()+'\n'+
+  '===========================================================\n'+
+  'SCENARIO      '+scen.n+'\n'+
+  'LOCATION      Zone '+nb.b.zone+' · Block '+nb.b.block+'  ('+lat.toFixed(5)+', '+lon.toFixed(5)+')\n'+
+  'BUFFER        '+radius+' m\n'+
+  'RISK SCORE    '+risk+'/100  ('+rN(risk)+')\n\n'+
+  'IMPACT  [REAL — masterplan + Civil 3D]\n'+
+  '  Population affected .... '+fmt(A.pop)+'  (est. from zoning density)\n'+
+  '  Households ............. '+fmt(A.hh)+'\n'+
+  '  Plots affected ......... '+fmt(A.plots)+'  ('+fmt(A.areaTot/10000,1)+' ha)\n'+
+  '  Water demand at risk ... '+fmt(A.demand,2)+' MLD\n'+
+  '  Road reserve in zone ... '+fmt(A.roadKm,2)+' km\n'+
+  '  Critical facilities .... '+(Object.keys(A.fac).map(function(k){return A.fac[k]+' '+k;}).join(', ')||'none')+'\n\n'+
+  'LANDUSE BREAKDOWN\n'+
+  Object.keys(A.byZone).map(function(z){return [z,A.byZone[z]];}).sort(function(a,b){return b[1].a-a[1].a;})
+    .map(function(e){ return '  '+pad2(e[0],38)+' '+padL(fmt(e[1].n),6)+' plots '+padL(fmt(e[1].a/10000,1),7)+' ha '+padL(fmt(e[1].pop),7)+' pop'; }).join('\n')+'\n\n'+
+  'NETWORK IN BUFFER  [REAL]\n'+
+  UT.filter(function(u){return A.uStat[u].n;}).map(function(u){ const s=A.uStat[u];
+    return '  '+pad2(ULAB[u],8)+padL(fmt(s.n),5)+' pipes '+padL(fmt(s.len/1000,2),7)+' km  max '+padL(s.maxD,4)+' mm '+padL(fmt(A.mhU[u]||0),5)+' chambers'; }).join('\n')+'\n'+
+  '  Chambers total ......... '+fmt(A.mhN)+'   Deepest: '+fmt(A.depthMax,1)+' m\n\n'+
+  'ISOLATION POINTS\n'+
+  (A.iso.map(function(v,i){ return '  V'+(i+1)+'  '+fmt(v.d)+' m  ('+ULAB[scen.u]+' chamber)'; }).join('\n')||'  none in range')+'\n\n'+
+  'RECOMMENDED ACTIONS  [rule engine]\n'+
+  D.map(function(d,i){ return '  '+(i+1)+'. ['+d.w+'] '+d.t+'  (confidence '+d.c+')\n      -> '+d.act; }).join('\n')+'\n\n'+
+  'PREDICTED TIMELINE  [modelled]\n'+
+  T.ms.map(function(m){ return '  '+pad2(m.t,10)+m.b+' — '+m.s; }).join('\n')+'\n\n'+
+  '-----------------------------------------------------------\n'+
+  'REAL: plots, zoning, areas, pipe geometry/diameters, chambers, buffer query.\n'+
+  'MODELLED: population (zoning density, not census), leak/spread/drawdown formulae,\n'+
+  'restoration times, risk weights. Rule engine — not a trained ML model.\n'+
+  'Live SCADA + EPANET + DEM would replace the modelled layer with measured values.\n'+
+  'Kreayotoo Solutions (P) Ltd';
+  document.getElementById('rep').value=R;
+  document.getElementById('modal').classList.add('on');
+}
+document.getElementById('cls').onclick=function(){ document.getElementById('modal').classList.remove('on'); };
+document.getElementById('cpy').onclick=function(){ const t=document.getElementById('rep'); t.select();
+  try{ navigator.clipboard.writeText(t.value); }catch(e){ try{ document.execCommand('copy'); }catch(e2){} }
+  const b=document.getElementById('cpy'); b.textContent='Copied ✓';
+  setTimeout(function(){ b.textContent='Copy to clipboard'; },1600); };
+
+document.getElementById('scn').innerHTML=SCEN.map(function(s){ return '<button class="chip '+(s.k===scen.k?'on':'')+'" data-k="'+s.k+'">'+s.i+' '+s.n+'</button>'; }).join('');
+document.querySelectorAll('.chip').forEach(function(c){ c.onclick=function(){
+  scen=SCEN.filter(function(s){return s.k===c.dataset.k;})[0]; radius=scen.r; done={};
+  document.querySelectorAll('.chip').forEach(function(x){ x.classList.remove('on'); }); c.classList.add('on');
+  if(inc) setIncident(inc[0],inc[1]); else showEmpty(); }; });
+function showEmpty(){
+  document.getElementById('hd').innerHTML='<div class="loc"><div class="ic">'+scen.i+'</div>'+
+    '<div><b>'+scen.n+'</b><span>no incident placed</span></div></div>';
+  document.getElementById('tabs').innerHTML='';
+  document.getElementById('body').innerHTML='<div class="empty">'+
+    '<b style="color:var(--teal)">Open an alert</b> from the feed, or <b>tap the map</b> to place an incident.<br><br>'+
+    'The twin runs a real GIS buffer against <b>95,935 masterplan plots</b> and your <b>129,786-pipe</b> network, '+
+    'then reports who is affected and what to do.<br><br>'+
+    '<span style="font-size:11px">Also: <b>⚡ Random incident</b> / <b>Jump to block</b> on the map.</span></div>';
+}
+showEmpty();
+
+/* ---------------- alert feed ---------------- */
+let NLAT=0, NLON=0;
+BLOCKS.forEach(function(b){ NLAT+=b.lat; NLON+=b.lon; });
+NLAT/=BLOCKS.length; NLON/=BLOCKS.length;
+function zoneBlock(z){ const m=BLOCKS.filter(function(b){return b.zone===z;}); return m.length?m[0]:BLOCKS[0]; }
+function seed(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619);} return (h>>>0)/4294967295; }
+
+let WX=null, WXT=0;
+
+/* ══════════ DEMO SENSOR NETWORK (◐ SIMULATED) ══════════
+   A virtual SCADA: pressure transmitters, DMA flow meters, chlorine analysers and pump
+   monitors across the 21 blocks. Readings follow a real diurnal pattern + noise and are
+   re-computed every tick, so the board is never static. Faults spawn, ramp up, escalate
+   and clear on their own — the alerts you see are threshold breaches on these readings.
+   Replace with SCADA by setting ALERT_FEED_URL (or SENSOR_FEED_URL). ══════════════════ */
+const SENSOR_FEED_URL = "";
+const DIU=[0.42,0.33,0.29,0.28,0.34,0.62,1.15,1.68,1.72,1.48,1.22,1.10,1.05,0.98,0.92,0.95,1.10,1.35,1.52,1.40,1.18,0.95,0.72,0.55];
+const SENSORS=[]; let FAULTS=[], simT0=Date.now(), lastTick=null;
+BLOCKS.forEach(function(b,i){
+  const t='Z'+b.zone+'-'+b.block;
+  SENSORS.push({id:'PT-'+t, kind:'pressure', unit:'bar',  b:b, base:2.9+seed(b.code+'p')*0.7});
+  SENSORS.push({id:'FM-'+t, kind:'flow',     unit:'L/s',  b:b, base:18+seed(b.code+'f')*46});
+  if(i%2===0) SENSORS.push({id:'CL-'+t, kind:'chlorine', unit:'mg/L', b:b, base:0.42+seed(b.code+'c')*0.26});
+  if(i%4===0) SENSORS.push({id:'PU-'+t, kind:'pump',     unit:'kW',   b:b, base:140+seed(b.code+'u')*130});
+});
+const FKIND={pressure:'burst', flow:'pressure', chlorine:'quality', pump:'power'};
+function spawnFault(now){
+  const cand=SENSORS.filter(function(s){ return !FAULTS.some(function(f){return f.sid===s.id;}); });
+  if(!cand.length) return;
+  const sn=cand[Math.floor(Math.random()*cand.length)];
+  FAULTS.push({sid:sn.id, kind:sn.kind, t0:now,
+    ramp: 2+Math.random()*6,                       // minutes to reach full severity
+    dur: 8+Math.random()*26,                       // minutes before it clears
+    mag: 0.55+Math.random()*0.42});                // how bad it gets
+}
+function tickSim(){
+  const now=Date.now();
+  FAULTS=FAULTS.filter(function(f){ return (now-f.t0)/60000 < f.dur; });   // resolved
+  const elapsed=(now-simT0)/1000;
+  if(FAULTS.length<4 && (Math.random() < (elapsed<5 ? 0.9 : 0.16))) spawnFault(now);  // seed fast, then drift
+  lastTick=new Date();
+}
+function readSensor(sn){
+  const now=new Date(), hr=now.getHours()+now.getMinutes()/60;
+  const d=DIU[Math.floor(hr)%24];
+  const nz=(Math.random()-0.5);
+  let v;
+  if(sn.kind==='pressure') v=sn.base*(1.08-0.10*d)+nz*0.06;
+  else if(sn.kind==='flow') v=sn.base*d+nz*sn.base*0.05;
+  else if(sn.kind==='chlorine') v=sn.base+nz*0.03;
+  else v=sn.base*(0.85+0.20*d)+nz*4;
+  const f=FAULTS.filter(function(x){return x.sid===sn.id;})[0];
+  let prog=0;
+  if(f){ prog=Math.min(1,(Date.now()-f.t0)/60000/f.ramp);
+    if(sn.kind==='pressure') v=v*(1-0.62*f.mag*prog);
+    else if(sn.kind==='flow') v=v*(1+1.25*f.mag*prog);
+    else if(sn.kind==='chlorine') v=Math.max(0.03, v*(1-0.80*f.mag*prog));
+    else v=v*(1-f.mag*prog);
+  }
+  return {v:v, fault:f?prog:0, base:sn.base};
+}
+function sensorAlert(sn){
+  const r=readSensor(sn); sn.last=r.v; sn.prog=r.fault;
+  if(!r.fault) return null;
+  const b=sn.b; let type,sev,msg,val,unit;
+  if(sn.kind==='pressure'){
+    const drop=(1-r.v/(sn.base*1.0))*100;
+    if(r.v>2.35) return null;
+    type='burst'; sev=r.v<1.5?'critical':(r.v<1.95?'high':'medium');
+    msg='Pressure '+Math.round(drop)+'% below normal — suspected burst (Zone '+b.zone+' · '+b.block+')';
+    val=r.v.toFixed(2); unit='bar (normal '+sn.base.toFixed(1)+')';
+  } else if(sn.kind==='flow'){
+    const up=(r.v/sn.base-1)*100;
+    if(up<45) return null;
+    type='pressure'; sev=up>110?'critical':(up>75?'high':'medium');
+    msg='Flow up '+Math.round(up)+'% at the DMA inlet — probable leak (Zone '+b.zone+' · '+b.block+')';
+    val='+'+Math.round(up); unit='% vs baseline ('+r.v.toFixed(0)+' L/s)';
+  } else if(sn.kind==='chlorine'){
+    if(r.v>=0.20) return null;
+    type='quality'; sev=r.v<0.08?'critical':(r.v<0.14?'high':'medium');
+    msg='Chlorine residual below limit (Zone '+b.zone+' · '+b.block+')';
+    val=r.v.toFixed(2); unit='mg/L (min 0.20)';
+  } else {
+    if(r.v>sn.base*0.35) return null;
+    type='power'; sev=r.v<8?'critical':'high';
+    msg='Pump station drawing '+r.v.toFixed(0)+' kW — supply fault (Zone '+b.zone+' · '+b.block+')';
+    val=r.v.toFixed(0); unit='kW (normal '+sn.base.toFixed(0)+')';
+  }
+  const f=FAULTS.filter(function(x){return x.sid===sn.id;})[0];
+  return {id:'SEN-'+sn.id, type:type, live:false, severity:sev,
+    lat:b.lat+(seed(sn.id+'a')-0.5)*0.004, lon:b.lon+(seed(sn.id+'b')-0.5)*0.004,
+    radius:type==='power'?600:(type==='quality'?400:250),
+    ts:new Date(f?f.t0:Date.now()).toISOString(),
+    source:'Demo sensor '+sn.id+' — SCADA placeholder',
+    msg:msg, value:val, unit:unit};
+}
+
+async function loadAlerts(){
+  // 1 ── real SCADA feed, if configured
+  if(ALERT_FEED_URL){
+    try{ const r=await fetch(ALERT_FEED_URL); const j=await r.json();
+      applyFeed(j.map(function(a){ a.live=true; return a; })); return;
+    }catch(e){ /* fall through to the built-in feed */ }
+  }
+  const out=[];
+  // 2 ── LIVE rainfall → storm/flood alerts (real: Open-Meteo + your Manning drain capacity)
+  try{
+    if(!WX || Date.now()-WXT > 10*60*1000){
+      const u='https://api.open-meteo.com/v1/forecast?latitude='+NLAT+'&longitude='+NLON+
+              '&hourly=precipitation&past_days=2&forecast_days=2&timezone=auto';
+      WX=await (await fetch(u)).json(); WXT=Date.now();
+    }
+    const d=WX;
+    const H=d.hourly, now=new Date();
+    let i0=H.time.findIndex(function(t){ return new Date(t)>=now; }); if(i0<1) i0=1;
+    let ante=0; for(let i=Math.max(0,i0-48);i<i0;i++) ante+=H.precipitation[i]||0;
+    const nxt=[]; for(let i=i0;i<i0+24&&i<H.time.length;i++) nxt.push(H.precipitation[i]||0);
+    const peak1=Math.max.apply(null,nxt.concat([0]));
+    let peak3=0; for(let i=0;i+3<=nxt.length;i++){ const s=(nxt[i]+nxt[i+1]+nxt[i+2])/3; if(s>peak3) peak3=s; }
+    const iPk=Math.max(peak1,peak3), C=Math.min(0.95,0.70+Math.min(ante/60,1)*0.22);
+    if(iPk>0.4){
+      Object.keys(ZONESTORM).forEach(function(z){
+        const s=ZONESTORM[z], A=Math.max(s.area_m2,50000), Qcap=Math.max(0.02,s.capacity_m3s||0.1);
+        const util=Math.min(200, C*iPk*A/3.6e6/Qcap*100);
+        if(util<50) return;
+        const b=zoneBlock(z);
+        out.push({id:'WX-'+z, type:'flood', live:true,
+          severity: util>100?'critical':(util>70?'high':'medium'),
+          lat:b.lat, lon:b.lon, radius:400, ts:new Date().toISOString(),
+          source:'Open-Meteo (live rainfall)',
+          msg:'Zone '+z+' storm drains at '+Math.round(util)+'% capacity',
+          value:iPk.toFixed(1), unit:'mm/hr peak · '+ante.toFixed(0)+' mm antecedent'});
+      });
+    }
+  }catch(e){ /* offline — no live weather alerts */ }
+  // 3 ── DEMO SENSOR NETWORK (◐ SIM) — virtual sensors that actually move.
+  //      Values evolve every tick (diurnal pattern + noise); faults appear, escalate and clear.
+  //      Alerts below are DERIVED FROM THE SENSOR READINGS crossing thresholds — exactly how
+  //      SCADA alerting works. Set SENSOR_FEED_URL / ALERT_FEED_URL to swap in the real thing.
+  tickSim();
+  SENSORS.forEach(function(sn){
+    const a=sensorAlert(sn); if(a) out.push(a);
+  });
+  const rank={critical:0,high:1,medium:2};
+  out.sort(function(a,b){ return (rank[a.severity]-rank[b.severity]) || (a.live===b.live?0:(a.live?-1:1)); });
+  applyFeed(out);
+}
+
+/* ---- diff the feed: new / changed / resolved → keep the decision view live ---- */
+function applyFeed(out){
+  const first = lastPoll===null;
+  const nowIds={}; const fresh=[];
+  out.forEach(function(a){ nowIds[a.id]=a;
+    if(!prevIds[a.id]){ a.isNew=!first; if(!first) fresh.push(a); logIt('received', a.msg, a.id); }
+    else { a.isNew=false;
+      const p=prevIds[a.id];
+      if(p.severity!==a.severity){ a.isNew=!first; logIt('escalated', a.msg+' ('+p.severity+' → '+a.severity+')', a.id); if(!first) fresh.push(a); }
+    }
+  });
+  // resolved = was there, now gone
+  Object.keys(prevIds).forEach(function(id){
+    if(!nowIds[id]){ logIt('resolved', prevIds[id].msg, id);
+      for(var rk in RUNS){ if(rk.indexOf(id+'|')===0) delete RUNS[rk]; }
+      if(respondingTo && respondingTo.id===id){ respondingTo.resolved=true; }
+    }
+  });
+  ALERTS=out; prevIds=nowIds; lastPoll=new Date();
+  renderAlerts();
+
+  // 1) the alert we are working on may have changed → re-run its analysis with the new numbers
+  if(respondingTo && !respondingTo.resolved && nowIds[respondingTo.id]){
+    const upd=nowIds[respondingTo.id];
+    const changed = upd.severity!==respondingTo.severity;
+    respondingTo=upd;
+    if(changed){ logIt('re-analysed', 'Alert updated → impact recalculated', upd.id); respond(upd, true); }
+    else if(inc){ drawSuspectRun(respondingTo); setIncident(inc[0], inc[1]); }   // refresh run + risk/actions
+  } else if(respondingTo && respondingTo.resolved && inc){
+    renderAll(inc[0], inc[1]);
+  }
+  // 2) new alerts → notify; auto-follow the worst new CRITICAL one
+  fresh.forEach(function(a){ toast(a); });
+  const crit=fresh.filter(function(a){ return a.severity==='critical'; });
+  if(autoFollow && crit.length && (!respondingTo || respondingTo.resolved || respondingTo.severity!=='critical')){
+    logIt('auto-analysed', 'Auto-follow picked up a new CRITICAL alert', crit[0].id);
+    respond(crit[0]);
+  }
+}
+function ago(ts){ const m=Math.round((Date.now()-new Date(ts).getTime())/60000);
+  return m<1?'just now':(m<60?m+' min ago':Math.round(m/60)+' hr ago'); }
+function renderAlerts(){
+  const live=ALERTS.filter(function(a){return a.live;}).length;
+  const crit=ALERTS.filter(function(a){return a.severity==='critical';}).length;
+  const bd=document.getElementById('bdg');
+  bd.textContent=ALERTS.length; bd.style.background=crit?'#ff5d5d':'#f5c542'; bd.style.color=crit?'#fff':'#06121f';
+  document.getElementById('alerts').innerHTML=
+    '<div class="ah"><b>Alert feed</b>'+
+    '<span style="font-size:9px;font-family:var(--mono);color:var(--grn)">'+live+' live</span>'+
+    '<span style="font-size:9px;font-family:var(--mono);color:var(--amber)">'+(ALERTS.length-live)+' sim</span>'+
+    '<span class="x" id="aX">×</span></div>'+
+    '<label class="afl"><input type="checkbox" id="afTog"'+(autoFollow?' checked':'')+
+    '> auto-analyse new <b>critical</b> alerts</label>'+
+    (ALERTS.length?ALERTS.map(function(a){
+      const st=a.resolved?'resolved':(respondingTo&&respondingTo.id===a.id?'responding':(ackd[a.id]?'acknowledged':'new'));
+      return '<div class="al '+(respondingTo&&respondingTo.id===a.id?'act':'')+'" data-id="'+a.id+'" style="border-left-color:'+SEVCOL[a.severity]+'">'+
+        '<div class="ai">'+(TYPEICON[a.type]||'⚠️')+'</div>'+
+        '<div class="ac"><div class="at">'+a.msg+(a.isNew?' <span class="np">NEW</span>':'')+'</div>'+
+        '<div class="am">'+a.value+' '+a.unit+' · '+ago(a.ts)+' · <b style="color:'+SEVCOL[a.severity]+'">'+a.severity.toUpperCase()+'</b></div>'+
+        '<span class="src '+(a.live?'live':'sim')+'">'+(a.live?'● LIVE — '+a.source:'◐ SIM — '+a.source)+'</span>'+
+        (st==='acknowledged'?'<span class="src" style="background:rgba(155,177,198,.15);color:var(--dim)">✓ acknowledged</span>':'')+
+        (st==='responding'?'<span class="src" style="background:rgba(95,224,210,.15);color:var(--teal)">▶ analysing</span>':'')+
+        '</div>'+
+        (ackd[a.id]?'':'<button class="ackb" data-ack="'+a.id+'">ACK</button>')+
+        '</div>';
+    }).join('')
+     :'<div style="font-size:11px;color:var(--dim);padding:8px;line-height:1.5">No alerts. Live rainfall is below the storm threshold — nothing to act on.</div>')+
+    '<div style="font-size:9px;color:#6d829a;font-family:var(--mono);margin-top:8px;line-height:1.5;border-top:1px solid var(--line);padding-top:8px">'+
+    'Feed re-checked every '+POLL_SEC+'s · last '+(lastPoll?lastPoll.toLocaleTimeString():'—')+'<br>'+
+    'Flood alerts are <b style="color:var(--grn)">live</b> (Open-Meteo rainfall vs your real drain capacity).<br>'+
+    'Burst/pressure/quality are <b style="color:var(--amber)">placeholders</b> until SCADA is connected — set <b>ALERT_FEED_URL</b>.</div>';
+  document.getElementById('aX').onclick=function(){ document.getElementById('alerts').classList.remove('on'); resizeMap(); };
+  document.getElementById('afTog').onchange=function(e){ autoFollow=e.target.checked;
+    logIt('setting', 'Auto-follow '+(autoFollow?'enabled':'disabled'), ''); };
+  document.querySelectorAll('.ackb').forEach(function(b){ b.onclick=function(e){ e.stopPropagation();
+    const id=b.dataset.ack; ackd[id]=true;
+    const a=ALERTS.filter(function(x){return x.id===id;})[0];
+    logIt('acknowledged', a?a.msg:'', id); renderAlerts(); }; });
+  document.querySelectorAll('.al').forEach(function(el){ el.onclick=function(){
+    const a=ALERTS.filter(function(x){return x.id===el.dataset.id;})[0]; if(a) respond(a); }; });
+  try{ parent.postMessage({t:'alertCount', n:ALERTS.length, crit:crit, live:live}, '*'); }catch(e){}
+}
+var RUNS={};
+function traceRun(mx,my,util,limitM){
+  const ui=UT.indexOf(util); if(ui<0||!NET.pipes.length) return null;
+  const BB=1700, cand=[];
+  for(let i=0;i<NET.pipes.length;i++){ const p=NET.pipes[i]; if(p[4]!==ui) continue;
+    const cx=(p[0]+p[2])/2, cy=(p[1]+p[3])/2;
+    if(Math.abs(cx-mx)>BB||Math.abs(cy-my)>BB) continue; cand.push(i); }
+  if(!cand.length) return null;
+  let seed=-1,bd=1e12;
+  cand.forEach(function(i){ const p=NET.pipes[i], cx=(p[0]+p[2])/2, cy=(p[1]+p[3])/2;
+    const d=(cx-mx)*(cx-mx)+(cy-my)*(cy-my); if(d<bd){bd=d;seed=i;} });
+  if(bd>400*400) return null;
+  const key=function(x,y){ return ((x+0.5)|0)+':'+((y+0.5)|0); };
+  const nodeMap={};
+  cand.forEach(function(i){ const p=NET.pipes[i];
+    [key(p[0],p[1]),key(p[2],p[3])].forEach(function(k){ (nodeMap[k]=nodeMap[k]||[]).push(i); }); });
+  const seen={}; seen[seed]=1; const queue=[seed]; let qi=0, total=0; const out=[];
+  while(qi<queue.length){
+    const i=queue[qi++]; out.push(i);
+    const p=NET.pipes[i]; total+=Math.hypot(p[2]-p[0],p[3]-p[1]);
+    if(total>limitM) break;
+    [key(p[0],p[1]),key(p[2],p[3])].forEach(function(k){
+      (nodeMap[k]||[]).forEach(function(j){ if(!seen[j]){ seen[j]=1; queue.push(j); } }); });
+  }
+  return {idx:out, km:total/1000};
+}
+function getRun(id,mx,my,util){ const k=id+'|'+util;
+  if(RUNS[k]&&RUNS[k].mx===mx&&RUNS[k].my===my) return RUNS[k].r;
+  const r=traceRun(mx,my,util,2600); RUNS[k]={mx:mx,my:my,r:r}; return r; }
+function clearRun(){ runLayer.clearLayers(); window.__run=null; }
+function drawSuspectRun(a){
+  clearRun();
+  const UMAP={burst:'water',pressure:'water',quality:'water',power:'power',fire:'water'};
+  const util=UMAP[a.type]; if(!util) return;
+  const m=ll2m(a.lat,a.lon);
+  const r=getRun(a.id,m[0],m[1],util); if(!r||!r.idx.length) return;
+  const cv2=L.canvas({padding:.5});
+  let overlap=null, others=0;
+  ALERTS.forEach(function(b){ if(b.id===a.id||UMAP[b.type]!==util) return;
+    const mb=ll2m(b.lat,b.lon), rb=getRun(b.id,mb[0],mb[1],util); if(!rb) return;
+    const set={}; rb.idx.forEach(function(i){ set[i]=1; });
+    const inter=r.idx.filter(function(i){ return set[i]; });
+    if(inter.length){ others++;
+      overlap = overlap ? overlap.filter(function(i){ return inter.indexOf(i)>=0; }) : inter; } });
+  r.idx.forEach(function(i){ const p=NET.pipes[i];
+    L.polyline([m2ll(p[0],p[1]),m2ll(p[2],p[3])],
+      {color:'#ff9f43',weight:3.2,opacity:.9,dashArray:'7 6',renderer:cv2}).addTo(runLayer); });
+  let okm=0;
+  if(overlap&&overlap.length){ overlap.forEach(function(i){ const p=NET.pipes[i];
+      okm+=Math.hypot(p[2]-p[0],p[3]-p[1])/1000;
+      L.polyline([m2ll(p[0],p[1]),m2ll(p[2],p[3])],
+        {color:'#ffe066',weight:6,opacity:.95,renderer:cv2}).addTo(runLayer); }); }
+  window.__run={km:r.km, okm:okm, others:others};
+}
+function respond(a, quiet){
+  respondingTo=a; a.isNew=false;
+  drawSuspectRun(a);
+  const sk=TYPE2SCEN[a.type]||'burst';
+  scen=SCEN.filter(function(s){return s.k===sk;})[0];
+  radius=a.radius||scen.r;
+  document.querySelectorAll('.chip').forEach(function(x){ x.classList.toggle('on', x.dataset.k===scen.k); });
+  if(!quiet) logIt('analysed', 'Impact analysis run for '+a.msg, a.id);
+  setIncident(a.lat,a.lon);
+  renderAlerts();
+}
+document.getElementById('bell').onclick=function(){
+  document.getElementById('alerts').classList.toggle('on'); resizeMap(); };
+loadAlerts();
+setInterval(function(){ loadAlerts(); if(tab==='sens'&&inc) renderAll(inc[0],inc[1]); }, POLL_SEC*1000);
+</script>
+</body></html>
