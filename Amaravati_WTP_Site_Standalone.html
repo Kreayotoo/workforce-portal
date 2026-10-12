@@ -508,7 +508,7 @@ body.mx-mode canvas { width:100%!important;height:100%!important; }
     <div class="rail">
       <div class="panel proc">
         <div class="panel-h" style="margin:-14px -16px 8px;padding:13px 16px">
-          <div class="pt"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg>WTP-44N Process Control</div>
+          <div class="pt"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/></svg><span class="plant-name">WTP-44N</span> Process Control</div>
           <div class="pmeta st-run">● RUNNING</div>
         </div>
         <div id="procList"></div>
@@ -516,7 +516,7 @@ body.mx-mode canvas { width:100%!important;height:100%!important; }
 
       <div class="panel">
         <div class="panel-h" style="margin:-14px -16px 8px;padding:13px 16px">
-          <div class="pt"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3h6M10 3v5.5L5.2 17a2 2 0 0 0 1.8 3h10a2 2 0 0 0 1.8-3L14 8.5V3"/><path d="M7.5 14h9"/></svg>Chemical Dosing — WTP-44N</div>
+          <div class="pt"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 3h6M10 3v5.5L5.2 17a2 2 0 0 0 1.8 3h10a2 2 0 0 0 1.8-3L14 8.5V3"/><path d="M7.5 14h9"/></svg>Chemical Dosing — <span class="plant-name">WTP-44N</span></div>
           <div class="pmeta st-run">● DOSING</div>
         </div>
         <div id="doseList"></div>
@@ -545,7 +545,7 @@ body.mx-mode canvas { width:100%!important;height:100%!important; }
 
   <!-- WATER QUALITY -->
   <div class="sec-head">
-    <span class="eyebrow">Water Quality — WTP-44N outlet</span>
+    <span class="eyebrow">Water Quality — <span class="plant-name">WTP-44N</span> outlet</span>
     <span class="line"></span>
     <span class="meta">plant-level \u00b7 identical in every view \u00b7 CPHEEO / IS 10500 limits \u00b7 <b style="color:#f5c542">SIMULATED</b></span>
   </div>
@@ -682,6 +682,11 @@ const ST = {
   tds:312, cond:624, hardness:178, alk:142,
   prodCap:36, prodNow:24.6, rawTurb:46, alum:38, alumDose:37.2,
 };
+/* ---- which treatment plant the process panels describe: the real 190 MLD WTP when it is in the view, else the block's demo plant ---- */
+const PLANT=(function(){ const real=(typeof WTPS!=='undefined')&&WTPS&&NET.meta&&NET.meta.wtp;
+  return real? {name:'190 MLD WTP',cap:190,tag:'REAL plant \u00b7 SIMULATED process'} : {name:'WTP-44N',cap:36,tag:'DEMO plant \u00b7 SIMULATED'}; })();
+ST.prodCap=PLANT.cap; ST.prodNow=PLANT.cap*0.68;
+document.querySelectorAll('.plant-name').forEach(e=>e.textContent=PLANT.name);
 /* ---- SCOPE: what the live panels refer to. Baselines scale with the open view. ---- */
 const SCOPE=(function(){
   const v=(NET.meta&&NET.meta.view)||(NET.meta&&NET.meta.wtpFocus?'WTP':'BLOCK');
@@ -1967,9 +1972,51 @@ const ASSETS=[
   {id:'SUB-44N',  type:'Power Substation',      ex:0.86, ez:0.86, kind:'box',  color:0xFF3B3B, h:40,
     data:{'Rating':'630 kVA','Load':()=>ST.powerLoad.toFixed(0)+' kW','PF':'0.96','Status':'Energised'}},
 ];
-function assetAnchor(fx,fz){
-  // desired point inside the plan bounds, then snap to the nearest real pipe vertex
-  // so the facility always sits on the network (never outside the master plan).
+function activeAssets(){
+  // the real 190 MLD plant is in the trunk / city / WTP views -> no dummy treatment plant there
+  return ASSETS.filter(a=>!(a.id==='WTP-44N' && wtpActive()));
+}
+let _assetAnch=null;
+function assetKeepOut(){
+  // keep-out discs in network coords [x, n, radius] : WTP site pad, every BIM model
+  // (intake wells + headworks, WTP site, admin building) and the raw-water main.
+  const K=[];
+  if(wtpActive() && WTPS.bounds){
+    const cE=NET.meta.center_E, cN=NET.meta.center_N, B=WTPS.bounds;
+    K.push([WTPS.E0-cE+(B[0]+B[1])/2, WTPS.N0-cN+(B[2]+B[3])/2, Math.hypot(B[1]-B[0],B[3]-B[2])/2+260]);
+  }
+  bimList().forEach(B=>{ const an=bimAnchor(B); const f=(B.foot&&Math.max(B.foot[0],B.foot[1]))||60; K.push([an[0], -an[1], f+320]); });
+  return K;
+}
+function assetAnchors(){
+  if(_assetAnch) return _assetAnch;
+  const out={}, K=assetKeepOut(), placed=[];
+  const RAW=(NET.raw_main&&NET.raw_main.segs)? new Set(NET.raw_main.segs) : null;
+  const diag=Math.hypot(EXX[1]-EXX[0],EZZ[1]-EZZ[0]), sep=Math.min(320, diag*0.08);
+  activeAssets().forEach(a=>{
+    const px=EXX[0]+a.ex*(EXX[1]-EXX[0]), pz=EZZ[0]+a.ez*(EZZ[1]-EZZ[0]);
+    let bx=px,bz=pz,bd=Infinity, fx=px,fz=pz,fd=Infinity;
+    ORDER.forEach(k=>{ const A=NET.networks[k]||[]; if(!A.length) return;
+      const st=Math.max(1,Math.floor(A.length/1200));
+      for(let i=0;i<A.length;i+=st){ const sg=A[i];
+        const dx=sg[0]-px, dz=sg[1]-pz, d2=dx*dx+dz*dz;
+        if(d2<fd){ fd=d2; fx=sg[0]; fz=sg[1]; }               // unconstrained fallback
+        if(d2>=bd) continue;
+        if(k==='water' && RAW && RAW.has(i)) continue;          // never on the intake -> WTP raw-water main
+        let bad=false;
+        for(const q of K){ if(Math.hypot(sg[0]-q[0],sg[1]-q[1])<q[2]){ bad=true; break; } }
+        if(!bad) for(const p of placed){ if(Math.hypot(sg[0]-p[0],sg[1]-p[1])<sep){ bad=true; break; } }
+        if(bad) continue;
+        bd=d2; bx=sg[0]; bz=sg[1]; } });
+    if(bd===Infinity){ bx=fx; bz=fz; }
+    placed.push([bx,bz]); out[a.id]=[bx,bz];
+  });
+  _assetAnch=out; return out;
+}
+function assetAnchor(fx,fz,id){
+  // desired point inside the plan bounds, snapped to the nearest real pipe vertex outside the
+  // keep-out zones (real plant, intake wells, BIM models, raw-water main) and clear of the other facilities.
+  if(id){ const A=assetAnchors(); if(A[id]) return A[id]; }
   const px=EXX[0]+fx*(EXX[1]-EXX[0]), pz=EZZ[0]+fz*(EZZ[1]-EZZ[0]);
   let bx=px,bz=pz,bd=Infinity;
   ORDER.forEach(k=>{ const A=NET.networks[k]||[]; if(!A.length) return;
@@ -1981,8 +2028,8 @@ function assetAnchor(fx,fz){
 }
 function buildAssets(){
   if(NET.meta&&NET.meta.wtpFocus) return;        // WTP site view: the real plant is here, no dummy facilities
-  ASSETS.forEach(a=>{
-    const an=assetAnchor(a.ex,a.ez), x=an[0], z=an[1];
+  activeAssets().forEach(a=>{
+    const an=assetAnchor(a.ex,a.ez,a.id), x=an[0], z=an[1];
     let geo;
     if(a.kind==='tank') geo=new THREE.CylinderGeometry(13,15,a.h*0.5,16);
     else if(a.kind==='cyl') geo=new THREE.CylinderGeometry(11,11,a.h*0.5,14);
@@ -2004,8 +2051,8 @@ function buildAssets(){
   });
 }
 function repositionAssets(){
-  ASSETS.forEach((a,i)=>{
-    const m=assetMeshes[i]; if(!m) return; const yb=explode?120:(MAXZ-BASEZ)*exag+14;
+  assetMeshes.forEach(m=>{
+    const a=m.userData; const yb=explode?120:(MAXZ-BASEZ)*exag+14;
     m.position.y=yb+a.h*0.25;
     m.userData.stem.scale.y=1; m.userData.stem.geometry.dispose();
     m.userData.stem.geometry=new THREE.CylinderGeometry(.6,.6,yb,6);
@@ -2461,9 +2508,9 @@ function initMap(){
   });
   const ag=L.layerGroup();
   // dummy facilities: same anchor as the 3D scene — snapped to a real pipe vertex, never outside the plan
-  (MP.assets?ASSETS:[]).forEach(a=>{
+  (MP.assets?activeAssets():[]).forEach(a=>{
     const col='#'+a.color.toString(16).padStart(6,'0');
-    const an=assetAnchor(a.ex,a.ez);
+    const an=assetAnchor(a.ex,a.ez,a.id);
     L.marker(convLL(an[0],an[1]),{icon:L.divIcon({className:'',iconSize:[16,16],iconAnchor:[8,8],
       html:`<div style="background:${col};width:14px;height:14px;border-radius:3px;border:1.5px solid #fff;box-shadow:0 0 0 3px rgba(4,12,22,.5),0 0 10px ${col}"></div>`})})
       .bindPopup(`<b>${a.id}</b><br>${a.type}<br><span style="color:#f5c542;font-size:10px">SIMULATED position \u00b7 snapped to network</span>`).addTo(ag);
@@ -2599,8 +2646,8 @@ function buildInventory(){
 function buildProc(){
   const el=document.getElementById('procList');
   const rows=[
-    ['Plant Capacity','36.0 MLD','st-run',null],
-    ['Current Output', ()=>ST.prodNow.toFixed(1)+' MLD','', ()=>ST.prodNow/36*100],
+    ['Plant Capacity',PLANT.cap.toFixed(1)+' MLD','st-run',null],
+    ['Current Output', ()=>ST.prodNow.toFixed(1)+' MLD','', ()=>ST.prodNow/PLANT.cap*100],
     ['Raw Water Turbidity', ()=>ST.rawTurb.toFixed(0)+' NTU','',null],
     ['Alum Dose (rec)','38 mg/L','',null],
     ['Alum Dose (actual)', ()=>ST.alumDose.toFixed(1)+' mg/L','',null],
@@ -2785,7 +2832,7 @@ function tick(){
   ST.ph=rw(ST.ph,6.9,7.5,0.05);
   ST.cl2=rw(ST.cl2,0.6,1.1,0.05);
   ST.temp=rw(ST.temp,26,31,0.2);
-  ST.prodNow=rw(ST.prodNow,20,34,0.6);
+  ST.prodNow=rw(ST.prodNow,PLANT.cap*0.55,PLANT.cap*0.95,PLANT.cap/60);
   ST.rawTurb=rw(ST.rawTurb,30,72,2.5);
   ST.alumDose=rw(ST.alumDose,34,42,0.4);
   const sv=Math.random(); ST.stormState= sv<0.6?'DRY':sv<0.85?'LIGHT':'MODERATE';
