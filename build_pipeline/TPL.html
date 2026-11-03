@@ -394,19 +394,19 @@ body.mx-mode [class*="viewer"]
 body.mx-mode canvas { width:100%!important;height:100%!important; }
 
 /* ═══ incident pop-up in the 3D scene ═══ */
-.inc-pop{position:absolute;z-index:40;width:300px;background:linear-gradient(135deg,rgba(12,28,46,.97),rgba(7,18,32,.97));border:1px solid #1d3a57;border-radius:13px;padding:11px 12px 10px 14px;box-shadow:0 18px 44px rgba(0,0,0,.6);pointer-events:auto;font-family:'Inter',system-ui,sans-serif;animation:incIn .35s cubic-bezier(.2,.9,.3,1.2);overflow:hidden}
+.inc-pop{position:absolute;z-index:40;width:236px;background:linear-gradient(135deg,rgba(12,28,46,.97),rgba(7,18,32,.97));border:1px solid #1d3a57;border-radius:10px;padding:8px 9px 7px 11px;box-shadow:0 12px 30px rgba(0,0,0,.55);pointer-events:auto;font-family:'Inter',system-ui,sans-serif;animation:incIn .35s cubic-bezier(.2,.9,.3,1.2);overflow:hidden}
 .inc-pop::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--sev)}
 .inc-pop.sev-critical{--sev:#ff5d5d}.inc-pop.sev-high{--sev:#f5c542}.inc-pop.sev-medium{--sev:#19C6F0}
 .inc-pop .tail{position:absolute;left:50%;bottom:-9px;width:16px;height:16px;background:#0a1a2e;border-right:1px solid #1d3a57;border-bottom:1px solid #1d3a57;transform:translateX(-50%) rotate(45deg)}
 .inc-pop.docked .tail{display:none}
 .inc-pop.below .tail{bottom:auto;top:-9px;border:0;border-left:1px solid #1d3a57;border-top:1px solid #1d3a57}
-.inc-pop .k{font:600 9.5px var(--mono,monospace);letter-spacing:.14em;color:#9bb1c6;display:flex;align-items:center;gap:7px}
+.inc-pop .k{font:600 8.5px var(--mono,monospace);letter-spacing:.08em;color:#9bb1c6;display:flex;align-items:center;gap:7px}
 .inc-pop .k .sev{margin-left:auto;background:var(--sev);color:#06121f;padding:2px 7px;border-radius:5px;font-weight:800}
-.inc-pop .t{font:700 12.5px/1.25 system-ui,sans-serif;color:#fff;margin-top:4px}
-.inc-pop .m{font:500 10.5px/1.4 system-ui,sans-serif;color:#9bb1c6;margin-top:4px}
+.inc-pop .t{font:700 11px/1.25 system-ui,sans-serif;color:#fff;margin-top:3px}
+.inc-pop .m{font:500 9.5px/1.35 system-ui,sans-serif;color:#9bb1c6;margin-top:3px}
 .inc-pop .m b{color:#dbe7f5}
 .inc-pop .a{display:flex;gap:6px;margin-top:8px}
-.inc-pop .a button{background:#0e1c2e;border:1px solid #1d3a57;color:#dbe7f5;border-radius:7px;padding:4px 9px;font:600 10.5px system-ui,sans-serif;cursor:pointer}
+.inc-pop .a button{background:#0e1c2e;border:1px solid #1d3a57;color:#dbe7f5;border-radius:6px;padding:3px 7px;font:600 9.5px system-ui,sans-serif;cursor:pointer}
 .inc-pop .a button.pri{background:linear-gradient(135deg,#1b4d6b,#13364e);border-color:#2d6a8a;color:#bfe9ff}
 .inc-pop .a button.x{margin-left:auto;color:#9bb1c6}
 .inc-pop .bar{position:absolute;left:4px;right:0;bottom:0;height:2px;background:rgba(255,255,255,.06)}
@@ -1246,43 +1246,47 @@ const INC_SCEN={burst:'Pipe Burst',pressure:'Leak / Pressure',quality:'Contamina
 function incScene(a){ const u=ll2utm(a.lat,a.lon); return [u[0]-NET.meta.center_E, -(u[1]-NET.meta.center_N)]; }
 function incInside(p){ const m=120; return p[0]>EXX[0]-m&&p[0]<EXX[1]+m&&(-p[1])>EZZ[0]-m&&(-p[1])<EZZ[1]+m; }
 function incSpan(){ return Math.max(EXX[1]-EXX[0],EZZ[1]-EZZ[0]); }
+function incSnap(p, maxD){
+  // nearest network vertex (sampled) within maxD metres, in scene coords [x, z]
+  let best=null, bd=maxD*maxD;
+  ORDER.forEach(k=>{ const A=NET.networks[k]||[]; if(!A.length) return; const st=Math.max(1,Math.floor(A.length/2500));
+    for(let i=0;i<A.length;i+=st){ const sg=A[i]; const dx=sg[0]-p[0], dz=-sg[1]-p[1], d2=dx*dx+dz*dz; if(d2<bd){ bd=d2; best=[sg[0],-sg[1]]; } } });
+  return best;
+}
 function incBeacon(a,p){
+  // simple blinking marker at the incident position: a small sphere + thin ring + short stem, severity colour
   const col=INC_COL[a.severity]||0x19C6F0, span=incSpan();
-  const h=Math.max(90, Math.min(700, span*0.07)), rr=Math.max(26, Math.min(300, span*0.02));
+  const rr=Math.max(5, Math.min(70, span*0.006)), h=Math.max(22, Math.min(220, span*0.025));
   const g=new THREE.Group(); g.position.set(p[0],0,p[1]); g.userData.a=a; g.userData.t0=performance.now();
-  const beam=new THREE.Mesh(new THREE.CylinderGeometry(rr*0.16,rr*0.34,h,14,1,true),
-    new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.6,depthWrite:false,side:THREE.DoubleSide}));
-  beam.position.y=h/2; g.add(beam);
-  const glow=new THREE.Mesh(new THREE.CylinderGeometry(rr*0.6,rr*1.1,h*0.4,20,1,true),
-    new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.14,depthWrite:false,side:THREE.DoubleSide}));
-  glow.position.y=h*0.2; g.add(glow);
-  const disc=new THREE.Mesh(new THREE.CircleGeometry(rr,40),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.22,depthWrite:false,side:THREE.DoubleSide}));
-  disc.rotation.x=-Math.PI/2; disc.position.y=0.5; g.add(disc);
-  const rings=[];
-  for(let i=0;i<3;i++){ const r=new THREE.Mesh(new THREE.RingGeometry(rr*0.86,rr,56),
-      new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.8,depthWrite:false,side:THREE.DoubleSide}));
-    r.rotation.x=-Math.PI/2; r.position.y=0.6+i*0.05; r.userData.ph=i/3; g.add(r); rings.push(r); }
-  const core=new THREE.Mesh(new THREE.SphereGeometry(rr*0.26,18,18),new THREE.MeshBasicMaterial({color:col}));
+  const stem=new THREE.Mesh(new THREE.CylinderGeometry(rr*0.07,rr*0.07,h,6),
+    new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.55,depthWrite:false}));
+  stem.position.y=h/2; g.add(stem);
+  const core=new THREE.Mesh(new THREE.SphereGeometry(rr*0.55,16,16),new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:1,depthWrite:false}));
   core.position.y=h; g.add(core);
-  const lbl=mkLabel((INC_ICON[a.type]?'':'')+a.id+' · '+a.severity.toUpperCase(),'#'+col.toString(16).padStart(6,'0'),true);
-  lbl.position.y=h+rr*0.6+14; lbl.scale.multiplyScalar(Math.max(0.8, Math.min(6, span/1400))); g.add(lbl);
-  g.userData.rings=rings; g.userData.beam=beam; g.userData.core=core; g.userData.h=h; g.userData.rr=rr;
+  const ring=new THREE.Mesh(new THREE.RingGeometry(rr*0.8,rr,40),
+    new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:.8,depthWrite:false,side:THREE.DoubleSide}));
+  ring.rotation.x=-Math.PI/2; ring.position.y=0.6; g.add(ring);
+  const lbl=mkLabel(a.id+' · '+a.severity.toUpperCase(),'#'+col.toString(16).padStart(6,'0'),true);
+  lbl.position.y=h+rr*1.4+8; lbl.scale.multiplyScalar(Math.max(0.45, Math.min(3, span/2600))); g.add(lbl);
+  g.userData.ring=ring; g.userData.core=core; g.userData.stem=stem; g.userData.h=h; g.userData.rr=rr;
   g.traverse(o=>{ if(o.isMesh||o.isSprite) o.renderOrder=6; });   // after the satellite tiles (which do not write depth)
   scene.add(g); return g;
 }
 function incTickStart(){ if(INC.tickOn) return; INC.tickOn=true; PLANT_TICK.push(incTick); }
 function incTick(dt){
   const now=performance.now();
-  INC.list.forEach(g=>{ const s=((now-g.userData.t0)/1400)%1; const cur=INC.cur===g;
-    g.userData.rings.forEach(r=>{ const f=(s+r.userData.ph)%1; r.scale.setScalar(0.3+f*2.8); r.material.opacity=(1-f)*(cur?.95:.5); });
-    g.userData.core.scale.setScalar(1+Math.sin(now*0.006)*0.25);
-    g.userData.beam.material.opacity=cur?0.45+Math.sin(now*0.005)*0.2:0.28; });
+  INC.list.forEach(g=>{ const cur=INC.cur===g; const on=Math.sin(now*(cur?0.009:0.006))>0;   // blink
+    g.userData.core.material.opacity=on?1:0.18; g.userData.core.scale.setScalar(on?1.15:0.9);
+    g.userData.ring.material.opacity=on?(cur?.9:.6):0.15; g.userData.stem.material.opacity=on?.6:.25; });
   incPlacePop();
 }
 function showIncident(a, focus, quiet){
   if(!a||a.lat==null) return; incTickStart();
   if(INC.list.some(g=>g.userData.a.id===a.id)){ if(focus) incLocate(a); if(!quiet) incPop(a); return; }
-  const p=incScene(a); a._p=p; a._inside=incInside(p);
+  let p=incScene(a); a._inside=incInside(p);
+  if(!a._inside){ const q=incSnap(p, 600); if(q){ p=q; a._inside=true; } }   // just outside the drawn extent: pull it onto the nearest pipe
+  else { const q=incSnap(p, 90); if(q) p=q; }                                  // otherwise sit it on the nearest pipe vertex nearby
+  a._p=p;
   if(a._inside){ const g=incBeacon(a,p); INC.list.push(g); INC.cur=g;
     while(INC.list.length>INC.max){ const old=INC.list.shift(); scene.remove(old); old.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material) o.material.dispose(); }); } }
   if(!quiet) incPop(a);
@@ -1290,7 +1294,7 @@ function showIncident(a, focus, quiet){
 }
 function incLocate(a){
   const p=a._p||incScene(a); if(!incInside(p)) return;
-  const g0=INC.list.find(x=>x.userData.a.id===a.id); const hh=g0?g0.userData.h*0.35:20;
+  const g0=INC.list.find(x=>x.userData.a.id===a.id); const hh=g0?g0.userData.h*0.4:10;
   target.set(p[0], hh, p[1]); camAngle.r=Math.max(ZMIN, Math.min(camAngle.r, Math.max(320, incSpan()*0.26))); updateCamFromAngles();
   const g=INC.list.find(x=>x.userData.a.id===a.id); if(g) INC.cur=g;
 }
@@ -1319,13 +1323,13 @@ function incPlacePop(){
   const el=document.getElementById('incPop'); if(!el||el.hidden||!INC.popA) return;
   const a=INC.popA, st=document.getElementById('stage');
   if(!a._inside||!camera||!canvas){ el.style.left='auto'; el.style.right='14px'; el.style.top='14px'; el.style.transform='none'; return; }
-  const g=INC.list.find(x=>x.userData.a.id===a.id); const h=g?g.userData.h+g.userData.rr*0.6+30:40;
+  const g=INC.list.find(x=>x.userData.a.id===a.id); const h=g?g.userData.h+g.userData.rr*1.4+16:30;
   _incV.set(a._p[0],h,a._p[1]).project(camera);
   const W=canvas.clientWidth, H=canvas.clientHeight;
   let x=(_incV.x*0.5+0.5)*W, y=(-_incV.y*0.5+0.5)*H;
   const behind=_incV.z>1; if(behind){ x=W-160; y=40; }
-  x=Math.max(160, Math.min(W-160, x));
-  const hgt=el.offsetHeight||150;
+  x=Math.max(128, Math.min(W-128, x));
+  const hgt=el.offsetHeight||120;
   el.style.left=x+'px'; el.style.right='auto';
   if(y-hgt-14<6){ el.classList.add('below'); el.style.top=Math.max(8,Math.min(H-hgt-8,y+14))+'px'; el.style.transform='translate(-50%,0)'; }   // anchor near / above the top edge: card hangs below it
   else { el.classList.remove('below'); el.style.top=Math.min(H-8,y)+'px'; el.style.transform='translate(-50%,calc(-100% - 12px))'; }
