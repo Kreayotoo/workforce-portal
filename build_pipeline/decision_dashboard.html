@@ -950,7 +950,7 @@ function applyFeed(out){
     renderAll(inc[0], inc[1]);
   }
   // 2) new alerts → notify; auto-follow the worst new CRITICAL one
-  fresh.forEach(function(a){ toast(a); });
+  fresh.forEach(function(a){ toast(a); if(!a.demo){ try{ parent.postMessage({t:'dssAlert', a:JSON.parse(JSON.stringify(a))}, '*'); }catch(e){} } });
   const crit=fresh.filter(function(a){ return a.severity==='critical'; });
   if(autoFollow && crit.length && (!respondingTo || respondingTo.resolved || respondingTo.severity!=='critical')){
     logIt('auto-analysed', 'Auto-follow picked up a new CRITICAL alert', crit[0].id);
@@ -1093,18 +1093,23 @@ function demoIncident(){
   const b=BLOCKS[Math.floor(Math.random()*BLOCKS.length)];
   const r=Math.random(), sev=r<T.sev[0]?'critical':(r<T.sev[0]+T.sev[1]?'high':'medium');
   demoN++;
-  const a={id:'DEMO-'+String(demoN).padStart(3,'0'), type:t, live:false, severity:sev, demo:true,
+  const a={id:'DEMO-'+String(demoN).padStart(3,'0'), type:t, live:false, severity:sev, demo:true, b:b,
     lat:b.lat+(Math.random()-.5)*.004, lon:b.lon+(Math.random()-.5)*.004, radius:T.radius,
     ts:new Date().toISOString(), source:'Demo incident player — SIMULATED (not a real event)',
     msg:T.msg[Math.floor(Math.random()*T.msg.length)]+' (Zone '+b.zone+' · '+b.block+')', value:T.val(), unit:T.unit};
+  demoRaise(a, true, true);
+}
+function demoRaise(a, analyse, announce){
+  if(DEMO_ALERTS.some(function(x){ return x.id===a.id; })){ if(analyse) respond(a, true); return; }
+  if(!a.b){ a.b=nearestBlock(a.lat,a.lon); }
   DEMO_ALERTS.unshift(a); while(DEMO_ALERTS.length>DEMO_KEEP) DEMO_ALERTS.pop();
   // register it in the live list now (the next poll keeps it until it ages out → "resolved")
   prevIds[a.id]=a; a.isNew=true;
   ALERTS=[a].concat(ALERTS.filter(function(x){ return x.id!==a.id; }));
-  logIt('received', a.msg+' [demo player]', a.id);
-  toast(a); demoPopup(a, b);
-  logIt('auto-analysed', 'Demo player ran the impact analysis', a.id);
-  respond(a, true);
+  logIt('received', a.msg+(a.demo?' [demo incident]':''), a.id);
+  if(announce){ toast(a); demoPopup(a, a.b); }
+  if(analyse){ logIt('auto-analysed', 'Incident analysed automatically', a.id); respond(a, true); }
+  else renderAlerts();
 }
 function demoPopup(a, b){
   const p=document.getElementById('demoPop'); if(demoPopT) clearTimeout(demoPopT);
@@ -1114,12 +1119,12 @@ function demoPopup(a, b){
     '<div class="dk">INCIDENT '+a.id+' · '+new Date(a.ts).toLocaleTimeString()+' · ◐ SIMULATED</div>'+
     '<div class="dt">'+a.msg+'</div></div>'+
     '<span class="dsev" style="background:'+SEVCOL[a.severity]+'">'+a.severity.toUpperCase()+'</span></div>'+
-    '<div class="dm">'+(sc?sc.n:'Incident')+' scenario · '+a.value+' '+a.unit+' · Zone '+b.zone+' · Block '+b.block+
-    ' — impact analysis, affected plots, isolation points and recommended actions are on the right. Next incident in '+DEMO_SEC+' s.</div>'+
-    '<div class="dbar"><i style="animation-duration:'+(DEMO_SEC-1.5)+'s"></i></div>';
+    '<div class="dm">'+(sc?sc.n:'Incident')+' scenario · '+a.value+' '+a.unit+' · Zone '+(a.zone||b.zone)+' · Block '+(a.block||b.block)+
+    ' — impact analysis, affected plots, isolation points and recommended actions are on the right.'+(EMBEDDED?'':' Next incident in '+DEMO_SEC+' s.')+'</div>'+
+    '<div class="dbar"><i style="animation-duration:'+(EMBEDDED?9:DEMO_SEC-1.5)+'s"></i></div>';
   p.hidden=false;
   document.getElementById('dpx').onclick=function(){ p.hidden=true; };
-  demoPopT=setTimeout(function(){ p.hidden=true; }, (DEMO_SEC-1.2)*1000);
+  demoPopT=setTimeout(function(){ p.hidden=true; }, (EMBEDDED?9.3:DEMO_SEC-1.2)*1000);
 }
 function demoTick(){
   const left=Math.max(0,Math.ceil((demoNext-Date.now())/1000));
@@ -1146,7 +1151,23 @@ document.addEventListener('visibilitychange',function(){ if(document.hidden&&dem
 
 loadAlerts();
 setInterval(function(){ loadAlerts(); if(tab==='sens'&&inc) renderAll(inc[0],inc[1]); }, POLL_SEC*1000);
-// demo player is on by default for this demonstration build; the choice is remembered per browser
-(function(){ let v='1'; try{ v=localStorage.getItem('dss_demo')||'1'; }catch(e){} if(v!=='0') setTimeout(demoStart, 1200); })();
+// Inside the main application the INCIDENT HUB of the app raises the incidents (one every 10 s, shown on
+// every screen); this view receives them and analyses each one. Opened on its own, it runs its own player.
+const EMBEDDED=(function(){ try{ return window.parent && window.parent!==window; }catch(e){ return false; } })();
+if(EMBEDDED){
+  const mb=document.getElementById('mDemo'); if(mb){ mb.textContent='● Incident feed · from main app'; mb.classList.add('on'); mb.disabled=true; mb.style.opacity='.75'; mb.title='Incidents are raised by the application-wide incident feed (top right) and analysed here automatically'; }
+  window.addEventListener('message', function(e){ const d=e.data; if(!d||!d.t) return;
+    try{
+      if(d.t==='incident' && d.a){ demoRaise(d.a, true, !d.quiet); }
+      else if(d.t==='incidentList' && d.list){
+        d.list.slice().reverse().forEach(function(a){ demoRaise(a, false, false); });
+        const f=d.focus? d.list.filter(function(a){ return a.id===d.focus; })[0] : d.list[0];
+        if(f){ demoRaise(f, true, true); }
+      }
+    }catch(err){ console.warn('incident message', err); }
+  });
+} else {
+  (function(){ let v='1'; try{ v=localStorage.getItem('dss_demo')||'1'; }catch(e){} if(v!=='0') setTimeout(demoStart, 1200); })();
+}
 </script>
 </body></html>
