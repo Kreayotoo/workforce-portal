@@ -252,10 +252,11 @@ tr:last-child td{border-bottom:0}td b{color:var(--ink)}
 
 <section id="s7"><h2><span class="n">07</span>Layers, sliders &amp; panels</h2>
 <h3>Layer chips (top of the network panel)</h3>
-<p>One chip per utility with its live pipe count. Click to hide or show. Two further chips: <b>Structures</b> (manholes, chambers, sumps — off by default in zone and city views to keep them fast) and <b>Road surface</b> (the formation road level plane).</p>
+<p>One chip per utility with its live pipe count. Click to hide or show. Two further chips: <b>Structures</b> (manholes, chambers, sumps — off by default in zone and city views to keep them fast) <b>Road surface</b> (the formation road level plane) and <b>Satellite</b> <span class="tag real">REAL</span> — Esri World Imagery streamed live and laid as the floor of the scene, re-projected tile by tile into UTM 44N so the pipes sit on it at survey position. A base set covers the whole view; sharper tiles load around the point you zoom into and are released again as you move. It needs an internet connection; the capture date of public imagery varies by area, so treat it as context, not as a survey of today.</p>
 <h3>Sliders</h3>
 <div class="kv">
 <b>Exaggeration</b><span>Vertical stretch applied to invert levels. Opens at <b>1×</b> (true). Increase it to see gradients on flat ground. Structures, the WTP and the building stretch with it so the scene stays consistent.</span>
+<b>Satellite opacity</b><span>Opens at <b>85 %</b>. Lower it to dim the imagery under the network; at 0 % the dark floor returns.</span>
 <b>Road opacity</b><span>Opens at <b>0 %</b>. Raise it to see the road surface over the pipes.</span></div>
 <h3>Right-column panels</h3>
 <div class="kv">

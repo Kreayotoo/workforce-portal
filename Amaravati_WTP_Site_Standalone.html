@@ -492,11 +492,17 @@ body.mx-mode canvas { width:100%!important;height:100%!important; }
               <span class="val" id="scVal" style="color:#78ccc0">REAL</span>
             </div>
             <div class="vexag">
+              <label>Sat α</label>
+              <input type="range" id="satSlider" min="0" max="100" step="5" value="85">
+              <span class="val" id="satVal" style="color:#8fd3a8">85%</span>
+            </div>
+            <div class="vexag">
               <label>Road α</label>
               <input type="range" id="roadSlider" min="0" max="100" step="5" value="0">
               <span class="val" id="roadVal">0%</span>
             </div>
-            <div class="twin-hint">Road surface (FRL) sits above the pipes — drag <b>Road α</b> to peel it back (x-ray) · click any manhole/chamber to inspect</div>
+            <div class="twin-hint">Satellite base = Esri World Imagery © Esri, Maxar, Earthstar Geographics &amp; GIS User Community (REAL, capture date varies) under the network · <b>Sat α</b> dims it · Road surface (FRL) sits above the pipes — drag <b>Road α</b> to peel it back (x-ray) · click any manhole/chamber to inspect</div>
+            <div id="satNote" style="display:none;margin-top:6px;font:600 11px var(--mono,monospace);color:#f5c542;background:rgba(245,197,66,.10);border:1px solid rgba(245,197,66,.3);border-radius:6px;padding:5px 9px">▣ satellite tiles not reachable — check the internet connection (imagery is streamed live from Esri)</div>
             <div id="scaleNote" style="display:none;margin-top:6px;font:600 11px var(--mono,monospace);color:var(--mint);background:rgba(120,204,192,.12);border:1px solid rgba(120,204,192,.3);border-radius:6px;padding:5px 9px">▣ 1:1 TRUE SCALE — pipes, chambers &amp; depths shown at real dimensions (sub-metre pipes appear thin)</div>
             <div id="cityNote" style="display:none;margin-top:6px;font:600 11px var(--mono,monospace);color:#bfe3ff;background:rgba(25,198,240,.10);border:1px solid rgba(25,198,240,.28);border-radius:6px;padding:5px 9px">▣ above-ground city</div>
           </div>
@@ -710,6 +716,7 @@ const layerOn = {water:true,sewer:true,strom:true,reuse:true,power:true};
 let flowOn=true, exag=1, explode=false;
 let structOn=!(NET.meta&&NET.meta.combined), frlOn=true, structsBuilt=false;          // manhole/chamber structures + road (FRL) surface (structures off by default in combined overviews)
 let roadAlpha=0.0;                         // road surface opacity (x-ray peel)
+let groundPlane=null, groundGrid=null;
 let trueScale=false, prevExag=3;          // 1:1 true-scale view vs legible (exaggerated) view
 let aboveOn=false, aboveGroup=null, aboveBuildings=[], cityFetched=false;  // above-ground master-plan massing
 let bimGroup=null, bimOn=true;   // real BIM building (glTF) placed in the scene
@@ -1035,7 +1042,7 @@ function initThree(){
   const rim=new THREE.DirectionalLight(0xffffff,0.45); rim.position.set(40,170,-420); scene.add(rim);
   scene.add(new THREE.AmbientLight(0xffffff,0.26));
 
-  buildGround();
+  buildGround(); buildSatellite();
   buildNetworks();
   if(structOn) buildStructures();
   if(NET.hydw && NET.hydw.length){ const hb=document.getElementById('vHyd');
@@ -1061,12 +1068,12 @@ function buildGround(){
   const spanX=Math.max(EXX[1]-EXX[0],EZZ[1]-EZZ[0])*1.18;
   // grid
   const grid=new THREE.GridHelper(Math.ceil(spanX/100)*100, Math.ceil(spanX/100), 0x2a3140, 0x1b2230);
-  grid.position.set(cx,-2,-cz); scene.add(grid);
+  grid.position.set(cx,-2,-cz); scene.add(grid); groundGrid=grid;
   // ground plane
   const pg=new THREE.PlaneGeometry(spanX,spanX);
   const pm=new THREE.MeshBasicMaterial({color:0x10141d,transparent:true,opacity:.7});
   const plane=new THREE.Mesh(pg,pm); plane.rotation.x=-Math.PI/2; plane.position.set(cx,-2.5,-cz);
-  scene.add(plane);
+  plane.renderOrder=0; scene.add(plane); groundPlane=plane;
   // block boundary
   const bx0=EXX[0]-12,bx1=EXX[1]+12,bz0=EZZ[0]-12,bz1=EZZ[1]+12;
   const bpts=[[bx0,bz0],[bx1,bz0],[bx1,bz1],[bx0,bz1],[bx0,bz0]].map(p=>new THREE.Vector3(p[0],-1.5,-p[1]));
@@ -1074,6 +1081,134 @@ function buildGround(){
   const bl=new THREE.Line(bg,new THREE.LineBasicMaterial({color:0x2a3340,transparent:true,opacity:.5}));
   scene.add(bl);
   target.set(cx,4,-cz);
+}
+
+
+/* =================== SATELLITE BASE — Esri World Imagery (REAL · capture date varies) ===================
+   Imagery tiles are fetched live (no key, nothing added to the file), re-projected tile-by-tile from Web
+   Mercator into UTM 44N (EPSG:32644) with a Krüger-series transform (mm-accurate), and laid as the floor of
+   the 3D scene so every pipe, chamber and structure sits on it at survey position. A base set (≤64 tiles)
+   covers the whole view; a detail set (≤36 tiles, up to z19 ≈ 0.3 m/px) follows the camera as you zoom in.
+   Old tiles are released, so the GPU load stays bounded on any machine. ======================================= */
+let satOn=true, satAlpha=0.85, satGroup=null, satDetGroup=null, satBaseZ=0, satCache=new Map(), satDetKeys=new Set(),
+    satLast={x:NaN,z:NaN,r:NaN}, satDirtyT=0, satLoading=0, satFailed=0, satLoaded=0, satLoader=null;
+const SAT_URL=(z,y,x)=>'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/'+z+'/'+y+'/'+x;
+const SAT_CAP_BASE=64, SAT_CAP_DET=36, SAT_MAXZ=19, SAT_MINZ=10, SAT_Y=-2.35, SAT_CACHE_MAX=220;
+// WGS84 <-> UTM zone 44N (EPSG:32644) — Krüger series, 3 terms (error < 1 mm inside the zone)
+const UTM=(function(){ const a=6378137, f=1/298.257223563, n=f/(2-f), n2=n*n, n3=n2*n;
+  return {a:a, n:n, k0:0.9996, lon0:81, E0:500000, N0:0, A:a/(1+n)*(1+n2/4+n2*n2/64),
+    al:[n/2-2*n2/3+5*n3/16, 13*n2/48-3*n3/5, 61*n3/240],
+    be:[n/2-2*n2/3+37*n3/96, n2/48+n3/15, 17*n3/480],
+    de:[2*n-2*n2/3-2*n3, 7*n2/3-8*n3/5, 56*n3/15]}; })();
+function ll2utm(lat,lon){
+  const n=UTM.n, p=lat*Math.PI/180, l=(lon-UTM.lon0)*Math.PI/180, q=2*Math.sqrt(n)/(1+n);
+  const t=Math.sinh(Math.atanh(Math.sin(p))-q*Math.atanh(q*Math.sin(p)));
+  const xi=Math.atan2(t,Math.cos(l)), eta=Math.atanh(Math.sin(l)/Math.sqrt(1+t*t));
+  let E=eta, N=xi;
+  for(let j=1;j<=3;j++){ E+=UTM.al[j-1]*Math.cos(2*j*xi)*Math.sinh(2*j*eta); N+=UTM.al[j-1]*Math.sin(2*j*xi)*Math.cosh(2*j*eta); }
+  return [UTM.E0+UTM.k0*UTM.A*E, UTM.N0+UTM.k0*UTM.A*N];
+}
+function utm2ll(E,N){
+  const xi=(N-UTM.N0)/(UTM.k0*UTM.A), eta=(E-UTM.E0)/(UTM.k0*UTM.A);
+  let xp=xi, ep=eta;
+  for(let j=1;j<=3;j++){ xp-=UTM.be[j-1]*Math.sin(2*j*xi)*Math.cosh(2*j*eta); ep-=UTM.be[j-1]*Math.cos(2*j*xi)*Math.sinh(2*j*eta); }
+  const chi=Math.asin(Math.sin(xp)/Math.cosh(ep)); let p=chi;
+  for(let j=1;j<=3;j++) p+=UTM.de[j-1]*Math.sin(2*j*chi);
+  const l=Math.atan2(Math.sinh(ep),Math.cos(xp));
+  return [p*180/Math.PI, UTM.lon0+l*180/Math.PI];
+}
+function satTileLL(tx,ty,z){ const n=Math.pow(2,z); return [Math.atan(Math.sinh(Math.PI*(1-2*ty/n)))*180/Math.PI, tx/n*360-180]; }
+function satLL2tile(lat,lon,z){ const n=Math.pow(2,z), p=lat*Math.PI/180;
+  return [(lon+180)/360*n, (1-Math.log(Math.tan(p)+1/Math.cos(p))/Math.PI)/2*n]; }
+function satScene(lat,lon){ const u=ll2utm(lat,lon); return [u[0]-NET.meta.center_E, -(u[1]-NET.meta.center_N)]; }
+function satRange(x0,x1,z0,z1,z){
+  // scene extent (x = E offset, z = N offset) -> integer tile range at zoom z
+  const cE=NET.meta.center_E, cN=NET.meta.center_N;
+  const c=[[x0,z0],[x1,z0],[x0,z1],[x1,z1]].map(p=>utm2ll(cE+p[0],cN+p[1]));
+  let tx0=1e9,tx1=-1e9,ty0=1e9,ty1=-1e9;
+  c.forEach(ll=>{ const t=satLL2tile(ll[0],ll[1],z); tx0=Math.min(tx0,t[0]); tx1=Math.max(tx1,t[0]); ty0=Math.min(ty0,t[1]); ty1=Math.max(ty1,t[1]); });
+  return {x0:Math.floor(tx0), x1:Math.floor(tx1), y0:Math.floor(ty0), y1:Math.floor(ty1),
+          n:(Math.floor(tx1)-Math.floor(tx0)+1)*(Math.floor(ty1)-Math.floor(ty0)+1)};
+}
+function satPickZoom(x0,x1,z0,z1,cap,zmin,zmax){
+  for(let z=zmax; z>=zmin; z--){ const r=satRange(x0,x1,z0,z1,z); if(r.n<=cap) return {z:z,r:r}; }
+  return null;
+}
+function satTexture(key,url){
+  const c=satCache.get(key);
+  if(c){ satCache.delete(key); satCache.set(key,c); return c; }     // LRU bump
+  if(!satLoader){ satLoader=new THREE.TextureLoader(); satLoader.setCrossOrigin('anonymous'); }
+  satLoading++;
+  const tex=satLoader.load(url, t=>{ satLoading--; satLoaded++; t.needsUpdate=true; satStatus(); },
+                                undefined, ()=>{ satLoading--; satFailed++; satStatus(); });
+  if(THREE.sRGBEncoding!==undefined) tex.encoding=THREE.sRGBEncoding;
+  tex.anisotropy=Math.min(8, renderer.capabilities.getMaxAnisotropy()||1);
+  tex.minFilter=THREE.LinearMipmapLinearFilter; tex.magFilter=THREE.LinearFilter;
+  satCache.set(key,tex);
+  if(satCache.size>SAT_CACHE_MAX){                       // evict the oldest textures that no tile is using
+    const inUse=k=>satDetKeys.has(k)||(satGroup&&satGroup.userData.keys.has(k));
+    for(const k0 of Array.from(satCache.keys())){ if(satCache.size<=SAT_CACHE_MAX) break; if(inUse(k0)) continue; satCache.get(k0).dispose(); satCache.delete(k0); }
+  }
+  return tex;
+}
+function satTileMesh(tx,ty,z,y,order){
+  // one tile = 3x3-subdivided quad, every vertex re-projected (Mercator -> UTM) so the image is not stretched
+  const g=new THREE.PlaneGeometry(1,1,3,3), pos=g.attributes.position;
+  for(let i=0;i<pos.count;i++){
+    const u=pos.getX(i)+0.5, v=pos.getY(i)+0.5;
+    const ll=satTileLL(tx+u, ty+(1-v), z), p=satScene(ll[0],ll[1]);
+    pos.setXYZ(i, p[0], y, p[1]);
+  }
+  pos.needsUpdate=true; g.computeBoundingSphere();
+  const key=z+'/'+ty+'/'+tx;
+  const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({map:satTexture(key,SAT_URL(z,ty,tx)),transparent:true,opacity:satAlpha,depthWrite:false}));
+  m.renderOrder=order; m.userData.key=key; m.frustumCulled=true;
+  return m;
+}
+function buildSatellite(){
+  if(!NET.meta||NET.meta.center_E==null) return;
+  if(satGroup){ scene.remove(satGroup); satGroup.traverse(o=>{ if(o.geometry) o.geometry.dispose(); }); }
+  satGroup=new THREE.Group(); satGroup.userData.keys=new Set();
+  satDetGroup=new THREE.Group(); satGroup.add(satDetGroup);
+  const padX=(EXX[1]-EXX[0])*0.08+60, padZ=(EZZ[1]-EZZ[0])*0.08+60;
+  const pick=satPickZoom(EXX[0]-padX,EXX[1]+padX,EZZ[0]-padZ,EZZ[1]+padZ,SAT_CAP_BASE,SAT_MINZ,SAT_MAXZ);
+  if(!pick){ scene.add(satGroup); return; }
+  satBaseZ=pick.z; const r=pick.r;
+  for(let ty=r.y0; ty<=r.y1; ty++) for(let tx=r.x0; tx<=r.x1; tx++){ const m=satTileMesh(tx,ty,pick.z,SAT_Y,1); satGroup.add(m); satGroup.userData.keys.add(m.userData.key); }
+  satGroup.visible=satOn&&!explode; scene.add(satGroup);
+  if(groundPlane) groundPlane.visible=!(satOn&&!explode); if(groundGrid) groundGrid.visible=!(satOn&&!explode);
+  satLast={x:NaN,z:NaN,r:NaN}; satStatus();
+}
+function satUpdateDetail(){
+  if(!satGroup||!satOn||explode) return;
+  const tx=target.x, tz=-target.z;      // target in scene (x, N-offset)
+  let pick=null;                        // widest window that fits the tile budget at a zoom above the base
+  for(const f of [0.85,0.6,0.42,0.3]){ const half=Math.max(120, Math.min(3200, camAngle.r*f));
+    pick=satPickZoom(tx-half,tx+half,tz-half,tz+half,SAT_CAP_DET,satBaseZ+1,SAT_MAXZ); if(pick) break; }
+  const want=new Set(); const keep={};
+  if(pick){ const r=pick.r; for(let ty=r.y0; ty<=r.y1; ty++) for(let x=r.x0; x<=r.x1; x++){ const k=pick.z+'/'+ty+'/'+x; want.add(k); keep[k]=[x,ty,pick.z]; } }
+  // drop tiles no longer wanted
+  for(const m of satDetGroup.children.slice()){ if(!want.has(m.userData.key)){ satDetGroup.remove(m); m.geometry.dispose(); m.material.dispose(); satDetKeys.delete(m.userData.key); } }
+  // add new ones (nearest to the target first)
+  const have=new Set(satDetGroup.children.map(m=>m.userData.key));
+  Object.keys(keep).filter(k=>!have.has(k)).forEach(k=>{ const t=keep[k]; const m=satTileMesh(t[0],t[1],t[2],SAT_Y+0.04,2); satDetGroup.add(m); satDetKeys.add(k); });
+  satStatus();
+}
+function satTick(t){
+  // camera idle for ~350 ms after a move -> refresh the detail tiles
+  if(!satGroup||!satOn||explode) return;
+  const x=target.x, z=target.z, r=camAngle.r;
+  if(!(Math.abs(x-satLast.x)<=1&&Math.abs(z-satLast.z)<=1&&Math.abs(r-satLast.r)<=1)){ satLast={x:x,z:z,r:r}; satDirtyT=t||1; return; }
+  if(satDirtyT&&t-satDirtyT>350){ satDirtyT=0; satUpdateDetail(); }
+}
+function satSetAlpha(a){ satAlpha=a; if(satGroup) satGroup.traverse(o=>{ if(o.material) o.material.opacity=a; }); }
+function satSetVisible(){ if(satGroup) satGroup.visible=satOn&&!explode; if(groundPlane) groundPlane.visible=!(satOn&&!explode); if(groundGrid) groundGrid.visible=!(satOn&&!explode); if(satOn&&!explode) satUpdateDetail(); }
+function satStatus(){
+  const el=document.getElementById('satVal'); if(!el) return;
+  const det=satDetGroup?satDetGroup.children.length:0;
+  el.textContent=Math.round(satAlpha*100)+'%';
+  el.title='Esri World Imagery · REAL · base z'+satBaseZ+(det?' + detail':'')+' · '+satLoaded+' tiles loaded'+(satFailed?' · '+satFailed+' failed (offline?)':'')+(satLoading?' · loading '+satLoading:'');
+  const nt=document.getElementById('satNote'); if(nt){ nt.style.display=(satFailed>3&&!satLoaded)?'block':'none'; }
 }
 
 function utilY(z, idx){
@@ -1546,7 +1681,7 @@ function buildFRL(){
   // thin wire skin so the road's camber/grading reads even when very transparent
   frlBorder=new THREE.LineSegments(new THREE.WireframeGeometry(geo),
     new THREE.LineBasicMaterial({color:0x7d8a99,transparent:true,opacity:.10}));
-  frlBorder.visible=frlOn&&!explode; scene.add(frlBorder);
+  frlBorder.visible=frlOn&&!explode&&roadAlpha>0.04; scene.add(frlBorder);
   frlLabel=mkLabel('ROAD SURFACE · FRL '+R.emin.toFixed(1)+'–'+R.emax.toFixed(1)+' m  (LandXML)','#d4dee8');
   frlLabel.position.set(x0+60, utilY(R.emax)+16, -(z0+40)); frlLabel.visible=frlOn&&!explode; scene.add(frlLabel);
 }
@@ -2141,6 +2276,8 @@ function fitView(){
   const span=Math.max(x1-x0,z1-z0);
   ZMAX=Math.max(2600, span*1.9);            // let the whole-city view pull right out
   ZMIN=Math.max(18, span*0.016);            // ...and push in close to any area
+  camera.far=Math.max(6000, ZMAX*2.6); camera.updateProjectionMatrix();          // city / trunk fit at 25-30 km: keep it inside the frustum
+  if(scene.fog) scene.fog.density=0.00026*Math.min(1, 2400/Math.max(2400,span)); // ...and do not fog the whole city out
   camAngle.r=Math.max(ZMIN,Math.min(r,ZMAX)); updateCamFromAngles();
 }
 function bindControls(){
@@ -2324,6 +2461,7 @@ function animate(t){
   // camera meta
   if((t|0)%8===0){ document.getElementById('camMeta').textContent=
     `az ${(camAngle.theta*57.3%360).toFixed(0)}° · el ${(90-camAngle.phi*57.3).toFixed(0)}° · ${(camAngle.r).toFixed(0)}m`; }
+  satTick(t);
   if(window.__ctxLost) return;
   if(introActive){ if(renderIntro(t)) return; }
   renderer.render(scene,camera);
@@ -2370,7 +2508,8 @@ function buildLayers(){
   }).join('');
   bar.innerHTML=`<span class="lb-lab">Layers</span>${chips}`
     +`<span class="lchip struct${structOn?'':' off'}" data-t="struct" style="--c:#9fb6c9"><span class="dot"></span>Structures<span class="ck">${(NET.nodes||[]).length}</span></span>`
-    +`<span class="lchip frl${frlOn?'':' off'}" data-t="frl" style="--c:#9aa7b5"><span class="dot"></span>Road surface</span>`;
+    +`<span class="lchip frl${frlOn?'':' off'}" data-t="frl" style="--c:#9aa7b5"><span class="dot"></span>Road surface</span>`
+    +`<span class="lchip sat${satOn?'':' off'}" data-t="sat" title="Satellite base — Esri World Imagery · REAL · capture date varies by area" style="--c:#8fd3a8"><span class="dot"></span>Satellite<span class="ck">REAL</span></span>`;
   bar.querySelectorAll('.lchip[data-k]').forEach(ch=>{
     ch.addEventListener('click',()=>{
       const k=ch.dataset.k; layerOn[k]=!layerOn[k]; ch.classList.toggle('off',!layerOn[k]);
@@ -2390,6 +2529,9 @@ function buildLayers(){
   });
   bar.querySelector('.lchip[data-t="frl"]').addEventListener('click',function(){
     frlOn=!frlOn; this.classList.toggle('off',!frlOn); updateFRL();
+  });
+  bar.querySelector('.lchip[data-t="sat"]').addEventListener('click',function(){
+    satOn=!satOn; this.classList.toggle('off',!satOn); satSetVisible();
   });
   // map legend
   const lg=document.getElementById('mapLegend');
@@ -3032,7 +3174,7 @@ function boot(){
     document.getElementById('vTop').onclick=function(){setView('top');setAct(this);};
     document.getElementById('vIso').onclick=function(){setView('iso');setAct(this);};
     const ve=document.getElementById('vExplode');
-    ve.onclick=function(){ explode=!explode; this.classList.toggle('act',explode);
+    ve.onclick=function(){ explode=!explode; this.classList.toggle('act',explode); satSetVisible();
       rebuildNetworkY(); repositionAssets(); repositionSensors(); updateAboveGround(); repositionWTP(); repositionBIM(); fitView(); };
     const vf=document.getElementById('vFlow');
     vf.onclick=function(){ flowOn=!flowOn; this.classList.toggle('act',flowOn); };
@@ -3065,6 +3207,7 @@ function boot(){
       exag=+e.target.value; document.getElementById('exagVal').textContent=exag+'×';
       if(!explode){ rebuildNetworkY(); repositionAssets(); repositionSensors(); updateAboveGround(); repositionWTP(); repositionBIM(); }
     });
+    document.getElementById('satSlider').addEventListener('input',e=>{ satSetAlpha(+e.target.value/100); satStatus(); });
     document.getElementById('roadSlider').addEventListener('input',e=>{
       roadAlpha=+e.target.value/100; document.getElementById('roadVal').textContent=e.target.value+'%';
       if(frlMesh){ frlMesh.material.opacity=roadAlpha; frlMesh.visible=frlOn&&!explode&&roadAlpha>0; }
