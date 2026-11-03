@@ -26,8 +26,6 @@ It contains everything in one app:
   • Whole-CITY 3D view ("Entire City" — all 21 blocks in one scene)
   • Trunk Main transmission network (its own button)
   • WTP Admin Building — the BIM model (its own button)
-  • Overview GIS map (right) — satellite basemap, block markers, the trunk
-    main drawn over it, and the building marker
   • Dark 3D dashboard, free pan/zoom (drag = orbit, 2-finger/right-drag = pan,
     pinch/scroll = zoom — into ANY point, never re-centred)
   • Alerts: tap "locate on map" -> jumps to the GIS map and zooms to that spot
@@ -58,7 +56,7 @@ Double-click. The WTP Admin building in 3D — architecture + structure combined
   3. webapp/   (the hosted / deployable version)
 ================================================================================
 Same app but as a multi-file web app for hosting (better for scaling to many
-blocks later). One page = sidebar + 3D viewer + overview map.
+blocks later). One page = sidebar + 3D viewer.
   • Deploy: drag the "webapp" folder onto vercel.com  (or any static host)
   • Or run locally:  cd webapp  &&  python -m http.server 8080
     then open http://localhost:8080
